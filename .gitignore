@@ -1,0 +1,30 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Environment Variables (Catches it anywhere)
+.env
+**/.env
+.env.local
+.env.*
+
+# Vector Database (This is inside your nested folder)
+**/chroma_db/
+
+# Node/React (Very important for your frontend)
+node_modules/
+**/node_modules/
+.next/
+
+# Mac system files
+.DS_Store
+
+# Frontend specifics
+frontend/.env.local
