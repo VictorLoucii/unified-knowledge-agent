@@ -1,12 +1,11 @@
 
-
 ---
 
 # 📊 Unified Knowledge Agent
 
 **The mission:** To build a production-grade, full-stack Agentic RAG system that transforms static technical logs and documents into an interactive, reasoning intelligence layer.
 
-Current Status: **Phase 4 Complete (Standardized Full-Stack Architecture)**
+Current Status: **Phase 5 Complete (PostgreSQL Persistence & Long-Term Memory)**
 
 ---
 
@@ -15,19 +14,21 @@ Current Status: **Phase 4 Complete (Standardized Full-Stack Architecture)**
 | Layer | Technology | Key Function |
 | :--- | :--- | :--- |
 | **Orchestration** | **LangGraph** | Stateful, multi-turn agent logic & tool-calling |
-| **Backend** | **FastAPI** | High-performance Python bridge with streaming support |
-| **Frontend** | **Next.js 14** | Responsive UI with real-time token streaming |
+| **Persistence** | **PostgreSQL** | Long-term memory & session checkpointing via `psycopg` |
+| **Backend** | **FastAPI** | High-performance Python bridge with async streaming |
+| **Frontend** | **Next.js 14** | Responsive UI with real-time token streaming & history sidebar |
 | **Environment** | **uv** | Blazing-fast Python package & project management |
-| **Database** | **ChromaDB** | Vector storage for local technical logs (Phase 4) |
+| **Vector DB** | **ChromaDB** | Vector storage for local technical internship logs |
 
 ---
 
 ## 🚀 Key Features
 
-* **Agentic Reasoning:** Unlike traditional RAG, this system uses an autonomous agent that decides *when* to retrieve data and *how* to synthesize complex answers.
-* **Real-time Streaming:** Token-by-token response delivery for a seamless, ChatGPT-like user experience.
-* **Professional Mono-repo:** A unified structure managed by `uv`, ensuring environment consistency across the backend and frontend.
-* **Standardized Architecture:** Built with scalability in mind, separating the intelligence layer (LangGraph) from the delivery layer (FastAPI).
+* **Long-Term Memory:** Integrated PostgreSQL checkpointer allows the agent to remember conversation context across browser refreshes and system restarts.
+* **Persistent Sessions:** A dedicated sidebar enables users to toggle between multiple historical chat sessions, reconstructing the agent's state instantly.
+* **Agentic Reasoning:** An autonomous agent that intelligently decides when to retrieve data and how to synthesize technical solutions.
+* **Asynchronous Streaming:** Fully non-blocking SSE (Server-Sent Events) architecture for token-by-token response delivery.
+* **Async Database Pooling:** High-concurrency management using `psycopg_pool` to ensure the database remains responsive under load.
 
 ---
 
@@ -35,8 +36,8 @@ Current Status: **Phase 4 Complete (Standardized Full-Stack Architecture)**
 
 ```text
 Unified-Knowledge-Agent/
-├── backend/          # LangGraph engine + FastAPI streaming bridge
-├── frontend/         # Next.js React application
+├── backend/          # LangGraph engine + FastAPI + PostgreSQL checkpointer
+├── frontend/         # Next.js React application + Chat History Sidebar
 ├── data/             # Knowledge library (Internship logs/PDFs)
 ├── pyproject.toml    # Global dependencies managed by uv
 └── uv.lock           # Deterministic lockfile for production parity
@@ -49,6 +50,7 @@ Unified-Knowledge-Agent/
 ### Prerequisites
 * Python 3.12+
 * Node.js 18+
+* [PostgreSQL](https://www.postgresql.org/) (Ensure the service is running)
 * [uv](https://github.com/astral-sh/uv) installed (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ### Installation & Setup
@@ -59,23 +61,23 @@ Unified-Knowledge-Agent/
    cd unified-knowledge-agent
    ```
 
-2. **Set up the Backend:**
+2. **Initialize Dependencies:**
    ```bash
    # uv automatically handles the virtual environment and syncs dependencies
    uv sync
    ```
 
 3. **Configure Environment Variables:**
-   Create a `.env` file in the `backend/` directory:
+   Create a `.env` file in the root directory:
    ```env
    OPENAI_API_KEY=your_key_here
-   TAVILY_API_KEY=your_key_here
+   DATABASE_URL=postgresql://localhost/postgres
    ```
 
 4. **Run the System:**
-   From the root directory:
+   Start the backend:
    ```bash
-   uv run backend/app.py
+   uv run uvicorn backend.app:app --reload
    ```
 
 ---
@@ -84,12 +86,14 @@ Unified-Knowledge-Agent/
 
 - [x] **Phase 1-3:** Prototype development & RAG integration.
 - [x] **Phase 4:** Standardization (FastAPI, Next.js, Mono-repo setup).
-- [ ] **Phase 5: Cloud Migration (Current Target):** * Replace local storage with **Supabase (Postgres + pgvector)**.
-    * Implement persistent conversation memory.
-    * Integrate **LangSmith** for observability.
-- [ ] **Phase 6: Production Scaling:**
+- [x] **Phase 5: Persistence Layer:**
+    * Integrated **PostgreSQL** for checkpointing.
+    * Developed persistent sidebar UI for session management.
+    * Implemented async connection pooling for high-performance memory retrieval.
+- [ ] **Phase 6: Deployment & Refinement:**
     * Dockerization for cloud deployment (Railway/AWS).
-    * Dynamic PDF ingestion API.
-
+    * Dynamic PDF ingestion API for real-time document updates.
+    * Multi-user authentication and secure session isolation.
 
 ---
+
