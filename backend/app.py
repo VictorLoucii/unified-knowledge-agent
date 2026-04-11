@@ -4,10 +4,11 @@ import json
 from datetime import datetime
 from typing import TypedDict, Annotated
 
-from contextlib import asynccontextmanager  # [FIX] Added for FastAPI lifespan
+from contextlib import asynccontextmanager  
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
+from backend.memory import DB_URI, setup_database_tables, save_thread_title, get_all_threads_history, delete_thread_from_db
 # FastAPI Imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,10 +22,10 @@ from langchain_core.tools import tool
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
-import psycopg  # [PHASE 5] Added for autocommit setup
+import psycopg  
 from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  # [FIX] Async Saver
-from psycopg_pool import ConnectionPool, AsyncConnectionPool  # [FIX] Async Pool
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  
+from psycopg_pool import ConnectionPool, AsyncConnectionPool  
 from langchain_chroma import Chroma
 
 
@@ -36,9 +37,6 @@ load_dotenv()
 if not os.getenv("OPENAI_API_KEY"):
     raise ValueError("🚨 OPENAI_API_KEY not found! Check your .env file.")
 
-# os.environ["LANGCHAIN_TRACING_V2"] = "true"
-# os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
-
 # Disable tracing temporarily since no LANGCHAIN_API_KEY is present
 os.environ["LANGCHAIN_TRACING_V2"] = "false"
 os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
@@ -46,20 +44,17 @@ os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
 
 # ==========================================
-# 2. VECTOR DB INITIALIZATION [NEW]
+# 2. VECTOR DB INITIALIZATION
 # ==========================================
 import os
 
-# This gets the absolute path to the directory where app.py lives
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# This explicitly points to backend/chroma_db
 persist_directory = os.path.join(BASE_DIR, "chroma_db")
 
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 5})
+retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
 
 print(f"✅ Connected to local ChromaDB at: {persist_directory}")
 
@@ -67,12 +62,10 @@ print(f"✅ Connected to local ChromaDB at: {persist_directory}")
 # 3. TOOL DEFINITIONS
 # ==========================================
 
-
 @tool
 def get_system_time(format: str = "%Y-%m-%d %H:%M:%S"):
     """Returns the current system time. Use this when the user asks for the time."""
-    from datetime import datetime  # Just in case this import also got lost
-
+    from datetime import datetime
     return datetime.now().strftime(format)
 
 
@@ -83,7 +76,6 @@ def search_internship_history(query: str) -> str:
     React Native issues, architectural decisions (like Yarn vs NPM), and UI fixes.
     Input should be a clear, concise search query.
     """
-    # 1. Multi-Query Expansion (Updated Prompt)
     expansion_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     search_variants = expansion_llm.invoke(
         f"Generate 3 diverse search queries to find information about '{query}' "
@@ -96,16 +88,12 @@ def search_internship_history(query: str) -> str:
 
     all_queries = [query] + [q.strip() for q in search_variants if q.strip()]
 
-    # ... (The rest of the tool remains exactly the same: Execute search, deduplicate, format)
-    # 2. Execute broad search
     all_docs = []
     for q in all_queries:
         all_docs.extend(retriever.invoke(q))
 
-    # 3. Deduplicate
     unique_docs = {doc.page_content: doc for doc in all_docs}.values()
 
-    # 4. Format
     formatted_context = "\n\n---\n\n".join(
         [
             f"Page {doc.metadata.get('page', 'Unknown')}:\n{doc.page_content}"
@@ -116,7 +104,6 @@ def search_internship_history(query: str) -> str:
     return formatted_context
 
 
-# Now both tools are defined before you bind them!
 tools = [get_system_time, search_internship_history]
 llm_with_tools = llm.bind_tools(tools)
 
@@ -129,10 +116,8 @@ class State(TypedDict):
 
 
 async def chatbot_node(state: State):
-    # [PHASE 5] User Persona - This could eventually be fetched from the DB based on user_id
     user_preferences = "Always prioritize TypeScript and focus on React Native performance optimization."
 
-    # Define the "Identity" and "Rules" for your Agent
     system_prompt = SystemMessage(
         content=(
             f"You are the Nexteir Second Brain, a specialized AI assistant for Victor's internship logs. "
@@ -140,55 +125,39 @@ async def chatbot_node(state: State):
             "Your goal is to provide technical solutions based strictly on the provided documentation. "
             "CRITICAL RULE: If you find information labeled with '//problemX:', treat it as the "
             "definitive and primary answer for any questions about 'problem X'. "
-            "Do not tell the user you 'cannot find' a problem if a result starting with '//problem' exists."
+            "Do not tell the user you 'cannot find' a problem if a result starting with '//problem' exists. "
+            "FORMATTING RULE: The retrieved context contains arbitrary line breaks from PDF extraction. You MUST remove unnecessary newlines, fix broken sentences, and format your output into natural, highly readable paragraphs and lists."
         )
     )
 
-    # Prepend the system prompt to the existing conversation
     messages = [system_prompt] + state["messages"]
 
-    # [CRITICAL FIX] Await the async invocation to prevent thread blocking during streaming
     response = await llm_with_tools.ainvoke(messages)
     return {"messages": [response]}
 
 
 workflow = StateGraph(State)
 
-# Add Nodes
 workflow.add_node("chatbot", chatbot_node)
 workflow.add_node("tools", ToolNode(tools=tools))
 
-# Set Routing logic
 workflow.set_entry_point("chatbot")
 workflow.add_conditional_edges("chatbot", tools_condition)
 workflow.add_edge("tools", "chatbot")
 
 # [PHASE 5] Compile Graph with Postgres Checkpointer
-DB_URI = os.getenv("DATABASE_URL", "postgresql://localhost/postgres")
+# [FIX] Replaced the synchronous block with the new helper function
+setup_database_tables()
 
-# 1. Keep the synchronous setup block (it works perfectly for creating tables)
-try:
-    with psycopg.connect(DB_URI, autocommit=True) as conn:
-        setup_memory = PostgresSaver(conn)
-        setup_memory.setup()
-    print("✅ PostgresSaver tables verified/created.")
-except Exception as e:
-    print(f"❌ Postgres Connection Error: {e}")
-    print("👉 Ensure Postgres is running and DATABASE_URL in .env is correct.")
-
-
-# 2. [CRITICAL FIX] Use Lifespan to start the async pool AFTER the server boots
 async_pool = None
 graph = None
-
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global async_pool, graph
     
-    # [FIX] Initialize pool without opening it in constructor
     async_pool = AsyncConnectionPool(conninfo=DB_URI, max_size=10, open=False) 
-    await async_pool.open() # Explicitly open it here
+    await async_pool.open() 
     
     memory = AsyncPostgresSaver(async_pool)
     graph = workflow.compile(checkpointer=memory)
@@ -203,7 +172,6 @@ async def lifespan(app: FastAPI):
 # ==========================================
 # 5. FASTAPI SETUP (The "Bridge")
 # ==========================================
-# Attach the lifespan to the app
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -217,14 +185,17 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    thread_id: str = "default_session"  # [NEW] Added thread tracking
+    thread_id: str = "default_session"  
 
 
 async def generate_chat_responses(user_message: str, thread_id: str):
     inputs = {"messages": [HumanMessage(content=user_message)]}
-    config = {"configurable": {"thread_id": thread_id}}  # [NEW] Pass thread to config
+    config = {"configurable": {"thread_id": thread_id}}  
 
     try:
+        # [NEW] Save title before streaming starts
+        await save_thread_title(async_pool, thread_id, user_message)
+
         async for event in graph.astream_events(inputs, config, version="v2"):
             kind = event["event"]
 
@@ -250,9 +221,8 @@ async def generate_chat_responses(user_message: str, thread_id: str):
         import traceback
 
         print("🚨 Backend Crash Details:")
-        traceback.print_exc()  # This prints the exact file and line number of the crash
+        traceback.print_exc()  
 
-        # Fallback to repr() to catch empty string errors
         print(f"🚨 Raw Error: {repr(e)}")
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
         yield "data: [DONE]\n\n"
@@ -278,16 +248,10 @@ async def chat_stream(request: ChatRequest):
 # ==========================================
 @app.get("/history")
 async def get_all_threads():
-    """Fetches a list of all unique thread IDs from PostgreSQL."""
+    """Fetches a list of all unique thread IDs and their titles from PostgreSQL."""
     try:
-        # [FIX] Use async_pool and await the database commands
-        async with async_pool.connection() as conn:
-            async with conn.cursor() as cur:
-                await cur.execute(
-                    "SELECT DISTINCT thread_id FROM checkpoints ORDER BY thread_id DESC;"
-                )
-                rows = await cur.fetchall()
-                threads = [row[0] for row in rows]
+        # [FIX] Delegate to memory.py
+        threads = await get_all_threads_history(async_pool)
         return {"threads": threads}
     except Exception as e:
         print(f"🚨 Error fetching threads: {e}")
@@ -299,16 +263,13 @@ async def get_thread_history(thread_id: str):
     """Fetches the message history for a specific thread_id."""
     try:
         config = {"configurable": {"thread_id": thread_id}}
-        # [FIX] Use aget_state instead of get_state for the async checkpointer
         state = await graph.aget_state(config)
 
-        # If the thread hasn't been created yet, return empty
         if not state or not hasattr(state, "values") or "messages" not in state.values:
             return {"messages": []}
 
         formatted_messages = []
         for msg in state.values["messages"]:
-            # Ignore SystemMessages for the frontend display
             if msg.type == "system":
                 continue
 
@@ -324,6 +285,16 @@ async def get_thread_history(thread_id: str):
         print(f"🚨 Error fetching thread state: {e}")
         return {"error": str(e), "messages": []}
 
+# [NEW] Added Delete Endpoint
+@app.delete("/history/{thread_id}")
+async def delete_thread(thread_id: str):
+    """Deletes all data for a specific thread_id."""
+    try:
+        await delete_thread_from_db(async_pool, thread_id)
+        return {"status": "success"}
+    except Exception as e:
+        print(f"🚨 Delete Error: {e}")
+        return {"error": str(e)}
 
 if __name__ == "__main__":
     import uvicorn

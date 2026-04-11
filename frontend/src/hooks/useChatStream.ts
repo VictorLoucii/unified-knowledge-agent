@@ -80,16 +80,22 @@ export const useChatStream = (initialThreadId?: string) => {
       const decoder = new TextDecoder("utf-8");
       let done = false;
 
+      let buffer = "";
+
       while (!done) {
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
 
         if (value) {
-          // Decode the Uint8Array chunk into a string
-          const chunkString = decoder.decode(value, { stream: true });
+          // Decode the Uint8Array chunk and append it to our buffer
+          buffer += decoder.decode(value, { stream: true });
 
-          // SSE chunks are separated by newlines and prefixed with "data: "
-          const lines = chunkString.split("\n");
+          // Split by newlines, just like before
+          const lines = buffer.split("\n");
+
+          // [FIX] Pop the last element off and keep it in the buffer.
+          // If the network chunk cut off mid-JSON, it will wait here for the next packet.
+          buffer = lines.pop() || "";
 
           for (const line of lines) {
             if (line.startsWith("data: ")) {
@@ -149,6 +155,31 @@ export const useChatStream = (initialThreadId?: string) => {
       }),
     );
   };
+  // [NEW] Add the delete logic here
+  const deleteThread = async (id: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/history/${id}`, {
+        method: "DELETE",
+      });
+      if (response.ok) {
+        // If we deleted the currently active thread, clear the screen
+        if (id === threadId) {
+          setMessages([]);
+        }
+        return true;
+      }
+    } catch (err) {
+      console.error("Failed to delete thread:", err);
+    }
+    return false;
+  };
 
-  return { messages, sendMessage, isStreaming, loadThread, threadId };
+  return {
+    messages,
+    sendMessage,
+    isStreaming,
+    loadThread,
+    threadId,
+    deleteThread,
+  };
 };
