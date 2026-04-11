@@ -5,7 +5,7 @@
 
 **The mission:** To build a production-grade, full-stack Agentic RAG system that transforms static technical logs and documents into an interactive, reasoning intelligence layer.
 
-Current Status: **Phase 5 Refined (Persistence, Metadata & UI Optimization)**
+Current Status: **Phase 5 Complete (Persistence, Pagination & Professional UX)**
 
 ---
 
@@ -26,11 +26,12 @@ Current Status: **Phase 5 Refined (Persistence, Metadata & UI Optimization)**
 ## 🚀 Key Features
 
 * **Long-Term Memory:** Integrated PostgreSQL checkpointer allows the agent to remember conversation context across browser refreshes and system restarts.
+* **Scalable Pagination:** Implemented `LIMIT` and `OFFSET` logic in the history retrieval layer, allowing the system to handle thousands of chat sessions with minimal initial load times.
+* **URL Routing & Hydration:** Deep-linking support via URL query parameters (`?thread=[id]`), enabling users to bookmark, share, or refresh specific chat sessions.
+* **Optimistic UI Sync:** The sidebar updates instantly upon sending a new message, providing zero-latency feedback before the backend processing even begins.
 * **Intelligent Session Naming:** Automatically generates chat titles from the initial user prompt, stored in a dedicated metadata table for fast retrieval.
-* **Safe Session Deletion:** Implemented a cascading delete protocol that cleans up LangGraph checkpoints (`checkpoint_writes`, `blobs`, and `checkpoints`) alongside session metadata without leaving orphaned data.
-* **Clean History Reconstruction:** Advanced server-side filtering removes intermediate "AI Thinking" states and raw tool outputs, ensuring historical sessions are as readable as live chats.
-* **Asynchronous Streaming:** Fully non-blocking SSE (Server-Sent Events) architecture for token-by-token response delivery.
-* **Async Database Pooling:** High-concurrency management using `psycopg_pool` to ensure the database remains responsive under load.
+* **Safe Session Deletion:** A cascading delete protocol cleans up internal LangGraph checkpoints (`checkpoint_writes`, `blobs`, `checkpoints`) and custom metadata synchronously.
+* **Pro Empty State:** A custom welcome dashboard featuring interactive "Suggested Queries" to guide the user through the knowledge base.
 
 ---
 
@@ -40,11 +41,11 @@ Current Status: **Phase 5 Refined (Persistence, Metadata & UI Optimization)**
 Unified-Knowledge-Agent/
 ├── backend/          
 │   ├── app.py          # FastAPI routes, LangGraph workflow & SSE Logic
-│   ├── memory.py       # Database schema setup, Metadata handling & Deletion logic
+│   ├── memory.py       # Database schema setup, Paginated SQL queries & Deletion
 │   └── chroma_db/      # Persistent Vector Store
 ├── frontend/         
-│   ├── src/app/        # Next.js Chat UI with Sidebar state management
-│   └── hooks/          # useChatStream for SSE processing & history hydration
+│   ├── src/app/        # Next.js Chat UI with Paginated Sidebar & Welcome Dashboard
+│   └── hooks/          # useChatStream hook for SSE handling & auto-hydration
 ├── data/               # Knowledge library (Internship logs/PDFs)
 ├── pyproject.toml      # Global dependencies managed by uv
 └── uv.lock             # Deterministic lockfile
@@ -54,48 +55,38 @@ Unified-Knowledge-Agent/
 
 ## 🛡️ Architecture Highlights
 
-### **1. The Metadata Layer (Option A Implementation)**
-To avoid the overhead of parsing binary LangGraph blobs, we implemented a `thread_metadata` table. When a new session starts, the backend captures the first 40 characters of the user's prompt and stores it as a relational title, which is then `LEFT JOIN`ed during history fetches.
+### **1. The Metadata Layer**
+To avoid the overhead of parsing binary LangGraph blobs, we implemented a `thread_metadata` table. When a new session starts, the backend captures the user prompt to store a relational title and a `created_at` timestamp for chronological sorting.
 
-### **2. Cascading Deletion**
-To maintain database integrity, the deletion endpoint targets the LangGraph internal tables in a specific order to respect foreign key constraints:
-1. `checkpoint_writes`
-2. `checkpoint_blobs`
-3. `checkpoints`
-4. `thread_metadata`
+### **2. Efficient Pagination & Scaling**
+To prevent the "Large History Slowdown," the `/history` endpoint supports chunked fetching. The frontend manages an `offset` state and appends new threads to the sidebar only when the user explicitly requests "Older Chats," maintaining a lightweight DOM.
 
-### **3. UI Logic: Message Filtering**
-We solved the "Double Bubble" and "Vertical Text" glitch by filtering the message stream. The backend now skips `system` messages, `tool` outputs, and empty AI "thought" messages, ensuring the user only sees polished content.
+### **3. Optimistic Synchronization & Hydration**
+When a new chat starts, the frontend "optimistically" creates a sidebar entry. Upon stream completion, a callback triggers a background re-sync with the database to ensure the local UI perfectly matches the server-side state.
 
 ---
 
 ## ⚡ Getting Started
 
 ### Prerequisites
-* Python 3.12+
-* Node.js 18+
-* [PostgreSQL](https://www.postgresql.org/) (Ensure the service is running)
-* [uv](https://github.com/astral-sh/uv) installed
+* Python 3.12+ | Node.js 18+ | PostgreSQL | [uv](https://astral.sh/uv/install.sh)
 
 ### Installation & Setup
 
-1. **Clone & Sync:**
-   ```bash
-   git clone https://github.com/victorloucii/unified-knowledge-agent.git
-   cd unified-knowledge-agent
-   uv sync
-   ```
+1.  **Clone & Sync:**
+    ```bash
+    git clone https://github.com/victorloucii/unified-knowledge-agent.git
+    cd unified-knowledge-agent
+    uv sync
+    ```
 
-2. **Configure Environment:**
-   ```env
-   OPENAI_API_KEY=your_key_here
-   DATABASE_URL=postgresql://localhost/postgres
-   ```
-
-3. **Run the System:**
-   ```bash
-   uv run uvicorn backend.app:app --reload
-   ```
+2.  **Run the System:**
+    ```bash
+    # Start Backend
+    uv run uvicorn backend.app:app --reload
+    # Start Frontend (In separate terminal)
+    npm run dev
+    ```
 
 ---
 
@@ -103,14 +94,12 @@ We solved the "Double Bubble" and "Vertical Text" glitch by filtering the messag
 
 - [x] **Phase 1-3:** Prototype development & RAG integration.
 - [x] **Phase 4:** Standardization (FastAPI, Next.js, Mono-repo setup).
-- [x] **Phase 5: Persistence Layer (Complete):**
-    * Integrated **PostgreSQL** for checkpointing.
-    * Implemented **Thread Metadata** for session naming.
-    * Built **Safe Delete** functionality for session management.
-    * Optimized **History Filtering** for clean UI rendering.
+- [x] **Phase 5: Persistence & UX (Complete):**
+    * **PostgreSQL** checkpointing & **Thread Metadata** tracking.
+    * **Pagination Layer** for scalable history retrieval.
+    * **URL Routing** for session persistence across refreshes.
+    * **Optimistic UI** & **Cascading Deletion** logic.
 - [ ] **Phase 6: Deployment & Refinement:**
-    * Dockerization for cloud deployment (Railway/AWS).
-    * Dynamic PDF ingestion API for real-time document updates.
+    * Dockerization & Cloud Deployment (Railway/AWS/Vercel).
+    * Dynamic PDF ingestion API.
     * Multi-user authentication and secure session isolation.
-
----
