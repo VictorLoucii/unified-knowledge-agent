@@ -4,11 +4,18 @@ import json
 from datetime import datetime
 from typing import TypedDict, Annotated
 
-from contextlib import asynccontextmanager  
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from pydantic import BaseModel
 
-from backend.memory import DB_URI, setup_database_tables, save_thread_title, get_all_threads_history, delete_thread_from_db
+from backend.memory import (
+    DB_URI,
+    setup_database_tables,
+    save_thread_title,
+    get_all_threads_history,
+    delete_thread_from_db,
+)
+
 # FastAPI Imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -22,10 +29,10 @@ from langchain_core.tools import tool
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
-import psycopg  
+import psycopg
 from langgraph.checkpoint.postgres import PostgresSaver
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver  
-from psycopg_pool import ConnectionPool, AsyncConnectionPool  
+from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from psycopg_pool import ConnectionPool, AsyncConnectionPool
 from langchain_chroma import Chroma
 
 
@@ -62,10 +69,12 @@ print(f"✅ Connected to local ChromaDB at: {persist_directory}")
 # 3. TOOL DEFINITIONS
 # ==========================================
 
+
 @tool
 def get_system_time(format: str = "%Y-%m-%d %H:%M:%S"):
     """Returns the current system time. Use this when the user asks for the time."""
     from datetime import datetime
+
     return datetime.now().strftime(format)
 
 
@@ -152,19 +161,20 @@ setup_database_tables()
 async_pool = None
 graph = None
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global async_pool, graph
-    
-    async_pool = AsyncConnectionPool(conninfo=DB_URI, max_size=10, open=False) 
-    await async_pool.open() 
-    
+
+    async_pool = AsyncConnectionPool(conninfo=DB_URI, max_size=10, open=False)
+    await async_pool.open()
+
     memory = AsyncPostgresSaver(async_pool)
     graph = workflow.compile(checkpointer=memory)
     print("🚀 Async Database Pool & LangGraph Engine Started")
-    
+
     yield
-    
+
     await async_pool.close()
     print("🛑 Async Database Pool Closed")
 
@@ -185,12 +195,12 @@ app.add_middleware(
 
 class ChatRequest(BaseModel):
     message: str
-    thread_id: str = "default_session"  
+    thread_id: str = "default_session"
 
 
 async def generate_chat_responses(user_message: str, thread_id: str):
     inputs = {"messages": [HumanMessage(content=user_message)]}
-    config = {"configurable": {"thread_id": thread_id}}  
+    config = {"configurable": {"thread_id": thread_id}}
 
     try:
         # [NEW] Save title before streaming starts
@@ -221,7 +231,7 @@ async def generate_chat_responses(user_message: str, thread_id: str):
         import traceback
 
         print("🚨 Backend Crash Details:")
-        traceback.print_exc()  
+        traceback.print_exc()
 
         print(f"🚨 Raw Error: {repr(e)}")
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
@@ -270,7 +280,8 @@ async def get_thread_history(thread_id: str):
 
         formatted_messages = []
         for msg in state.values["messages"]:
-            if msg.type == "system":
+            # Skip system messages, raw tool output, and empty AI tool-call messages
+            if msg.type in ["system", "tool"] or not msg.content:
                 continue
 
             formatted_messages.append(
@@ -285,6 +296,7 @@ async def get_thread_history(thread_id: str):
         print(f"🚨 Error fetching thread state: {e}")
         return {"error": str(e), "messages": []}
 
+
 # [NEW] Added Delete Endpoint
 @app.delete("/history/{thread_id}")
 async def delete_thread(thread_id: str):
@@ -295,6 +307,7 @@ async def delete_thread(thread_id: str):
     except Exception as e:
         print(f"🚨 Delete Error: {e}")
         return {"error": str(e)}
+
 
 if __name__ == "__main__":
     import uvicorn
