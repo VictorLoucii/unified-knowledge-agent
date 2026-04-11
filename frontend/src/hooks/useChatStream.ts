@@ -18,8 +18,9 @@ export const useChatStream = (initialThreadId?: string) => {
 
   // [PHASE 5] Load historical messages from the backend
   const loadThread = async (id: string) => {
-    setIsStreaming(true); // Show a loading state if desired
+    setIsStreaming(true); 
     setThreadId(id);
+    setMessages([]); // Clean hydration: clear the current view instantly
 
     try {
       const response = await fetch(`http://localhost:8000/history/${id}`);
@@ -44,7 +45,7 @@ export const useChatStream = (initialThreadId?: string) => {
     }
   };
 
-  const sendMessage = async (userText: string) => {
+const sendMessage = async (userText: string, onFinish?: () => void) => {    
     // 1. Instantly show the user's message
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
@@ -115,7 +116,7 @@ export const useChatStream = (initialThreadId?: string) => {
       }
     } catch (error) {
       console.error("Stream connection failed:", error);
-    } finally {
+} finally {
       setIsStreaming(false);
       // Ensure the thinking state is turned off when the stream closes
       setMessages((prev) =>
@@ -123,6 +124,8 @@ export const useChatStream = (initialThreadId?: string) => {
           msg.id === assistantId ? { ...msg, isThinking: false } : msg,
         ),
       );
+      // [NEW] Trigger sidebar refresh if a callback was provided
+      if (onFinish) onFinish();
     }
   };
 
@@ -174,6 +177,19 @@ export const useChatStream = (initialThreadId?: string) => {
     return false;
   };
 
+const createNewChat = () => {
+    setMessages([]);
+    setThreadId(
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `thread_${Date.now()}`,
+    );
+    //  Clear the URL when starting a fresh chat
+    if (typeof window !== "undefined") {
+      window.history.pushState(null, '', window.location.pathname);
+    }
+  };
+
   return {
     messages,
     sendMessage,
@@ -181,5 +197,6 @@ export const useChatStream = (initialThreadId?: string) => {
     loadThread,
     threadId,
     deleteThread,
+    createNewChat,
   };
 };

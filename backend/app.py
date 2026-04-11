@@ -257,16 +257,16 @@ async def chat_stream(request: ChatRequest):
 # 6. MEMORY & HISTORY ENDPOINTS [PHASE 5]
 # ==========================================
 @app.get("/history")
-async def get_all_threads():
+async def get_all_threads(limit: int = 20, offset: int = 0):
     """Fetches a list of all unique thread IDs and their titles from PostgreSQL."""
     try:
-        # [FIX] Delegate to memory.py
-        threads = await get_all_threads_history(async_pool)
-        return {"threads": threads}
+        threads = await get_all_threads_history(async_pool, limit, offset)
+        # If we get exactly the limit amount, there are likely more rows to fetch
+        has_more = len(threads) == limit 
+        return {"threads": threads, "has_more": has_more}
     except Exception as e:
         print(f"🚨 Error fetching threads: {e}")
-        return {"error": str(e), "threads": []}
-
+        return {"error": str(e), "threads": [], "has_more": False}
 
 @app.get("/history/{thread_id}")
 async def get_thread_history(thread_id: str):

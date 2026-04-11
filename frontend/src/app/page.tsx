@@ -13,6 +13,7 @@ export default function ChatUI() {
     loadThread,
     deleteThread,
     threadId: currentThreadId,
+    createNewChat,
   } = useChatStream() as any;
   const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -20,14 +21,50 @@ export default function ChatUI() {
   // [PHASE 5] Sidebar State (Updated to handle objects)
   const [threads, setThreads] = useState<any[]>([]);
 
-  // [PHASE 5] Fetch Thread History on Mount
-  useEffect(() => {
-    fetch("http://localhost:8000/history")
+  //  Pagination State
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 20;
+
+  // [PHASE 5] Reusable fetch function for history
+  const fetchHistory = (isReset = false) => {
+    const currentOffset = isReset ? 0 : offset;
+
+    fetch(
+      `http://localhost:8000/history?limit=${LIMIT}&offset=${currentOffset}`,
+    )
       .then((res) => res.json())
       .then((data) => {
-        if (data.threads) setThreads(data.threads);
+        if (data.threads) {
+          if (isReset) {
+            setThreads(data.threads);
+          } else {
+            // Append new threads, ensuring no duplicates
+            setThreads((prev) => {
+              const newThreads = data.threads.filter(
+                (newT: any) => !prev.some((p) => p.id === newT.id),
+              );
+              return [...prev, ...newThreads];
+            });
+          }
+          setOffset(currentOffset + LIMIT);
+          setHasMore(data.has_more);
+        }
       })
       .catch((err) => console.error("Failed to fetch history:", err));
+  };
+
+  // Fetch on mount and check URL for bookmarks
+  useEffect(() => {
+    fetchHistory(true); // Pass true to reset on initial load
+
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlThreadId = urlParams.get("thread");
+      if (urlThreadId && loadThread) {
+        loadThread(urlThreadId);
+      }
+    }
   }, []);
 
   // Auto-scroll to the latest message as the stream arrives
@@ -35,10 +72,47 @@ export default function ChatUI() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  //  Helper function to handle suggested queries
+  const handleSuggestedQuery = (query: string) => {
+    if (isStreaming) return;
+
+    const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
+    if (isNewThread) {
+      const optimisticTitle =
+        query.length > 40 ? query.slice(0, 40) + "..." : query;
+      setThreads((prev) => [
+        { id: currentThreadId, title: optimisticTitle },
+        ...prev,
+      ]);
+      window.history.pushState(null, "", `?thread=${currentThreadId}`);
+    }
+
+    sendMessage(query, () => fetchHistory(true));
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
-    sendMessage(input);
+
+    // [NEW] Optimistic UI: Instantly add to sidebar if it's a brand new chat
+    const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
+
+    if (isNewThread) {
+      // Create a title matching your backend logic (first 40 chars)
+      const optimisticTitle =
+        input.length > 40 ? input.slice(0, 40) + "..." : input;
+
+      setThreads((prev) => [
+        { id: currentThreadId, title: optimisticTitle },
+        ...prev, // Put the new chat at the very top
+      ]);
+
+      // [NEW] Update the URL immediately so the new chat can be bookmarked
+      window.history.pushState(null, "", `?thread=${currentThreadId}`);
+    }
+
+    // Start streaming. The fetchHistory callback will ensure DB sync when done.
+    sendMessage(input, () => fetchHistory(true));
     setInput("");
   };
 
@@ -46,8 +120,29 @@ export default function ChatUI() {
     <div className="flex h-screen w-full bg-white">
       {/* [PHASE 5] Sidebar */}
       <aside className="w-64 bg-gray-100 border-r border-gray-200 flex flex-col hidden md:flex">
-        <div className="p-4 border-b border-gray-200 bg-white">
+        <div className="p-4 border-b border-gray-200 bg-white flex flex-col gap-3">
           <h2 className="text-lg font-semibold text-gray-800">Chat History</h2>
+
+          {/* New Chat Button */}
+          <button
+            onClick={createNewChat}
+            className="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v16m8-8H4"
+              />
+            </svg>
+            New Chat
+          </button>
         </div>
         <div className="flex-1 overflow-y-auto p-2 space-y-1">
           {threads.length === 0 ? (
@@ -58,15 +153,25 @@ export default function ChatUI() {
             threads.map((thread: any) => (
               <div
                 key={thread.id}
-                className={`group relative flex items-center ${currentThreadId === thread.id ? "bg-gray-200 rounded-lg" : ""}`}
+                className="group relative flex items-center mb-1"
               >
                 <button
-                  className="w-full text-left p-3 rounded-lg text-sm text-gray-700 hover:bg-gray-200 transition-colors truncate border border-transparent hover:border-gray-300 pr-10"
+                  className={`w-full text-left p-3 rounded-lg text-sm transition-all truncate border pr-10 ${
+                    currentThreadId === thread.id
+                      ? "bg-blue-50 border-blue-200 text-blue-700 font-semibold shadow-sm"
+                      : "text-gray-700 border-transparent hover:bg-gray-200 hover:border-gray-300"
+                  }`}
                   onClick={() => {
-                    if (loadThread) loadThread(thread.id);
+                    if (loadThread) {
+                      loadThread(thread.id);
+                      window.history.pushState(
+                        null,
+                        "",
+                        `?thread=${thread.id}`,
+                      );
+                    }
                   }}
                 >
-                  {/* Safely handle older threads that might not have a title yet */}
                   {thread.title?.startsWith("thread_")
                     ? `Session: ${thread.title.replace("thread_", "")}`
                     : thread.title}
@@ -110,6 +215,29 @@ export default function ChatUI() {
               </div>
             ))
           )}
+
+          {/* Pagination Button */}
+          {hasMore && threads.length > 0 && (
+            <button
+              onClick={() => fetchHistory(false)}
+              className="w-full mt-2 p-2 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors flex items-center justify-center gap-1"
+            >
+              Load Older Chats
+              <svg
+                className="w-3 h-3"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
+              </svg>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -136,10 +264,53 @@ export default function ChatUI() {
         {/* Message History Area */}
         <main className="flex-1 overflow-y-auto p-6 space-y-6">
           {messages.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-gray-400">
-              <p>
-                Send a message to initialize the LangGraph reasoning engine.
-              </p>
+            <div className="flex flex-col h-full items-center justify-center text-center space-y-8 animate-in fade-in duration-500">
+              <div className="space-y-2">
+                <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-sm">
+                  <svg
+                    className="w-8 h-8"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 10V3L4 14h7v7l9-11h-7z"
+                    />
+                  </svg>
+                </div>
+                <h2 className="text-2xl font-bold text-gray-800">
+                  Unified Knowledge Agent
+                </h2>
+                <p className="text-gray-500 max-w-md mx-auto">
+                  Your personal Second Brain for the Nexteir Internship. Ask
+                  about debugging, architecture, or specific problem IDs.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full max-w-2xl px-4">
+                {[
+                  "What was the fix for the Chiiro loader?",
+                  "Summarize the React Native Yarn vs NPM issue.",
+                  "How do I handle the MultiSelect scrolling bug?",
+                  "Find the solution for //problem82.",
+                ].map((query, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => handleSuggestedQuery(query)}
+                    className="p-4 border border-gray-200 rounded-xl bg-white hover:border-blue-300 hover:shadow-md transition-all text-sm text-gray-700 text-left flex flex-col gap-2 group"
+                  >
+                    <span className="font-medium group-hover:text-blue-600 transition-colors">
+                      {query}
+                    </span>
+                    <span className="text-xs text-gray-400">
+                      Query Knowledge Base →
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           ) : (
             messages.map((msg: any) => (
