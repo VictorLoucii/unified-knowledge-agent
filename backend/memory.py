@@ -16,7 +16,7 @@ def setup_database_tables():
             setup_memory = PostgresSaver(conn)
             setup_memory.setup()
 
-            # 2. Setup custom Second Brain metadata table
+# 2. Setup custom Second Brain metadata table and Cascade rules
             with conn.cursor() as cur:
                 cur.execute(
                     """
@@ -25,8 +25,32 @@ def setup_database_tables():
                         title TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
-                """
+
+                    -- Tie LangGraph's checkpoints to our metadata table
+                    ALTER TABLE checkpoints 
+                    DROP CONSTRAINT IF EXISTS fk_cascade_metadata_checkpoints;
+                    ALTER TABLE checkpoints 
+                    ADD CONSTRAINT fk_cascade_metadata_checkpoints 
+                    FOREIGN KEY (thread_id) REFERENCES thread_metadata(thread_id) ON DELETE CASCADE;
+
+                    -- Tie LangGraph's blobs to our metadata table
+                    ALTER TABLE checkpoint_blobs 
+                    DROP CONSTRAINT IF EXISTS fk_cascade_metadata_blobs;
+                    ALTER TABLE checkpoint_blobs 
+                    ADD CONSTRAINT fk_cascade_metadata_blobs 
+                    FOREIGN KEY (thread_id) REFERENCES thread_metadata(thread_id) ON DELETE CASCADE;
+
+                    -- Tie LangGraph's writes to our metadata table
+                    ALTER TABLE checkpoint_writes 
+                    DROP CONSTRAINT IF EXISTS fk_cascade_metadata_writes;
+                    ALTER TABLE checkpoint_writes 
+                    ADD CONSTRAINT fk_cascade_metadata_writes 
+                    FOREIGN KEY (thread_id) REFERENCES thread_metadata(thread_id) ON DELETE CASCADE;
+                    """
                 )
+
+                
+
         print("✅ PostgresSaver and Metadata tables verified/created.")
     except Exception as e:
         print(f"❌ Postgres Connection Error: {e}")
@@ -71,19 +95,10 @@ async def get_all_threads_history(async_pool: AsyncConnectionPool, limit: int = 
 
 
 async def delete_thread_from_db(async_pool: AsyncConnectionPool, thread_id: str):
-    """Safely deletes all LangGraph checkpoints and metadata for a specific thread."""
+    """Safely deletes thread metadata. PostgreSQL ON DELETE CASCADE handles LangGraph tables automatically."""
     async with async_pool.connection() as conn:
         async with conn.cursor() as cur:
-            # Delete in correct order to avoid orphaned blobs or foreign key issues
-            await cur.execute(
-                "DELETE FROM checkpoint_writes WHERE thread_id = %s;", (thread_id,)
-            )
-            await cur.execute(
-                "DELETE FROM checkpoint_blobs WHERE thread_id = %s;", (thread_id,)
-            )
-            await cur.execute(
-                "DELETE FROM checkpoints WHERE thread_id = %s;", (thread_id,)
-            )
+            # We only need to delete the parent record now
             await cur.execute(
                 "DELETE FROM thread_metadata WHERE thread_id = %s;", (thread_id,)
             )

@@ -3,7 +3,7 @@ import os
 import json
 from datetime import datetime
 from typing import TypedDict, Annotated
-
+import re
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 from pydantic import BaseModel
@@ -61,7 +61,7 @@ persist_directory = os.path.join(BASE_DIR, "chroma_db")
 embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
 
 vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 8})
+retriever = vectorstore.as_retriever(search_kwargs={"k": 100})
 
 print(f"✅ Connected to local ChromaDB at: {persist_directory}")
 
@@ -85,23 +85,33 @@ def search_internship_history(query: str) -> str:
     React Native issues, architectural decisions (like Yarn vs NPM), and UI fixes.
     Input should be a clear, concise search query.
     """
-    expansion_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    expansion_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, name="Expansion_LLM")
     search_variants = expansion_llm.invoke(
-        f"Generate 3 diverse search queries to find information about '{query}' "
-        "in technical internship logs. "
-        "CRITICAL INSTRUCTION: If the user is looking for a specific problem number, "
-        "always include a variant formatted EXACTLY like '//problemX:' (no spaces, with colon). "
-        "Also include variants focusing on the core concepts (e.g., 'MultiSelectAutocompleteField', 'skills modal'). "
-        "Respond with only the queries, one per line."
+        f"Based on the user's query: '{query}', generate 3 search variations. "
+        "RULE 1: If the user asks for a specific problem number (e.g., 13), your FIRST variation MUST be exactly and only '//problem13:' with absolutely NO extra words. "
+        "RULE 2: The other variations should just be core technical keywords from the query. "
+        "Respond with only the raw queries, one per line. DO NOT use numbering, bullets, quotes, or prefixes."
     ).content.split("\n")
 
-    all_queries = [query] + [q.strip() for q in search_variants if q.strip()]
+    # Force strip any accidental numbers/bullets if the LLM disobeys (e.g. "1. //problem13:" -> "//problem13:")
+    # Prioritize the AI's exact variants (like '//problem13:') over the conversational user query
+    all_queries = [
+        q.strip().lstrip("0123456789.- ") for q in search_variants if q.strip()
+    ] + [query]
+
+    all_queries = [re.sub(r'//\s*problem\s*(\d+)\s*:', r'//problem\1:', q, flags=re.IGNORECASE) for q in all_queries]
 
     all_docs = []
     for q in all_queries:
         all_docs.extend(retriever.invoke(q))
 
-    unique_docs = {doc.page_content: doc for doc in all_docs}.values()
+    unique_docs = list({doc.page_content: doc for doc in all_docs}.values())
+        
+# [FIX] Hybrid RAG Sorting stays the same
+    unique_docs.sort(key=lambda d: sum(1 for q in all_queries if q.lower() in d.page_content.lower()), reverse=True)
+
+    # [FIX] Increase to 20 to give the agent more technical depth
+    unique_docs = unique_docs[:20]
 
     formatted_context = "\n\n---\n\n".join(
         [
@@ -132,10 +142,10 @@ async def chatbot_node(state: State):
             f"You are the Nexteir Second Brain, a specialized AI assistant for Victor's internship logs. "
             f"USER PREFERENCES: {user_preferences} "
             "Your goal is to provide technical solutions based strictly on the provided documentation. "
-            "CRITICAL RULE: If you find information labeled with '//problemX:', treat it as the "
-            "definitive and primary answer for any questions about 'problem X'. "
-            "Do not tell the user you 'cannot find' a problem if a result starting with '//problem' exists. "
-            "FORMATTING RULE: The retrieved context contains arbitrary line breaks from PDF extraction. You MUST remove unnecessary newlines, fix broken sentences, and format your output into natural, highly readable paragraphs and lists."
+            "ISOLATION RULE (CRITICAL): When answering about a specific problem ID (e.g., '//problem13:'), you MUST extract and use ONLY the text, explanations, and code that belong to that exact problem. Do NOT merge, mix, or include solutions, file paths, or code from any other problem IDs present in the context. "
+            "CITATION RULE: Always cite the exact problem ID (e.g., //problem13:) for the solution you provide. "
+            "ANTI-HALLUCINATION RULE: If you find the correct technical solution, but the exact '//problemX:' header is missing from that text block, DO NOT borrow an ID from another problem. Instead, provide the solution and add this note: '*(Note: The exact problem ID header was cut off in the retrieved logs, but here is the relevant solution)*'. "
+            "FORMATTING RULE: Remove arbitrary line breaks from the PDF text. CRITICAL CODE PRESERVATION: You are strictly forbidden from summarizing, abbreviating, or skipping code. If the context contains multiple code snippets (e.g., 'Original Code' and 'New Code'), you MUST extract and output EVERY SINGLE LINE of code for ALL of them using proper markdown backticks. Never write 'You need to adjust the layout...' when actual code is available in the context."
         )
     )
 
@@ -217,6 +227,10 @@ async def generate_chat_responses(user_message: str, thread_id: str):
             }
 
             if kind == "on_chat_model_stream":
+                # [FIX] Block the expansion LLM from leaking into the UI stream
+                if event.get("name") == "Expansion_LLM":
+                    continue
+
                 chunk = event["data"].get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
                     safe_event["data"]["chunk"] = {"content": chunk.content}
@@ -262,11 +276,12 @@ async def get_all_threads(limit: int = 20, offset: int = 0):
     try:
         threads = await get_all_threads_history(async_pool, limit, offset)
         # If we get exactly the limit amount, there are likely more rows to fetch
-        has_more = len(threads) == limit 
+        has_more = len(threads) == limit
         return {"threads": threads, "has_more": has_more}
     except Exception as e:
         print(f"🚨 Error fetching threads: {e}")
         return {"error": str(e), "threads": [], "has_more": False}
+
 
 @app.get("/history/{thread_id}")
 async def get_thread_history(thread_id: str):
@@ -297,7 +312,7 @@ async def get_thread_history(thread_id: str):
         return {"error": str(e), "messages": []}
 
 
-# [NEW] Added Delete Endpoint
+# Added Delete Endpoint
 @app.delete("/history/{thread_id}")
 async def delete_thread(thread_id: str):
     """Deletes all data for a specific thread_id."""
