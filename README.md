@@ -5,7 +5,7 @@
 
 **The mission:** To build a production-grade, full-stack Agentic RAG system that transforms static technical logs and documents into an interactive, reasoning intelligence layer.
 
-Current Status: **Phase 5 Complete (Persistence, Pagination & Professional UX)**
+Current Status: **Phase 5 Complete (Persistence, Professional UX & Power User Tools)**
 
 ---
 
@@ -26,12 +26,12 @@ Current Status: **Phase 5 Complete (Persistence, Pagination & Professional UX)**
 ## 🚀 Key Features
 
 * **Long-Term Memory:** Integrated PostgreSQL checkpointer allows the agent to remember conversation context across browser refreshes and system restarts.
+* **Sticky Pinning:** Save important conversations to the top of the sidebar. Uses `localStorage` for UI persistence so your priority chats stay where they belong.
+* **Bulk Management:** Efficient multi-select checkboxes with "Select All" logic. Perform concurrent deletions across multiple threads to keep the workspace clean.
+* **Universal Copy System:** One-tap copying for both Human and AI messages. Includes a **Recursive Fallback Mechanism** to ensure functionality even on non-secure (HTTP/IP-based) local network testing.
 * **Scalable Pagination:** Implemented `LIMIT` and `OFFSET` logic in the history retrieval layer, allowing the system to handle thousands of chat sessions with minimal initial load times.
-* **URL Routing & Hydration:** Deep-linking support via URL query parameters (`?thread=[id]`), enabling users to bookmark, share, or refresh specific chat sessions.
-* **Optimistic UI Sync:** The sidebar updates instantly upon sending a new message, providing zero-latency feedback before the backend processing even begins.
-* **Intelligent Session Naming:** Automatically generates chat titles from the initial user prompt, stored in a dedicated metadata table for fast retrieval.
-* **Safe Session Deletion:** A cascading delete protocol cleans up internal LangGraph checkpoints (`checkpoint_writes`, `blobs`, `checkpoints`) and custom metadata synchronously.
-* **Pro Empty State:** A custom welcome dashboard featuring interactive "Suggested Queries" to guide the user through the knowledge base.
+* **URL Routing & Hydration:** Deep-linking support via URL query parameters (`?thread=[id]`), enabling users to bookmark or refresh specific chat sessions.
+* **Optimistic UI Sync:** The sidebar updates instantly upon sending a new message, providing zero-latency feedback before the backend processing begins.
 
 ---
 
@@ -44,7 +44,7 @@ Unified-Knowledge-Agent/
 │   ├── memory.py       # Database schema setup, Paginated SQL queries & Deletion
 │   └── chroma_db/      # Persistent Vector Store
 ├── frontend/         
-│   ├── src/app/        # Next.js Chat UI with Paginated Sidebar & Welcome Dashboard
+│   ├── src/app/        # Next.js Chat UI with Pinning, Multi-select & Copy Logic
 │   └── hooks/          # useChatStream hook for SSE handling & auto-hydration
 ├── data/               # Knowledge library (Internship logs/PDFs)
 ├── pyproject.toml      # Global dependencies managed by uv
@@ -55,14 +55,14 @@ Unified-Knowledge-Agent/
 
 ## 🛡️ Architecture Highlights
 
-### **1. The Metadata Layer**
-To avoid the overhead of parsing binary LangGraph blobs, we implemented a `thread_metadata` table. When a new session starts, the backend captures the user prompt to store a relational title and a `created_at` timestamp for chronological sorting.
+### **1. The Hybrid Persistence Model**
+We utilize a dual-layer persistence strategy. **PostgreSQL** handles the heavy lifting of agent states and thread metadata, while **Browser LocalStorage** manages UI-specific states like pinned threads. This ensures a "snappy" interface that remembers your preferences without unnecessary database round-trips.
 
-### **2. Efficient Pagination & Scaling**
-To prevent the "Large History Slowdown," the `/history` endpoint supports chunked fetching. The frontend manages an `offset` state and appends new threads to the sidebar only when the user explicitly requests "Older Chats," maintaining a lightweight DOM.
+### **2. Resilient Clipboard Integration**
+To support the "Always-Available" developer workflow, the clipboard logic detects `isSecureContext`. If testing over a local IP (standard in React Native development), the system automatically falls back to an invisible `textarea` injection method to bypass browser security blocks.
 
-### **3. Optimistic Synchronization & Hydration**
-When a new chat starts, the frontend "optimistically" creates a sidebar entry. Upon stream completion, a callback triggers a background re-sync with the database to ensure the local UI perfectly matches the server-side state.
+### **3. Cascading Deletion Protocol**
+Deleting a thread triggers a clean-up across all relational tables. PostgreSQL `ON DELETE CASCADE` rules ensure that when a thread metadata record is removed, all associated LangGraph checkpoints, blobs, and writes are purged, preventing database bloat.
 
 ---
 
@@ -84,8 +84,9 @@ When a new chat starts, the frontend "optimistically" creates a sidebar entry. U
     ```bash
     # Start Backend
     uv run uvicorn backend.app:app --reload
+    
     # Start Frontend (In separate terminal)
-    npm run dev
+    cd frontend && npm run dev
     ```
 
 ---
@@ -97,8 +98,8 @@ When a new chat starts, the frontend "optimistically" creates a sidebar entry. U
 - [x] **Phase 5: Persistence & UX (Complete):**
     * **PostgreSQL** checkpointing & **Thread Metadata** tracking.
     * **Pagination Layer** for scalable history retrieval.
-    * **URL Routing** for session persistence across refreshes.
-    * **Optimistic UI** & **Cascading Deletion** logic.
+    * **Power User UX:** Pinning, Bulk Delete, and Universal Copy.
+    * **Clipboard Fallback** for cross-network testing.
 - [ ] **Phase 6: Deployment & Refinement:**
     * Dockerization & Cloud Deployment (Railway/AWS/Vercel).
     * Dynamic PDF ingestion API.
