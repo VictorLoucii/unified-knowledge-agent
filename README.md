@@ -3,9 +3,9 @@
 
 # 📊 Unified Knowledge Agent
 
-**The mission:** To build a production-grade, full-stack Agentic RAG system that transforms static technical logs and documents into an interactive, reasoning intelligence layer.
+**The mission:** To build a production-grade, modular Agentic RAG system that transforms static technical logs into an interactive, reasoning intelligence layer—optimized for performance and zero-cost local indexing.
 
-Current Status: **Phase 5 Complete (Persistence, Professional UX & Power User Tools)**
+Current Status: **Phase 5.5 Complete (Modular Refactor & Zero-Waste RAG)**
 
 ---
 
@@ -15,23 +15,22 @@ Current Status: **Phase 5 Complete (Persistence, Professional UX & Power User To
 | :--- | :--- | :--- |
 | **Orchestration** | **LangGraph** | Stateful, multi-turn agent logic & tool-calling |
 | **Persistence** | **PostgreSQL** | Long-term memory & session checkpointing via `psycopg` |
-| **Metadata** | **Relational SQL** | Custom `thread_metadata` table for intelligent session naming |
-| **Backend** | **FastAPI** | High-performance Python bridge with async streaming |
+| **Embeddings** | **HuggingFace (Local)** | `all-MiniLM-L6-v2` for **$0 cost** vector indexing |
+| **LLM** | **GPT-4o-Mini** | High-reasoning, low-cost intelligence for the final answer |
+| **Backend** | **FastAPI** | Modularized Python bridge (Pruned `app.py` + `core/` logic) |
 | **Frontend** | **Next.js 14** | Responsive UI with real-time token streaming & history sidebar |
-| **Environment** | **uv** | Blazing-fast Python package & project management |
-| **Vector DB** | **ChromaDB** | Vector storage for local technical internship logs |
+| **Vector DB** | **ChromaDB** | Local vector storage with Markdown-optimized parsing |
 
 ---
 
 ## 🚀 Key Features
 
+* **Zero-Waste RAG Architecture:** Switched from OpenAI embeddings to local HuggingFace models. Indexing 5.4MB of data now costs **$0.00**, allowing for infinite database rebuilds during development.
+* **Modular Backend Logic:** Refactored a 600-line monolith into a clean `core/` directory. Separation of concerns between `agents.py` (logic), `config.py` (infrastructure), and `tools.py` (capabilities).
+* **Markdown-First Ingestion:** Migrated from `pypdf` to `.md` source files. This ensures high-fidelity parsing of code blocks and technical headers, significantly improving retrieval accuracy.
 * **Long-Term Memory:** Integrated PostgreSQL checkpointer allows the agent to remember conversation context across browser refreshes and system restarts.
-* **Sticky Pinning:** Save important conversations to the top of the sidebar. Uses `localStorage` for UI persistence so your priority chats stay where they belong.
-* **Bulk Management:** Efficient multi-select checkboxes with "Select All" logic. Perform concurrent deletions across multiple threads to keep the workspace clean.
-* **Universal Copy System:** One-tap copying for both Human and AI messages. Includes a **Recursive Fallback Mechanism** to ensure functionality even on non-secure (HTTP/IP-based) local network testing.
-* **Scalable Pagination:** Implemented `LIMIT` and `OFFSET` logic in the history retrieval layer, allowing the system to handle thousands of chat sessions with minimal initial load times.
-* **URL Routing & Hydration:** Deep-linking support via URL query parameters (`?thread=[id]`), enabling users to bookmark or refresh specific chat sessions.
-* **Optimistic UI Sync:** The sidebar updates instantly upon sending a new message, providing zero-latency feedback before the backend processing begins.
+* **Universal Copy & Fallback:** Includes a **Recursive Fallback Mechanism** for clipboards, ensuring copy-paste works even when testing over local IP/HTTP environments.
+* **Optimistic UI Sync:** The sidebar updates instantly upon sending a new message, providing zero-latency feedback.
 
 ---
 
@@ -40,29 +39,34 @@ Current Status: **Phase 5 Complete (Persistence, Professional UX & Power User To
 ```text
 Unified-Knowledge-Agent/
 ├── backend/          
-│   ├── app.py          # FastAPI routes, LangGraph workflow & SSE Logic
-│   ├── memory.py       # Database schema setup, Paginated SQL queries & Deletion
-│   └── chroma_db/      # Persistent Vector Store
+│   ├── app.py             # Lean FastAPI entry point (Routes & Lifecycle)
+│   ├── core/              # The "Brain" of the operation
+│   │   ├── agents.py      # LangGraph state machine & workflow
+│   │   ├── config.py      # LLM, Local Embeddings & VectorStore setup
+│   │   └── tools.py       # Custom tools (Time, Stats, RAG Search)
+│   ├── memory.py          # PostgreSQL schema & paginated history logic
+│   ├── chroma_db/         # Local Vector Store (Persisted)
+│   └── docstore/          # Local Parent-Document storage
 ├── frontend/         
-│   ├── src/app/        # Next.js Chat UI with Pinning, Multi-select & Copy Logic
-│   └── hooks/          # useChatStream hook for SSE handling & auto-hydration
-├── data/               # Knowledge library (Internship logs/PDFs)
-├── pyproject.toml      # Global dependencies managed by uv
-└── uv.lock             # Deterministic lockfile
+│   ├── src/app/           # Next.js Chat UI (Pinning, Multi-select)
+│   └── hooks/             # useChatStream hook for SSE handling
+├── data/                  # Source Knowledge (.md / .pdf)
+├── pyproject.toml         # Dependencies managed by uv
+└── uv.lock                # Deterministic lockfile
 ```
 
 ---
 
 ## 🛡️ Architecture Highlights
 
-### **1. The Hybrid Persistence Model**
-We utilize a dual-layer persistence strategy. **PostgreSQL** handles the heavy lifting of agent states and thread metadata, while **Browser LocalStorage** manages UI-specific states like pinned threads. This ensures a "snappy" interface that remembers your preferences without unnecessary database round-trips.
+### **1. Modular Logic Dispersal**
+We follow a strict "Pruned Entry-Point" pattern. `app.py` is restricted to handling the FastAPI bridge and database pooling, while the Agentic logic is isolated in `backend/core/`. This prevents "Spaghetti Code" and makes the system 10x easier to debug or scale.
 
-### **2. Resilient Clipboard Integration**
-To support the "Always-Available" developer workflow, the clipboard logic detects `isSecureContext`. If testing over a local IP (standard in React Native development), the system automatically falls back to an invisible `textarea` injection method to bypass browser security blocks.
+### **2. Local Embedding Efficiency**
+By utilizing `sentence-transformers/all-MiniLM-L6-v2` locally, we've eliminated network latency and API credit "burn" during the RAG retrieval phase. The system performs hybrid re-ranking based on core keywords to ensure the most relevant internship logs are prioritized.
 
-### **3. Cascading Deletion Protocol**
-Deleting a thread triggers a clean-up across all relational tables. PostgreSQL `ON DELETE CASCADE` rules ensure that when a thread metadata record is removed, all associated LangGraph checkpoints, blobs, and writes are purged, preventing database bloat.
+### **3. Scalable Persistence Layer**
+A dual-layer strategy: **PostgreSQL** for heavy-lifting agent states/thread metadata and **Browser LocalStorage** for UI-specific states like pinned threads. 
 
 ---
 
@@ -75,7 +79,7 @@ Deleting a thread triggers a clean-up across all relational tables. PostgreSQL `
 
 1.  **Clone & Sync:**
     ```bash
-    git clone https://github.com/victorloucii/unified-knowledge-agent.git
+    git clone https://github.com/VictorLoucii/unified-knowledge-agent.git
     cd unified-knowledge-agent
     uv sync
     ```
@@ -83,7 +87,7 @@ Deleting a thread triggers a clean-up across all relational tables. PostgreSQL `
 2.  **Run the System:**
     ```bash
     # Start Backend
-    uv run uvicorn backend.app:app --reload
+    uv run python backend/app.py
     
     # Start Frontend (In separate terminal)
     cd frontend && npm run dev
@@ -95,12 +99,15 @@ Deleting a thread triggers a clean-up across all relational tables. PostgreSQL `
 
 - [x] **Phase 1-3:** Prototype development & RAG integration.
 - [x] **Phase 4:** Standardization (FastAPI, Next.js, Mono-repo setup).
-- [x] **Phase 5: Persistence & UX (Complete):**
-    * **PostgreSQL** checkpointing & **Thread Metadata** tracking.
-    * **Pagination Layer** for scalable history retrieval.
-    * **Power User UX:** Pinning, Bulk Delete, and Universal Copy.
-    * **Clipboard Fallback** for cross-network testing.
-- [ ] **Phase 6: Deployment & Refinement:**
-    * Dockerization & Cloud Deployment (Railway/AWS/Vercel).
-    * Dynamic PDF ingestion API.
-    * Multi-user authentication and secure session isolation.
+- [x] **Phase 5: Persistence & UX:**
+    * PostgreSQL checkpointing & Pagination.
+    * Power User UX (Pinning, Bulk Delete, Universal Copy).
+- [x] **Phase 5.5: Refinement (Current):**
+    * **Modular Refactor:** Split `app.py` into `core/` modules.
+    * **Zero-Waste RAG:** Local embeddings & `.md` data ingestion.
+- [ ] **Phase 6: Deployment:**
+    * Dockerization & Cloud Deployment (Railway/AWS).
+    * Dynamic PDF/MD ingestion API.
+    * Multi-user authentication.
+
+---
