@@ -24,6 +24,8 @@ export default function ChatUI() {
   const [selectedThreads, setSelectedThreads] = useState<Set<string>>(
     new Set(),
   );
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  const isAutoScrollPaused = useRef(false);
 
   // Pagination State
   const [offset, setOffset] = useState(0);
@@ -33,6 +35,17 @@ export default function ChatUI() {
   // [NEW] Pin & Copy States
   const [pinnedThreads, setPinnedThreads] = useState<Set<string>>(new Set());
   const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  // Add this logic before the useEffects
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    // If the user is more than 100px from the bottom, pause auto-scroll
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+    isAutoScrollPaused.current = !isAtBottom;
+  };
 
   // Load pins from localStorage on mount
   useEffect(() => {
@@ -90,7 +103,10 @@ export default function ChatUI() {
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    // Only auto-scroll if the user hasn't manually scrolled up
+    if (!isAutoScrollPaused.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }
   }, [messages]);
 
   // Selection Handlers
@@ -155,11 +171,12 @@ export default function ChatUI() {
     });
   };
 
-// Updated Copy Handler with Fallback for non-secure contexts
+  // Updated Copy Handler with Fallback for non-secure contexts
   const handleCopy = (id: string, content: string) => {
     // 1. Try the modern Clipboard API first
     if (navigator.clipboard && window.isSecureContext) {
-      navigator.clipboard.writeText(content)
+      navigator.clipboard
+        .writeText(content)
         .then(() => {
           setCopiedId(id);
           setTimeout(() => setCopiedId(null), 2000);
@@ -179,30 +196,31 @@ export default function ChatUI() {
     try {
       const textArea = document.createElement("textarea");
       textArea.value = content;
-      
+
       // Ensure the textarea is not visible or affecting layout
       textArea.style.position = "fixed";
       textArea.style.left = "-9999px";
       textArea.style.top = "0";
       document.body.appendChild(textArea);
-      
+
       textArea.focus();
       textArea.select();
-      
-      const successful = document.execCommand('copy');
+
+      const successful = document.execCommand("copy");
       document.body.removeChild(textArea);
-      
+
       if (successful) {
         setCopiedId(id);
         setTimeout(() => setCopiedId(null), 2000);
       }
     } catch (err) {
-      console.error('Fallback copy failed: ', err);
+      console.error("Fallback copy failed: ", err);
     }
   };
 
   const handleSuggestedQuery = (query: string) => {
     if (isStreaming) return;
+    isAutoScrollPaused.current = false; // Reset the pause
 
     const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
     if (isNewThread) {
@@ -221,6 +239,7 @@ export default function ChatUI() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
+    isAutoScrollPaused.current = false; // Reset the pause
 
     const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
 
@@ -475,7 +494,11 @@ export default function ChatUI() {
         </header>
 
         {/* Message History Area */}
-        <main className="flex-1 overflow-y-auto p-6 space-y-6">
+        <main
+          ref={scrollContainerRef as any} // Use 'as any' if TypeScript complains about <main> vs HTMLDivElement
+          onScroll={handleScroll}
+          className="flex-1 overflow-y-auto p-6 space-y-6"
+        >
           {messages.length === 0 ? (
             <div className="flex flex-col h-full items-center justify-center text-center space-y-8 animate-in fade-in duration-500">
               <div className="space-y-2">

@@ -1,0 +1,1 @@
+{"lc": 1, "type": "constructor", "id": ["langchain", "schema", "document", "Document"], "kwargs": {"metadata": {"Header 1": "**Solution**"}, "page_content": "Standardize the parameter name across both screens.  \nThe **correct parameter is categoryId**.", "type": "Document"}}

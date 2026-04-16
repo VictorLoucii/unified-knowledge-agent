@@ -1,0 +1,1 @@
+{"lc": 1, "type": "constructor", "id": ["langchain", "schema", "document", "Document"], "kwargs": {"metadata": {"Header 1": "Problem 78:"}, "page_content": "Here is a complete summary of the feature implementation for your future reference.", "type": "Document"}}

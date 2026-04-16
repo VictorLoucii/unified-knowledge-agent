@@ -1,11 +1,7 @@
 # backend/app.py
 import os
 import json
-from datetime import datetime
-from typing import TypedDict, Annotated
-import re
 from contextlib import asynccontextmanager
-from dotenv import load_dotenv
 from pydantic import BaseModel
 
 from backend.memory import (
@@ -16,155 +12,24 @@ from backend.memory import (
     delete_thread_from_db,
 )
 
+# Core Component Imports
+from backend.core.agents import workflow
+
 # FastAPI Imports
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
-from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import HumanMessage
 
-# Langchain / LangGraph Imports
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_core.messages import BaseMessage, HumanMessage
-from langchain_core.tools import tool
-from langgraph.graph.message import add_messages
-from langgraph.graph import StateGraph, END
-from langgraph.prebuilt import ToolNode, tools_condition
-import psycopg
-from langgraph.checkpoint.postgres import PostgresSaver
+# LangGraph / Postgres checkpointer
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from psycopg_pool import ConnectionPool, AsyncConnectionPool
-from langchain_chroma import Chroma
+from psycopg_pool import AsyncConnectionPool
 
 
 # ==========================================
-# 1. ENVIRONMENT & LLM SETUP
-# ==========================================
-load_dotenv()
-
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("🚨 OPENAI_API_KEY not found! Check your .env file.")
-
-# Disable tracing temporarily since no LANGCHAIN_API_KEY is present
-os.environ["LANGCHAIN_TRACING_V2"] = "false"
-os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
-
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
-
-# ==========================================
-# 2. VECTOR DB INITIALIZATION
-# ==========================================
-import os
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-persist_directory = os.path.join(BASE_DIR, "chroma_db")
-
-embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
-
-vectorstore = Chroma(persist_directory=persist_directory, embedding_function=embeddings)
-retriever = vectorstore.as_retriever(search_kwargs={"k": 100})
-
-print(f"✅ Connected to local ChromaDB at: {persist_directory}")
-
-# ==========================================
-# 3. TOOL DEFINITIONS
+# PHASE 5. FASTAPI & DB POOL LIFECYCLE
 # ==========================================
 
-
-@tool
-def get_system_time(format: str = "%Y-%m-%d %H:%M:%S"):
-    """Returns the current system time. Use this when the user asks for the time."""
-    from datetime import datetime
-
-    return datetime.now().strftime(format)
-
-
-@tool
-def search_internship_history(query: str) -> str:
-    """
-    Use this tool to search the Nexteir Internship logs for debugging solutions,
-    React Native issues, architectural decisions (like Yarn vs NPM), and UI fixes.
-    Input should be a clear, concise search query.
-    """
-    expansion_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, name="Expansion_LLM")
-    search_variants = expansion_llm.invoke(
-        f"Based on the user's query: '{query}', generate 3 search variations. "
-        "RULE 1: If the user asks for a specific problem number (e.g., 13), your FIRST variation MUST be exactly and only '//problem13:' with absolutely NO extra words. "
-        "RULE 2: The other variations should just be core technical keywords from the query. "
-        "Respond with only the raw queries, one per line. DO NOT use numbering, bullets, quotes, or prefixes."
-    ).content.split("\n")
-
-    # Force strip any accidental numbers/bullets if the LLM disobeys (e.g. "1. //problem13:" -> "//problem13:")
-    # Prioritize the AI's exact variants (like '//problem13:') over the conversational user query
-    all_queries = [
-        q.strip().lstrip("0123456789.- ") for q in search_variants if q.strip()
-    ] + [query]
-
-    all_queries = [re.sub(r'//\s*problem\s*(\d+)\s*:', r'//problem\1:', q, flags=re.IGNORECASE) for q in all_queries]
-
-    all_docs = []
-    for q in all_queries:
-        all_docs.extend(retriever.invoke(q))
-
-    unique_docs = list({doc.page_content: doc for doc in all_docs}.values())
-        
-# [FIX] Hybrid RAG Sorting stays the same
-    unique_docs.sort(key=lambda d: sum(1 for q in all_queries if q.lower() in d.page_content.lower()), reverse=True)
-
-    # [FIX] Increase to 20 to give the agent more technical depth
-    unique_docs = unique_docs[:20]
-
-    formatted_context = "\n\n---\n\n".join(
-        [
-            f"Page {doc.metadata.get('page', 'Unknown')}:\n{doc.page_content}"
-            for doc in unique_docs
-        ]
-    )
-
-    return formatted_context
-
-
-tools = [get_system_time, search_internship_history]
-llm_with_tools = llm.bind_tools(tools)
-
-
-# ==========================================
-# 4. LANGGRAPH SETUP (The "Brain")
-# ==========================================
-class State(TypedDict):
-    messages: Annotated[list[BaseMessage], add_messages]
-
-
-async def chatbot_node(state: State):
-    user_preferences = "Always prioritize TypeScript and focus on React Native performance optimization."
-
-    system_prompt = SystemMessage(
-        content=(
-            f"You are the Nexteir Second Brain, a specialized AI assistant for Victor's internship logs. "
-            f"USER PREFERENCES: {user_preferences} "
-            "Your goal is to provide technical solutions based strictly on the provided documentation. "
-            "ISOLATION RULE (CRITICAL): When answering about a specific problem ID (e.g., '//problem13:'), you MUST extract and use ONLY the text, explanations, and code that belong to that exact problem. Do NOT merge, mix, or include solutions, file paths, or code from any other problem IDs present in the context. "
-            "CITATION RULE: Always cite the exact problem ID (e.g., //problem13:) for the solution you provide. "
-            "ANTI-HALLUCINATION RULE: If you find the correct technical solution, but the exact '//problemX:' header is missing from that text block, DO NOT borrow an ID from another problem. Instead, provide the solution and add this note: '*(Note: The exact problem ID header was cut off in the retrieved logs, but here is the relevant solution)*'. "
-            "FORMATTING RULE: Remove arbitrary line breaks from the PDF text. CRITICAL CODE PRESERVATION: You are strictly forbidden from summarizing, abbreviating, or skipping code. If the context contains multiple code snippets (e.g., 'Original Code' and 'New Code'), you MUST extract and output EVERY SINGLE LINE of code for ALL of them using proper markdown backticks. Never write 'You need to adjust the layout...' when actual code is available in the context."
-        )
-    )
-
-    messages = [system_prompt] + state["messages"]
-
-    response = await llm_with_tools.ainvoke(messages)
-    return {"messages": [response]}
-
-
-workflow = StateGraph(State)
-
-workflow.add_node("chatbot", chatbot_node)
-workflow.add_node("tools", ToolNode(tools=tools))
-
-workflow.set_entry_point("chatbot")
-workflow.add_conditional_edges("chatbot", tools_condition)
-workflow.add_edge("tools", "chatbot")
-
-# [PHASE 5] Compile Graph with Postgres Checkpointer
 # [FIX] Replaced the synchronous block with the new helper function
 setup_database_tables()
 
@@ -180,6 +45,8 @@ async def lifespan(app: FastAPI):
     await async_pool.open()
 
     memory = AsyncPostgresSaver(async_pool)
+    
+    # Compile the graph imported from backend.core.agents
     graph = workflow.compile(checkpointer=memory)
     print("🚀 Async Database Pool & LangGraph Engine Started")
 
@@ -189,9 +56,6 @@ async def lifespan(app: FastAPI):
     print("🛑 Async Database Pool Closed")
 
 
-# ==========================================
-# 5. FASTAPI SETUP (The "Bridge")
-# ==========================================
 app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
@@ -201,7 +65,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class ChatRequest(BaseModel):
     message: str
@@ -268,7 +131,7 @@ async def chat_stream(request: ChatRequest):
 
 
 # ==========================================
-# 6. MEMORY & HISTORY ENDPOINTS [PHASE 5]
+# 6. MEMORY & HISTORY ENDPOINTS
 # ==========================================
 @app.get("/history")
 async def get_all_threads(limit: int = 20, offset: int = 0):
@@ -326,5 +189,4 @@ async def delete_thread(thread_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-
     uvicorn.run(app, host="0.0.0.0", port=8000)
