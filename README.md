@@ -5,7 +5,7 @@
 
 **The mission:** To build a production-grade, modular Agentic RAG system that transforms static technical logs into an interactive, reasoning intelligence layer—optimized for performance and zero-cost local indexing.
 
-Current Status: **Phase 5.5 Complete (Modular Refactor & Zero-Waste RAG)**
+Current Status: **Phase 5.5 Complete (Full-Stack Modular Refactor & Zero-Waste RAG)**
 
 ---
 
@@ -26,7 +26,7 @@ Current Status: **Phase 5.5 Complete (Modular Refactor & Zero-Waste RAG)**
 ## 🚀 Key Features
 
 * **Zero-Waste RAG Architecture:** Switched from OpenAI embeddings to local HuggingFace models. Indexing 5.4MB of data now costs **$0.00**, allowing for infinite database rebuilds during development.
-* **Modular Backend Logic:** Refactored a 600-line monolith into a clean `core/` directory. Separation of concerns between `agents.py` (logic), `config.py` (infrastructure), and `tools.py` (capabilities).
+* **Full-Stack Modular Logic:** Refactored the backend 600-line monolith into a clean `core/` directory and transitioned the Next.js UI from a single massive `page.tsx` into strict, typed presentational components. 
 * **Markdown-First Ingestion:** Migrated from `pypdf` to `.md` source files. This ensures high-fidelity parsing of code blocks and technical headers, significantly improving retrieval accuracy.
 * **Long-Term Memory:** Integrated PostgreSQL checkpointer allows the agent to remember conversation context across browser refreshes and system restarts.
 * **Universal Copy & Fallback:** Includes a **Recursive Fallback Mechanism** for clipboards, ensuring copy-paste works even when testing over local IP/HTTP environments.
@@ -48,9 +48,12 @@ Unified-Knowledge-Agent/
 │   ├── chroma_db/         # Local Vector Store (Persisted)
 │   └── docstore/          # Local Parent-Document storage
 ├── frontend/         
-│   ├── src/app/           # Next.js Chat UI (Pinning, Multi-select)
-│   └── hooks/             # useChatStream hook for SSE handling
-├── data/                  # Source Knowledge (.md / .pdf)
+│   ├── src/               
+│   │   ├── app/           # Next.js App Router (page.tsx Orchestrator)
+│   │   ├── components/    # Modular UI (Sidebar, ChatHeader, MessageList, ChatInput)
+│   │   ├── hooks/         # useChatStream hook for SSE handling
+│   │   └── types/         # TypeScript interface definitions
+├── data/                  # Source Knowledge (.md)
 ├── pyproject.toml         # Dependencies managed by uv
 └── uv.lock                # Deterministic lockfile
 ```
@@ -60,7 +63,7 @@ Unified-Knowledge-Agent/
 ## 🛡️ Architecture Highlights
 
 ### **1. Modular Logic Dispersal**
-We follow a strict "Pruned Entry-Point" pattern. `app.py` is restricted to handling the FastAPI bridge and database pooling, while the Agentic logic is isolated in `backend/core/`. This prevents "Spaghetti Code" and makes the system 10x easier to debug or scale.
+We follow a strict "Pruned Entry-Point" pattern. `app.py` is restricted to handling the FastAPI bridge and database pooling, while the Agentic logic is isolated in `backend/core/`. On the frontend, `page.tsx` acts purely as an orchestrator, delegating rendering to isolated React components. This prevents "Spaghetti Code" and makes the system highly scalable.
 
 ### **2. Local Embedding Efficiency**
 By utilizing `sentence-transformers/all-MiniLM-L6-v2` locally, we've eliminated network latency and API credit "burn" during the RAG retrieval phase. The system performs hybrid re-ranking based on core keywords to ensure the most relevant internship logs are prioritized.
@@ -79,7 +82,7 @@ A dual-layer strategy: **PostgreSQL** for heavy-lifting agent states/thread meta
 
 1.  **Clone & Sync:**
     ```bash
-    git clone https://github.com/VictorLoucii/unified-knowledge-agent.git
+    git clone [https://github.com/VictorLoucii/unified-knowledge-agent.git](https://github.com/VictorLoucii/unified-knowledge-agent.git)
     cd unified-knowledge-agent
     uv sync
     ```
@@ -103,7 +106,8 @@ A dual-layer strategy: **PostgreSQL** for heavy-lifting agent states/thread meta
     * PostgreSQL checkpointing & Pagination.
     * Power User UX (Pinning, Bulk Delete, Universal Copy).
 - [x] **Phase 5.5: Refinement (Current):**
-    * **Modular Refactor:** Split `app.py` into `core/` modules.
+    * **Backend Modular Refactor:** Split `app.py` into `core/` modules.
+    * **Frontend Modular Refactor:** Extracted `page.tsx` monolith into clean presentational components.
     * **Zero-Waste RAG:** Local embeddings & `.md` data ingestion.
 - [ ] **Phase 6: Deployment:**
     * Dockerization & Cloud Deployment (Railway/AWS).
