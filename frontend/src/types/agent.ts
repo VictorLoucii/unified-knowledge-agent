@@ -19,7 +19,7 @@ export interface AgentStreamEvent {
 // This represents the parsed state we will actually use in the React UI
 export interface ChatMessage {
   id: string;
-  role: "user" | "assistant";
+  role: "user" | "assistant" | "system";  
   content: string;
   isThinking?: boolean;
   currentTool?: string | null; // e.g., "Searching the web..."
