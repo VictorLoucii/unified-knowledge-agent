@@ -1,106 +1,283 @@
-// src/app/page.tsx
-'use client';
+// frontend/src/app/page.tsx
+"use client";
 
-import { useState, useRef, useEffect } from 'react';
-import { useChatStream } from '../hooks/useChatStream';
+import { useState, useRef, useEffect } from "react";
+import { useChatStream } from "../hooks/useChatStream";
+import Sidebar from "../components/Sidebar";
+import ChatHeader from "../components/ChatHeader";
+import MessageList from "../components/MessageList";
+import ChatInput from "../components/ChatInput";
 
 export default function ChatUI() {
-  const { messages, sendMessage, isStreaming } = useChatStream();
-  const [input, setInput] = useState('');
+  const {
+    messages,
+    sendMessage,
+    isStreaming,
+    isWaitingForApproval, // <-- [PHASE 7 NEW] Extracted from hook
+    handleApproval,       // <-- [PHASE 7 NEW] Extracted from hook
+    loadThread,
+    deleteThread,
+    threadId: currentThreadId,
+    createNewChat,
+  } = useChatStream() as any;
+
+  const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to the latest message as the stream arrives
+  const [threads, setThreads] = useState<any[]>([]);
+  const [selectedThreads, setSelectedThreads] = useState<Set<string>>(
+    new Set(),
+  );
+  const scrollContainerRef = useRef<HTMLElement>(null);
+  const isAutoScrollPaused = useRef(false);
+
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const LIMIT = 20;
+
+  const [pinnedThreads, setPinnedThreads] = useState<Set<string>>(new Set());
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const handleScroll = () => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+    const { scrollTop, scrollHeight, clientHeight } = container;
+    const isAtBottom = scrollHeight - scrollTop - clientHeight < 10;
+    isAutoScrollPaused.current = !isAtBottom;
+  };
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    const savedPins = localStorage.getItem("pinnedThreads");
+    if (savedPins) {
+      setPinnedThreads(new Set(JSON.parse(savedPins)));
+    }
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(
+      "pinnedThreads",
+      JSON.stringify(Array.from(pinnedThreads)),
+    );
+  }, [pinnedThreads]);
+
+  const fetchHistory = (isReset = false) => {
+    const currentOffset = isReset ? 0 : offset;
+    fetch(
+      `http://localhost:7860/history?limit=${LIMIT}&offset=${currentOffset}`,
+    )
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.threads) {
+          if (isReset) {
+            setThreads(data.threads);
+          } else {
+            setThreads((prev) => {
+              const newThreads = data.threads.filter(
+                (newT: any) => !prev.some((p) => p.id === newT.id),
+              );
+              return [...prev, ...newThreads];
+            });
+          }
+          setOffset(currentOffset + LIMIT);
+          setHasMore(data.has_more);
+        }
+      })
+      .catch((err) => console.error("Failed to fetch history:", err));
+  };
+
+  useEffect(() => {
+    fetchHistory(true);
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      const urlThreadId = urlParams.get("thread");
+      if (urlThreadId && loadThread) {
+        loadThread(urlThreadId);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isAutoScrollPaused.current) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "auto" });
+    }
   }, [messages]);
+
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedThreads(new Set(threads.map((t: any) => t.id)));
+    } else {
+      setSelectedThreads(new Set());
+    }
+  };
+
+  const toggleThreadSelection = (
+    id: string,
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    e.stopPropagation();
+    const newSet = new Set(selectedThreads);
+    if (newSet.has(id)) newSet.delete(id);
+    else newSet.add(id);
+    setSelectedThreads(newSet);
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedThreads.size === 0) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${selectedThreads.size} selected chat(s)?`,
+      )
+    )
+      return;
+
+    const idsToDelete = Array.from(selectedThreads);
+    await Promise.all(idsToDelete.map((id) => deleteThread(id)));
+
+    setThreads((prev) => prev.filter((t: any) => !selectedThreads.has(t.id)));
+    setSelectedThreads(new Set());
+
+    setPinnedThreads((prev) => {
+      const newSet = new Set(prev);
+      idsToDelete.forEach((id) => newSet.delete(id));
+      return newSet;
+    });
+
+    if (idsToDelete.includes(currentThreadId) && createNewChat) {
+      createNewChat();
+    }
+  };
+
+  const togglePin = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setPinnedThreads((prev) => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) newSet.delete(id);
+      else newSet.add(id);
+      return newSet;
+    });
+  };
+
+  const handleCopy = (id: string, content: string) => {
+    if (navigator.clipboard && window.isSecureContext) {
+      navigator.clipboard
+        .writeText(content)
+        .then(() => {
+          setCopiedId(id);
+          setTimeout(() => setCopiedId(null), 2000);
+        })
+        .catch((err) => {
+          console.error("Modern copy failed, trying fallback: ", err);
+          fallbackCopyTextToClipboard(id, content);
+        });
+    } else {
+      fallbackCopyTextToClipboard(id, content);
+    }
+  };
+
+  const fallbackCopyTextToClipboard = (id: string, content: string) => {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = content;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textArea);
+
+      if (successful) {
+        setCopiedId(id);
+        setTimeout(() => setCopiedId(null), 2000);
+      }
+    } catch (err) {
+      console.error("Fallback copy failed: ", err);
+    }
+  };
+
+  const handleSuggestedQuery = (query: string) => {
+    if (isStreaming) return;
+    isAutoScrollPaused.current = false;
+
+    const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
+    if (isNewThread) {
+      const optimisticTitle =
+        query.length > 40 ? query.slice(0, 40) + "..." : query;
+      setThreads((prev) => [
+        { id: currentThreadId, title: optimisticTitle },
+        ...prev,
+      ]);
+      window.history.pushState(null, "", `?thread=${currentThreadId}`);
+    }
+    sendMessage(query, () => fetchHistory(true));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isStreaming) return;
-    sendMessage(input);
-    setInput('');
+    isAutoScrollPaused.current = false;
+
+    const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
+    if (isNewThread) {
+      const optimisticTitle =
+        input.length > 40 ? input.slice(0, 40) + "..." : input;
+      setThreads((prev) => [
+        { id: currentThreadId, title: optimisticTitle },
+        ...prev,
+      ]);
+      window.history.pushState(null, "", `?thread=${currentThreadId}`);
+    }
+    sendMessage(input, () => fetchHistory(true));
+    setInput("");
   };
 
   return (
-    <div className="flex flex-col h-screen bg-gray-50 text-gray-900">
-      {/* Header */}
-      <header className="bg-white border-b border-gray-200 px-6 py-4 shadow-sm flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-800">Agentic AI Streaming Bridge</h1>
-        <span className="text-xs text-red-500">Streaming: {isStreaming ? "YES" : "NO"}</span>
-        <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${isStreaming ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`}></span>
-          <span className="text-sm text-gray-500 font-medium">
-            {isStreaming ? 'Connection Active' : 'Idle'}
-          </span>
-        </div>
-      </header>
+    <div className="flex h-screen w-full bg-white">
+      <Sidebar
+        threads={threads}
+        pinnedThreads={pinnedThreads}
+        selectedThreads={selectedThreads}
+        currentThreadId={currentThreadId}
+        hasMore={hasMore}
+        createNewChat={createNewChat}
+        handleSelectAll={handleSelectAll}
+        handleBulkDelete={handleBulkDelete}
+        toggleThreadSelection={toggleThreadSelection}
+        loadThread={loadThread}
+        togglePin={togglePin}
+        deleteThread={deleteThread}
+        setThreads={setThreads}
+        setSelectedThreads={setSelectedThreads}
+        setPinnedThreads={setPinnedThreads}
+        fetchHistory={fetchHistory}
+      />
 
-      {/* Message History Area */}
-      <main className="flex-1 overflow-y-auto p-6 space-y-6">
-        {messages.length === 0 ? (
-          <div className="flex h-full items-center justify-center text-gray-400">
-            <p>Send a message to initialize the LangGraph reasoning engine.</p>
-          </div>
-        ) : (
-          messages.map((msg) => (
-            <div
-              key={msg.id}
-              className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
-            >
-              <div
-                className={`max-w-[80%] rounded-2xl px-5 py-3 ${
-                  msg.role === 'user'
-                    ? 'bg-blue-600 text-white rounded-br-none shadow-md'
-                    : 'bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm'
-                }`}
-              >
-                {/* 1. Content Rendering */}
-                {msg.content && (
-                  <div className="whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
-                  </div>
-                )}
+      <div className="flex flex-col flex-1 h-screen bg-gray-50 text-gray-900 overflow-hidden">
+        <ChatHeader isStreaming={isStreaming} />
 
-                {/* 2. Tool & Thinking State UI */}
-                {(msg.isThinking || msg.currentTool) && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 font-medium bg-blue-50/50 p-2 rounded-lg border border-blue-100">
-                    <svg className="animate-spin h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    <span>{msg.currentTool ? msg.currentTool : 'Agent is reasoning...'}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-        {/* Invisible div to anchor the auto-scroll */}
-        <div ref={messagesEndRef} />
-      </main>
+        <MessageList
+          messages={messages}
+          isStreaming={isStreaming}
+          isWaitingForApproval={isWaitingForApproval} // <-- [PHASE 7 NEW] Passed down to trigger UI
+          handleApproval={handleApproval}             // <-- [PHASE 7 NEW] Passed down to trigger Backend endpoint
+          handleSuggestedQuery={handleSuggestedQuery}
+          scrollContainerRef={scrollContainerRef}
+          handleScroll={handleScroll}
+          messagesEndRef={messagesEndRef}
+          copiedId={copiedId}
+          handleCopy={handleCopy}
+        />
 
-      {/* Input Form */}
-      <footer className="bg-white border-t border-gray-200 p-4">
-        <div className="max-w-4xl mx-auto">
-          <form onSubmit={handleSubmit} className="flex gap-3">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              disabled={isStreaming}
-              placeholder={isStreaming ? "Wait for response..." : "Ask the agent anything..."}
-              className="flex-1 rounded-xl border border-gray-300 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100 disabled:text-gray-400 transition-colors"
-            />
-            <button
-              type="submit"
-              disabled={!input.trim() || isStreaming}
-              className="bg-blue-600 text-white px-6 py-3 rounded-xl font-medium hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:bg-blue-300 transition-all active:scale-95"
-            >
-              Send
-            </button>
-          </form>
-        </div>
-      </footer>
+        <ChatInput
+          input={input}
+          setInput={setInput}
+          handleSubmit={handleSubmit}
+          isStreaming={isStreaming}
+          isWaitingForApproval={isWaitingForApproval} // <-- [PHASE 7 NEW] Passed down to lock input
+        />
+      </div>
     </div>
   );
 }

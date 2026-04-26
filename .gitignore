@@ -17,6 +17,8 @@ wheels/
 
 # Vector Database (This is inside your nested folder)
 **/chroma_db/
+# Local Document Store
+**/docstore/
 
 # Node/React (Very important for your frontend)
 node_modules/
@@ -28,3 +30,6 @@ node_modules/
 
 # Frontend specifics
 frontend/.env.local
+
+# Troubleshooting scripts
+test_conn.py
