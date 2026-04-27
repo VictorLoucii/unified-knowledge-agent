@@ -29,7 +29,7 @@ services:
       - "8000:8000"
     environment:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - DATABASE_URL=postgresql://postgres.zpsguwilzanoraxwfsty:0I3cdkk8KAY6803O@aws-1-ap-south-1.pooler.supabase.com:5432/postgres
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       # Kept from your version: CRITICAL for keeping your AI's knowledge base!
       - ./chroma_db:/app/chroma_db
