@@ -1,4 +1,3 @@
-
 ---
 title: Unified Knowledge Agent (Nexteir Second Brain)
 emoji: 🧠
