@@ -1,3 +1,4 @@
+# backend/core/tools.py
 import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
@@ -19,15 +20,15 @@ def get_system_time(format: str = "%Y-%m-%d %H:%M:%S"):
 @tool
 def get_problem_index(start: int = 1, end: int = 25) -> str:
     """
-    Use this tool ONLY for top-level navigation, such as 'what are the problems?', 
+    Use this tool ONLY for top-level navigation, such as 'what are the problems?',
     'show me the index', or 'list all problems'.
-    
-    CRITICAL ROUTING RULE: DO NOT use this tool to look for specific topics, 
-    errors, bugs, or existence checks (e.g., 'are there problems about X' or 
-    'is there a fix for Y'). 
-    
-    DO NOT USE THIS TOOL FOR ORDINAL REQUESTS. If the user asks for the 'first problem', 
-    'last problem', 'oldest', or 'latest', you MUST REJECT this tool and use 
+
+    CRITICAL ROUTING RULE: DO NOT use this tool to look for specific topics,
+    errors, bugs, or existence checks (e.g., 'are there problems about X' or
+    'is there a fix for Y').
+
+    DO NOT USE THIS TOOL FOR ORDINAL REQUESTS. If the user asks for the 'first problem',
+    'last problem', 'oldest', or 'latest', you MUST REJECT this tool and use
     search_internship_history instead.
     """
     import os
@@ -62,7 +63,6 @@ def get_problem_index(start: int = 1, end: int = 25) -> str:
             start_idx = match.end()
             end_idx = matches[i + 1].start() if i + 1 < len(matches) else len(full_text)
             block = full_text[start_idx:end_idx]
-
 
             # LAYER 1: Code Blocks
             block = re.sub(r"```.*?```", "", block, flags=re.DOTALL)
@@ -99,7 +99,7 @@ def get_problem_index(start: int = 1, end: int = 25) -> str:
         problem_titles.sort(key=lambda x: x[0])
 
         start_idx = max(0, start - 1)
-        
+
         # [PHASE 7.3 FIX] The Hard Token Ceiling
         MAX_PAGINATION_SIZE = 25
         requested_end = min(end, start + MAX_PAGINATION_SIZE - 1)
@@ -167,12 +167,15 @@ def get_internship_stats() -> str:
 @tool
 def search_internship_history(query: str) -> str:
     """
-    Use this tool for ANY query regarding specific topics, keywords, errors, 
-    or existence checks (e.g., 'is there a fix for...', 'are there problems about X', 
-    or 'how do I handle Y'). 
-    
+    CRITICAL DIRECTIVE: You MUST call this tool for EVERY technical question, bug inquiry,
+    UI styling rule, or project workflow question. Do NOT rely on your internal programming knowledge.
+
+    Use this tool for ANY query regarding specific topics, keywords, errors,
+    code logic, or existence checks (e.g., 'is there a fix for...', 'are there problems about X',
+    'why do we add marginLeft', or 'how do I handle Y').
+
     This is the ONLY tool that can see the full content of the logs.
-    
+
     CRITICAL: If the user asks for a specific Problem ID (e.g., 'Problem 26'),
     OR asks for ordinal positions like 'the first problem' or 'the last problem',
     you MUST use this tool and pass that exact phrase as the query.
@@ -302,6 +305,11 @@ def search_internship_history(query: str) -> str:
         print(
             f"✅ [DEBUG] Short-circuiting vector search. Fed {len(direct_problem_blocks)} raw blocks."
         )
+
+        # [PHASE 7.0 FIX]: Inject metadata even during an early return!
+        retrieved_ids_str = ",".join(list(target_problems))
+        final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
+
         return final_output
 
     # ==========================================
@@ -364,8 +372,13 @@ def search_internship_history(query: str) -> str:
                     score += 10
 
         exact_query_lower = query.lower().strip()
-        if len(exact_query_lower) > 3 and exact_query_lower in text_lower:
-            score += 50
+        # [THE FIX: Heavily weight header matches to prevent hijacking]
+        if len(exact_query_lower) >= 2:
+            headers_text_lower = headers_text.lower()
+            if exact_query_lower in headers_text_lower:
+                score += 500  # Massive boost for exact match in header
+            elif exact_query_lower in text_lower:
+                score += 100
 
         for kw in core_keywords:
             base_word = kw[:-1] if kw.endswith("s") else kw
@@ -381,15 +394,19 @@ def search_internship_history(query: str) -> str:
             )
 
             if re.search(pattern, text_lower):
-                score += 5
+                # [THE FIX: Heavily boost the weight if the user only typed 1-3 words]
+                score += 15 if len(core_keywords) <= 3 else 5
 
         return score
 
     # [PHASE 6.8 FIX] SORT AND TRUNCATE FIRST!
     unique_docs.sort(key=calculate_relevance_score, reverse=True)
-    unique_docs = unique_docs[:3]
+    
+    # [THE FIX: Increase K value to 8 to ensure deep retrieval for short-tail queries]
+    unique_docs = unique_docs[:10] 
+    print(f"🔧 [__DEV__] Increased K-value to 8. Sorting for broad short-tail queries completed.")
 
-    print(f"\n📊 [DEBUG] Top 3 Vector Matches for General Search:")
+    print(f"\n📊 [DEBUG] Top 8 Vector Matches for General Search:")
     for i, doc in enumerate(unique_docs):
         score = calculate_relevance_score(doc)
         preview = doc.page_content[:100].replace("\n", " ")
@@ -401,11 +418,16 @@ def search_internship_history(query: str) -> str:
         headers_text = " ".join(
             [str(val) for k, val in doc.metadata.items() if "Header" in k]
         )
-        
+
         # 🚀 THE FIX: Prevent Extractor Trap by checking metadata headers
         # If the chunk comes from a Workflow or General section, do NOT scrape it for bug IDs.
-        if any(keyword in headers_text.lower() for keyword in ["workflow", "rule", "general", "role"]):
-            print(f"🔧 [__DEV__] Skipping auto-escalation for general document: {headers_text[:50]}...")
+        if any(
+            keyword in headers_text.lower()
+            for keyword in ["workflow", "rule", "general", "role"]
+        ):
+            print(
+                f"🔧 [__DEV__] Skipping auto-escalation for general document: {headers_text[:50]}..."
+            )
             continue
 
         full_text = headers_text + " " + doc.page_content
@@ -450,11 +472,11 @@ def search_internship_history(query: str) -> str:
                                 block[:15000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
                             )
 
-                        # [PHASE 7.2 FIX] The Strict Librarian Directive
+                        # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
                         escalated_blocks.append(
                             f"=== AUTO-ESCALATED CONTEXT: PROBLEM {prob_num} ===\n"
-                            f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID or a highly specific technical error, you MUST COPY AND PASTE the entire text below this line and end with '<END OF PROBLEM>'. "
-                            f"HOWEVER, if the user's query is vague/ambiguous (e.g., 'the screen', 'a bug') OR it's a general workflow question, DO NOT extract the solution. Act as a Librarian: list ONLY the Problem ID and a 1-sentence description of the issue. You are STRICTLY FORBIDDEN from outputting any code blocks. Force the user to pick an ID first.)\n\n"
+                            f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID, or a highly specific technical error, you MUST synthesize the entire text below this line including code and paths. "
+                            f"Act as a Librarian (listing ONLY IDs) if the query is vague/ambiguous and matches 2 or more completely unrelated problems (e.g., 'file upload bug' matching 3 different IDs). You are STRICTLY FORBIDDEN from summarizing code blocks—output them exactly.)\n\n"
                             f"{block}\n==============================================\n"
                         )
 
@@ -504,6 +526,12 @@ def search_internship_history(query: str) -> str:
             final_output[:MAX_CHAR_LIMIT]
             + "\n\n...[TOTAL CONTENT TRUNCATED DUE TO SIZE]..."
         )
+
+    # [RECALL@K METADATA INJECTION]
+    # Inject retrieved IDs as an invisible comment for the evaluation parser.
+    # The LLM ignores this, ensuring UI/Persona backward compatibility.
+    retrieved_ids_str = ",".join(list(discovered_problems))
+    final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
 
     return final_output
 
