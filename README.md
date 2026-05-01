@@ -112,5 +112,4 @@ uv run python -m backend.app
 * **Database:** **Supabase** handles the persistent LangGraph state machine.
 ```
 
----
 

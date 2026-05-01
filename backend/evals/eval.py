@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import re
 from pathlib import Path
 import uuid
 
@@ -23,20 +24,28 @@ import asyncio
 memory = MemorySaver()
 graph = workflow.compile(checkpointer=memory)
 
-def get_agent_response(query: str) -> str:
+def get_agent_response_and_metadata(query: str) -> tuple[str, list[str]]:
+    """Returns the agent's textual response alongside mathematically extracted Problem IDs."""
     try:
         inputs = {"messages": [HumanMessage(content=query)]}
-        
-        # Generate a truly unique ID for this specific test
         test_thread_id = str(uuid.uuid4())
         config = {"configurable": {"thread_id": test_thread_id}}
         
-        # Use asyncio.run to execute the async graph in our synchronous eval loop
         output_state = asyncio.run(graph.ainvoke(inputs, config=config))
+        final_message = output_state["messages"][-1].content
         
-        return output_state["messages"][-1].content
+        # Intercept and extract the hidden metadata directly from the Tool calls
+        retrieved_ids = []
+        for msg in output_state["messages"]:
+            if hasattr(msg, 'type') and msg.type == 'tool' and isinstance(msg.content, str):
+                matches = re.findall(r"<!-- RETRIEVED_PROBLEM_IDS: \[(.*?)\] -->", msg.content)
+                for match in matches:
+                    if match.strip():
+                        retrieved_ids.extend([x.strip() for x in match.split(",")])
+                        
+        return final_message, list(set(retrieved_ids))
     except Exception as e:
-        return f"Error invoking agent: {str(e)}"
+        return f"Error invoking agent: {str(e)}", []
 
 # --- 1. Define the Structured Output for the Judge ---
 class EvalResult(BaseModel):
@@ -44,7 +53,6 @@ class EvalResult(BaseModel):
     reason: str = Field(description="Explanation of why the agent passed or failed.")
 
 # --- 2. Setup the LLM-as-a-Judge ---
-# Using gpt-4o as the judge because it is excellent at following strict instructions
 judge_llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
 structured_judge = judge_llm.with_structured_output(EvalResult)
 
@@ -74,9 +82,7 @@ judge_prompt = ChatPromptTemplate.from_messages([
     """)
 ])
 
-
 evaluator_chain = judge_prompt | structured_judge
-
 
 # --- 4. Main Evaluation Loop ---
 def run_evals():
@@ -87,16 +93,29 @@ def run_evals():
     with open(dataset_path, "r", encoding="utf-8") as f:
         dataset = json.load(f)
         
-    passed_count = 0
-    total = len(dataset)
+    passed_llm_count = 0
+    total_llm = len(dataset)
+    
+    recall_hits = 0
+    total_recall_targets = 0
     
     for i, test in enumerate(dataset, 1):
-        print(f"🔄 Running Test {i}/{total}: {test['query']}")
+        print(f"🔄 Running Test {i}/{total_llm}: {test['query']}")
         
-        # 1. Get Agent Output
-        agent_output = get_agent_response(test["query"])
+        # 1. Get Agent Output & Metadata
+        agent_output, retrieved_ids = get_agent_response_and_metadata(test["query"])
         
-        # 2. Grade with Judge
+        # 2. Check Recall@k (Mathematical Check, bypassing LLM bias)
+        target_id = test.get("target_problem_id")
+        is_hit = False
+        
+        if target_id is not None:
+            total_recall_targets += 1
+            if str(target_id) in retrieved_ids:
+                is_hit = True
+                recall_hits += 1
+        
+        # 3. Grade with LLM Judge
         verdict: EvalResult = evaluator_chain.invoke({
             "query": test["query"],
             "expected_output": test["expected_output"],
@@ -104,23 +123,44 @@ def run_evals():
             "agent_output": agent_output
         })
         
-        # 3. Print Results
+        # 4. Print Pipeline Results
         if verdict.passed:
-            print(f"✅ PASS")
-            passed_count += 1
+            print(f"✅ AI LOGIC PASS")
+            passed_llm_count += 1
         else:
-            print(f"❌ FAIL")
+            print(f"❌ AI LOGIC FAIL")
             
+        if target_id is not None:
+            if is_hit:
+                print(f"✅ SEARCH HIT: Target [{target_id}] found in Chroma DB Retrieval {retrieved_ids}")
+            else:
+                print(f"❌ SEARCH MISS: Target [{target_id}] NOT found in Chroma DB Retrieval {retrieved_ids}")
+
         print(f"   Reason: {verdict.reason}")
         print("-" * 60)
 
-    # --- 5. Final Score ---
-    score = (passed_count / total) * 100
-    print(f"\n🎯 Final Evaluation Score: {passed_count}/{total} ({score:.1f}%)")
-    if score == 100:
-        print("🏆 Congratulations! Your LangGraph Agent is Production-Ready.")
+    # --- 5. Final Synthesis Matrix ---
+    llm_score = (passed_llm_count / total_llm) * 100
+    print("\n===========================================")
+    print("📊 PHASE 7.0 EVALUATION REPORT MATRIX")
+    print("===========================================")
+    
+    if total_recall_targets > 0:
+        recall_score = (recall_hits / total_recall_targets) * 100
+        print(f"🔎 Final Search Recall@k: {recall_hits}/{total_recall_targets} ({recall_score:.1f}%)")
     else:
-        print("⚠️ Your agent failed some strict constraints. Review the reasons above and tweak your system prompt or tools.")
+        recall_score = 100.0
+        print("🔎 Final Search Recall@k: N/A (No target IDs specified)")
+
+    print(f"🧠 Final Agent Logic Score: {passed_llm_count}/{total_llm} ({llm_score:.1f}%)")
+    print("===========================================")
+
+    if llm_score == 100 and recall_score == 100:
+        print("🏆 STATUS: PRODUCTION READY. (Safe to Deploy)")
+    elif recall_score < 100:
+        print("⚠️ ACTIONABLE INSIGHT: Tweak ChromaDB search weights in tools.py. The Database is failing to find the right files.")
+    elif llm_score < 100:
+        print("⚠️ ACTIONABLE INSIGHT: Tweak System Prompt. The Database is finding the files, but the AI is failing to synthesize them correctly.")
 
 if __name__ == "__main__":
     run_evals()

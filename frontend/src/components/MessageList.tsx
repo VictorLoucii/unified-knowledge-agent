@@ -2,6 +2,8 @@
 "use client";
 
 import React from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 
 interface MessageListProps {
   messages?: any[];
@@ -28,6 +30,23 @@ export default function MessageList({
   copiedId = null,
   handleCopy = () => {},
 }: MessageListProps) {
+  // Helper to strip metadata tags AND the END OF PROBLEM marker
+  const sanitizeContent = (content: string) => {
+    if (!content) return "";
+    return content
+      .replace(/<!--[\s\S]*?(?:-->|$)/g, "") // Hides HTML comments
+      .replace(/<END OF PROBLEM>/g, ""); // Hides the end tag
+  };
+
+  //Check if the user has already requested a post-mortem in this thread
+  const hasRequestedPostMortem = messages.some(
+    (msg: any) =>
+      msg.role === "user" &&
+      msg.content.includes(
+        "Synthesize this conversation into a structured technical Post-Mortem report",
+      ),
+  );
+
   return (
     <main
       ref={scrollContainerRef as any}
@@ -56,7 +75,7 @@ export default function MessageList({
               Unified Knowledge Agent
             </h2>
             <p className="text-gray-500 max-w-md mx-auto">
-              Your personal Second Brain for the Nexteir Internship. Ask about
+              Your internal knowledge base for your internship. Ask about
               debugging, architecture, or specific problem IDs.
             </p>
           </div>
@@ -85,7 +104,6 @@ export default function MessageList({
         </div>
       ) : (
         messages.map((msg: any) => {
-          // Render system messages (like tool cancellation) differently
           if (msg.role === "system") {
             return (
               <div key={msg.id} className="flex justify-center my-4">
@@ -95,6 +113,8 @@ export default function MessageList({
               </div>
             );
           }
+
+          const cleanContent = sanitizeContent(msg.content);
 
           return (
             <div
@@ -110,9 +130,46 @@ export default function MessageList({
                     : "bg-white border border-gray-200 text-gray-800 rounded-bl-none shadow-sm"
                 }`}
               >
-                {msg.content && (
-                  <div className="whitespace-pre-wrap leading-relaxed">
-                    {msg.content}
+                {/* Replaced raw div with ReactMarkdown */}
+                {cleanContent && (
+                  <div className="leading-relaxed">
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        // 1. Style the block wrapper (the dark box)
+                        pre({ node, children, ...props }: any) {
+                          return (
+                            <pre
+                              className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto my-4 text-sm"
+                              {...props}
+                            >
+                              {children}
+                            </pre>
+                          );
+                        },
+                        // 2. Style the text inside (inline vs block text)
+                        code({ node, className, children, ...props }: any) {
+                          // Block code usually gets a language class like "language-js"
+                          // If it doesn't have one, we treat it as an inline ` snippet
+                          const isInline = !className;
+
+                          return (
+                            <code
+                              className={`${className || ""} ${
+                                isInline
+                                  ? "bg-gray-100 text-gray-800 rounded px-1.5 py-0.5 font-mono text-sm"
+                                  : ""
+                              }`}
+                              {...props}
+                            >
+                              {children}
+                            </code>
+                          );
+                        },
+                      }}
+                    >
+                      {cleanContent}
+                    </ReactMarkdown>
                   </div>
                 )}
 
@@ -129,9 +186,7 @@ export default function MessageList({
                     {copiedId === msg.id ? (
                       <>
                         <svg
-                          className={`w-4 h-4 ${
-                            msg.role === "user" ? "text-white" : "text-green-500"
-                          }`}
+                          className={`w-4 h-4 ${msg.role === "user" ? "text-white" : "text-green-500"}`}
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -144,9 +199,7 @@ export default function MessageList({
                           />
                         </svg>
                         <span
-                          className={`font-medium ${
-                            msg.role === "user" ? "text-white" : "text-green-500"
-                          }`}
+                          className={`font-medium ${msg.role === "user" ? "text-white" : "text-green-500"}`}
                         >
                           Copied!
                         </span>
@@ -197,7 +250,9 @@ export default function MessageList({
                       </svg>
                     )}
                     <span>
-                      {msg.currentTool ? msg.currentTool : "Agent is reasoning..."}
+                      {msg.currentTool
+                        ? msg.currentTool
+                        : "Agent is reasoning..."}
                     </span>
                   </div>
                 )}
@@ -211,23 +266,36 @@ export default function MessageList({
       {isWaitingForApproval && handleApproval && (
         <div className="flex flex-col items-center justify-center p-6 mt-4 border-2 border-yellow-400 bg-yellow-50 rounded-2xl shadow-sm animate-in slide-in-from-bottom-4">
           <div className="flex items-center gap-2 mb-4">
-            <svg className="w-6 h-6 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            <svg
+              className="w-6 h-6 text-yellow-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
             </svg>
-            <span className="text-yellow-800 font-bold text-lg">Action Required</span>
+            <span className="text-yellow-800 font-bold text-lg">
+              Action Required
+            </span>
           </div>
           <p className="text-sm text-yellow-700 mb-6 text-center max-w-md">
-            The agent is requesting permission to execute a tool. Do you want to proceed?
+            The agent is requesting permission to execute a tool. Do you want to
+            proceed?
           </p>
           <div className="flex gap-4 w-full justify-center">
-            <button 
-              onClick={() => handleApproval(true)} 
+            <button
+              onClick={() => handleApproval(true)}
               className="flex-1 max-w-[140px] px-4 py-2.5 bg-green-500 text-white font-medium rounded-xl hover:bg-green-600 transition shadow-sm hover:shadow active:scale-95"
             >
               Approve ✅
             </button>
-            <button 
-              onClick={() => handleApproval(false)} 
+            <button
+              onClick={() => handleApproval(false)}
               className="flex-1 max-w-[140px] px-4 py-2.5 bg-white border-2 border-red-200 text-red-600 font-medium rounded-xl hover:bg-red-50 hover:border-red-300 transition shadow-sm hover:shadow active:scale-95"
             >
               Reject ❌
@@ -237,19 +305,36 @@ export default function MessageList({
       )}
 
       {/* --- POST-MORTEM BONUS TRIGGER --- */}
-      {messages.length > 4 && !isStreaming && !isWaitingForApproval && (
-        <div className="flex justify-center mt-10 pt-6 border-t border-gray-100">
-          <button 
-            onClick={() => handleSuggestedQuery("Synthesize this conversation into a structured technical Post-Mortem report (Root Cause, Fix, Lessons Learned).")}
-            className="px-6 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-full hover:bg-gray-700 transition shadow-sm flex items-center gap-2 group"
-          >
-            <svg className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            Generate Post-Mortem
-          </button>
-        </div>
-      )}
+      {messages.length > 4 &&
+        !isStreaming &&
+        !isWaitingForApproval &&
+        !hasRequestedPostMortem && (
+          <div className="flex justify-center mt-10 pt-6 border-t border-gray-100">
+            <button
+              onClick={() =>
+                handleSuggestedQuery(
+                  "Synthesize this conversation into a structured technical Post-Mortem report (Root Cause, Fix, Lessons Learned).",
+                )
+              }
+              className="px-6 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-full hover:bg-gray-700 transition shadow-sm flex items-center gap-2 group"
+            >
+              <svg
+                className="w-4 h-4 text-gray-400 group-hover:text-white transition-colors"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                />
+              </svg>
+              Generate Post-Mortem
+            </button>
+          </div>
+        )}
 
       <div ref={messagesEndRef as any} />
     </main>
