@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform 600+ fragmented technical internship logs into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Phase 8.0 - Hardened Production Logic & Frontend Sync
+**Current Status:** Phase 8.1 - Modular Refactoring & 100% Logic Scores
 
 ---
 
@@ -30,12 +30,14 @@ The agent utilizes `on_agent_interrupt` to pause before executing heavy tools, r
 
 ---
 
-## 🚀 Phase 8.0: The Hardening & Sync Layer
+## 🚀 Phase 8.1: Modular Refactoring & 100% Logic Scores
 
-Phase 8 shifts from architectural setup to **production-grade reliability and UI polish**:
+Phase 8.1 focuses on **modular tooling, production performance optimization, and 100% recall/logic scores**:
 
 * **Verified Retrieval Accuracy:** Achieved **100% Search Recall@k** across the entire internal dataset, ensuring the "Librarian" never misses a relevant log.
-* **Agent Logic Scoring:** Validated an **83% Agent Logic Score** across 30 complex test cases in the `backend/evals/qa_dataset.json` Golden Dataset.
+* **Perfect Agent Logic Scoring:** Achieved a **100% Agent Logic Score** across all 30 complex test cases in the `backend/evals/qa_dataset.json` Golden Dataset.
+* **Modular Backend Architecture:** Split the bloated `tools.py` into a highly clean, specialized `backend/core/tools/` sub-package.
+* **Configurable LLM Backends:** Integrated support for running evaluations and agent logic against multiple model backends using the `MODEL_NAME` environment variable (e.g., iterating cost-effectively with `google/gemini-2.0-flash-001` before performing a production "Golden Run" on `deepseek/deepseek-chat`).
 * **Advanced Markdown Rendering:** The frontend now utilizes `react-markdown` and `remark-gfm` to render technical logs, code blocks, and tables with full fidelity.
 * **Regex Sanitization Firewall:** Implemented frontend-side regex sanitization to strip hidden metadata, system anchors, and `<END OF PROBLEM>` tags.
 * **Internal Knowledge Base Branding:** Fully transitioned terminology from "Second Brain" to "Internal Knowledge Base" to align with enterprise standards.
@@ -66,7 +68,12 @@ Phase 8 shifts from architectural setup to **production-grade reliability and UI
 │   ├── core/              
 │   │   ├── agents.py      # LangGraph node logic & system rules
 │   │   ├── config.py      # VectorStore & Supabase PostgresSaver setup
-│   │   └── tools.py       # Librarian Triage & Search tools
+│   │   └── tools/         # Modular Librarian Triage & Search sub-package
+│   │       ├── __init__.py
+│   │       ├── problem_index.py
+│   │       ├── search.py
+│   │       ├── stats.py
+│   │       └── system.py
 │   ├── evals/             
 │   │   ├── eval.py        # Automated LLM-as-a-Judge evaluation
 │   │   └── qa_dataset.json # Phase 8.0 Golden Dataset (30 cases)
@@ -87,3 +94,32 @@ Phase 8 shifts from architectural setup to **production-grade reliability and UI
 ├── generate_dataset.py    # Synthetic dataset generation script
 ├── pyproject.toml         # Python dependencies (uv)
 └── uv.lock                # Deterministic lockfile
+```
+
+---
+
+## 🚦 Developer Commands & Evaluation Workflow
+
+### Running the Evaluation Suite
+You can customize the model used for testing by setting the `MODEL_NAME` environment variable. By default, it uses `deepseek/deepseek-chat`.
+
+**1. Iterating on a Cheap Model (Gemini 2.0 Flash):**
+```bash
+MODEL_NAME="google/gemini-2.0-flash-001" uv run python -m backend.evals.eval
+```
+
+**2. Final Production "Golden Run" (DeepSeek V3):**
+```bash
+MODEL_NAME="deepseek/deepseek-chat" uv run python -m backend.evals.eval
+```
+
+### Running the Application Locally
+You can run the full system using Docker Compose:
+```bash
+docker-compose up --build
+```
+Or start the backend locally:
+```bash
+cd backend
+uv run uvicorn app:app --reload --port 8000
+```
