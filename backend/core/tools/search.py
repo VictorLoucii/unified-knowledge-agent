@@ -35,15 +35,22 @@ def search_internship_history(query: str) -> str:
         openai_api_base="https://openrouter.ai/api/v1",
         temperature=0,
         name="Expansion_LLM",
+        request_timeout=45,
         max_retries=5,
     )
 
-    search_variants = expansion_llm.invoke(
-        f"Based on the user's query: '{query}', generate 3 search variations. "
-        "RULE 1: Extract technical keywords and proper nouns. "
-        "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query. "
-        "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
-    ).content.split("\n")
+    try:
+        search_variants = expansion_llm.invoke(
+            f"Based on the user's query: '{query}', generate 3 search variations. "
+            "RULE 1: Extract technical keywords and proper nouns. "
+            "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query. "
+            "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
+        ).content.split("\n")
+    except Exception as e:
+        print(f"🚨 [ERROR] expansion_llm.invoke failed: {e}")
+        import traceback
+        traceback.print_exc()
+        raise e
 
     all_queries = [
         q.strip().lstrip("0123456789.- ") for q in search_variants if q.strip()

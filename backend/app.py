@@ -254,6 +254,8 @@ async def resume_graph_stream(thread_id: str):
     """Resumes the graph from the exact point it was paused."""
     config = {"configurable": {"thread_id": thread_id}}
     try:
+        state = await graph.aget_state(config)
+        print(f"🤖 [DEBUG] resume_graph_stream state for thread {thread_id}: next = {state.next if state else None}")
         # Passing 'None' tells LangGraph to pick up exactly where it left off
         async for event in graph.astream_events(None, config, version="v2"):
             kind = event["event"]
@@ -287,6 +289,9 @@ async def resume_graph_stream(thread_id: str):
         yield "data: [DONE]\n\n"
 
     except Exception as e:
+        import traceback
+        print("🚨 resume_graph_stream Crash Details:")
+        traceback.print_exc()
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
         yield "data: [DONE]\n\n"
 

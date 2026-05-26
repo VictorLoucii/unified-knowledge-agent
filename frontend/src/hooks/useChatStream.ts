@@ -169,17 +169,20 @@ export const useChatStream = (initialThreadId?: string) => {
     } catch (error) {
       console.error("Stream connection failed:", error);
     } finally {
-      // Only clear streaming if we aren't waiting for the user to click approve
-      setIsStreaming((prev) => isWaitingForApproval ? true : false);
-      
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === assistantId && !isWaitingForApproval 
-            ? { ...msg, isThinking: false } 
-            : msg,
-        ),
-      );
-      if (onFinish && !isWaitingForApproval) onFinish();
+      setMessages((prev) => {
+        const targetMsg = prev.find((m) => m.id === assistantId);
+        const isInterrupted = targetMsg?.currentTool === "Action Required: Pending approval.";
+        
+        if (isInterrupted) {
+          return prev;
+        } else {
+          setIsStreaming(false);
+          if (onFinish) onFinish();
+          return prev.map((msg) =>
+            msg.id === assistantId ? { ...msg, isThinking: false } : msg
+          );
+        }
+      });
     }
   };
 

@@ -29,6 +29,7 @@ llm = ChatOpenAI(
     request_timeout=45,
     max_retries=5,
 )
+print(f"🤖 Loading LLM model: {llm.model_name}")
 
 # ==========================================
 # 2. VECTOR DB INITIALIZATION
