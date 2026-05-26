@@ -33,3 +33,7 @@ frontend/.env.local
 
 # Troubleshooting scripts
 test_conn.py
+
+# Agents
+.agents/
+scratch/

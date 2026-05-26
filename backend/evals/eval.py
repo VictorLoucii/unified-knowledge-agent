@@ -53,7 +53,13 @@ class EvalResult(BaseModel):
     reason: str = Field(description="Explanation of why the agent passed or failed.")
 
 # --- 2. Setup the LLM-as-a-Judge ---
-judge_llm = ChatOpenAI(model="gpt-4o", temperature=0.0)
+judge_llm = ChatOpenAI(
+    model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0.0,
+    max_retries=5,
+)
 structured_judge = judge_llm.with_structured_output(EvalResult)
 
 judge_prompt = ChatPromptTemplate.from_messages([

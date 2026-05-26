@@ -13,14 +13,22 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 # ==========================================
 load_dotenv()
 
-if not os.getenv("OPENAI_API_KEY"):
-    raise ValueError("🚨 OPENAI_API_KEY not found! Check your .env file.")
+if not os.getenv("OPENROUTER_API_KEY"):
+    raise ValueError("🚨 OPENROUTER_API_KEY not found! Check your .env file.")
 
 # Disable tracing temporarily since no LANGCHAIN_API_KEY is present
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
 
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, streaming=True)
+llm = ChatOpenAI(
+    model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0,
+    streaming=True,
+    request_timeout=45,
+    max_retries=5,
+)
 
 # ==========================================
 # 2. VECTOR DB INITIALIZATION
@@ -53,7 +61,7 @@ retriever = ParentDocumentRetriever(
     docstore=store,  # Now uses the wrapped store
     child_splitter=child_splitter,
     parent_splitter=parent_splitter, # <-- Now enforces a size limit on the stored memory
-    search_kwargs={"k": 5},          # <-- [FIX] Pulls top 5 most relevant sections, not 15
+    search_kwargs={"k": 25},         # <-- [FIX] Pulls top 25 most relevant sections to feed the reranker
 )
 
 print(f"✅ Connected to local ChromaDB & DocStore at: {BASE_DIR}")

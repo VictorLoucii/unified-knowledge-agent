@@ -1,167 +1,11 @@
-# backend/core/tools.py
+import os
 import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from backend.core.config import store, retriever, vectorstore
+from backend.core.config import retriever
+from sentence_transformers import CrossEncoder
 
-# ==========================================
-# 3. TOOL DEFINITIONS
-# ==========================================
-
-
-@tool
-def get_system_time(format: str = "%Y-%m-%d %H:%M:%S"):
-    """Returns the current system time. Use this when the user asks for the time."""
-    from datetime import datetime
-
-    return datetime.now().strftime(format)
-
-
-@tool
-def get_problem_index(start: int = 1, end: int = 25) -> str:
-    """
-    Use this tool ONLY for top-level navigation, such as 'what are the problems?',
-    'show me the index', or 'list all problems'.
-
-    CRITICAL ROUTING RULE: DO NOT use this tool to look for specific topics,
-    errors, bugs, or existence checks (e.g., 'are there problems about X' or
-    'is there a fix for Y').
-
-    DO NOT USE THIS TOOL FOR ORDINAL REQUESTS. If the user asks for the 'first problem',
-    'last problem', 'oldest', or 'latest', you MUST REJECT this tool and use
-    search_internship_history instead.
-    """
-    import os
-    import re
-
-    print(f"\n📥 [TOOL CALL] get_problem_index triggered for range {start} to {end}")
-
-    try:
-        BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-        ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
-        DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
-
-        if not os.path.exists(DATA_FILE):
-            return "Error: Internship database file not found."
-
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            full_text = f.read()
-
-        # Capture ALL Problem IDs using the Phase 6.3 anchor strategy
-        header_pattern = r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)"
-        matches = list(re.finditer(header_pattern, full_text))
-
-        if not matches:
-            return "No problems found in the database."
-
-        problem_titles = []
-
-        # The "Look-Ahead Block" Strategy
-        for i, match in enumerate(matches):
-            prob_num = int(match.group(1))
-
-            start_idx = match.end()
-            end_idx = matches[i + 1].start() if i + 1 < len(matches) else len(full_text)
-            block = full_text[start_idx:end_idx]
-
-            # LAYER 1: Code Blocks
-            block = re.sub(r"```.*?```", "", block, flags=re.DOTALL)
-            # LAYER 2: Base64
-            block = re.sub(r"data:image\S+", "", block)
-            # LAYER 2.1: Pandoc & Markdown Media Paths (Handles multi-line attributes)
-            block = re.sub(r"!\[.*?\]\(.*?\)(?:\{[^}]*?\})?", "", block)
-            # LAYER 3: URLs
-            block = re.sub(r"http\S+", "", block)
-
-            lines = block.split("\n")
-            clean_title = "Could not extract clear title"
-
-            for line in lines:
-                line = line.strip()
-                if not line:
-                    continue
-
-                # LAYER 4: MD Symbols
-                line_clean = re.sub(r"[#\*_>\-\[\]\(\)]+", "", line).strip()
-
-                # LAYER 6: The TSX Filter
-                if ".tsx" in line_clean.lower() or "src/" in line_clean.lower():
-                    continue
-
-                # LAYER 5: The Gauntlet (must be > 15 chars)
-                if len(line_clean) >= 15:
-                    clean_title = line_clean
-                    break
-
-            problem_titles.append((prob_num, clean_title))
-
-        # Sort and apply Start/End Range logic
-        problem_titles.sort(key=lambda x: x[0])
-
-        start_idx = max(0, start - 1)
-
-        # [PHASE 7.3 FIX] The Hard Token Ceiling
-        MAX_PAGINATION_SIZE = 25
-        requested_end = min(end, start + MAX_PAGINATION_SIZE - 1)
-        end_idx = min(len(problem_titles), requested_end)
-
-        paginated = problem_titles[start_idx:end_idx]
-
-        output = [f"=== PROBLEM INDEX ({start} to {requested_end}) ==="]
-        for num, title in paginated:
-            output.append(f"Problem {num}: {title}")
-
-        # === THE TOKEN SAVER PROTOCOL ===
-        if len(problem_titles) > end_idx:
-            output.append(
-                f"\n*(Note: Hard-capped at {len(paginated)} items out of {len(problem_titles)} total problems to save tokens. "
-                "Please be more specific by asking for a specific Problem ID, searching by keyword, or requesting the next page [e.g., 'show problems 26 to 50'].)*"
-            )
-
-        return "\n".join(output)
-
-    except Exception as e:
-        print(f"🚨 [ERROR] get_problem_index crashed: {e}")
-        return f"Error extracting titles: {e}"
-
-
-@tool
-def get_internship_stats() -> str:
-    """Returns the total number of problems and logs stored in the Second Brain."""
-    unique_problems = set()
-    unique_notes = set()
-    try:
-        # [THE FIX: Scan the in-memory Chroma database instead]
-        data = vectorstore.get()
-
-        if data and "documents" in data:
-            for content, metadata in zip(data["documents"], data["metadatas"]):
-                if not content or not metadata:
-                    continue
-
-                headers_text = " ".join(
-                    [str(val) for k, val in metadata.items() if "Header" in k]
-                )
-                full_text = headers_text + "\n" + str(content)
-
-                matches = re.findall(r"(?i)problem\s*:?\s*(\d+)", full_text)
-
-                if matches:
-                    for num in matches:
-                        unique_problems.add(num)
-                elif headers_text.strip():
-                    unique_notes.add(headers_text.strip())
-
-        problem_count = len(unique_problems)
-        note_count = len(unique_notes)
-
-        return (
-            f"The Second Brain currently contains {problem_count} uniquely numbered debugging logs, "
-            f"plus {note_count} general engineering notes and post-mortems. "
-            f"Total knowledge documents: {problem_count + note_count}."
-        )
-    except Exception as e:
-        return f"Could not determine stats: {e}"
+reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
 
 
 @tool
@@ -179,15 +23,20 @@ def search_internship_history(query: str) -> str:
     CRITICAL: If the user asks for a specific Problem ID (e.g., 'Problem 26'),
     OR asks for ordinal positions like 'the first problem' or 'the last problem',
     you MUST use this tool and pass that exact phrase as the query.
-    """
-    import os
-    import re
-    from langchain_openai import ChatOpenAI
-    from backend.core.config import retriever
 
+    CRITICAL FORMATTING: When the tool returns data wrapped in `=== ABSOLUTE SOURCE OF TRUTH ===`, 
+    you must output the enclosed text EXACTLY as is, character-for-character, without summarizing.
+    """
     print(f"\n📥 [TOOL CALL] search_internship_history triggered with query: '{query}'")
 
-    expansion_llm = ChatOpenAI(model="gpt-4o-mini", temperature=0, name="Expansion_LLM")
+    expansion_llm = ChatOpenAI(
+        model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
+        openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+        openai_api_base="https://openrouter.ai/api/v1",
+        temperature=0,
+        name="Expansion_LLM",
+        max_retries=5,
+    )
 
     search_variants = expansion_llm.invoke(
         f"Based on the user's query: '{query}', generate 3 search variations. "
@@ -230,7 +79,7 @@ def search_internship_history(query: str) -> str:
     if needs_first or needs_last:
         try:
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
+            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
             DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
 
             if os.path.exists(DATA_FILE):
@@ -267,7 +116,7 @@ def search_internship_history(query: str) -> str:
         print(f"🚀 [DEBUG] Engaging Raw Interceptor for IDs: {target_problems}")
         try:
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
+            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
             DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
 
             if os.path.exists(DATA_FILE):
@@ -380,6 +229,13 @@ def search_internship_history(query: str) -> str:
             elif exact_query_lower in text_lower:
                 score += 100
 
+        # [PHASE 7.3 FIX] File Name Boosting for UI components
+        file_name_target = exact_query_lower.replace(" ", "")
+        if "screen" in exact_query_lower or "component" in exact_query_lower or "tab" in exact_query_lower:
+            pattern = re.compile(r'\b' + re.escape(file_name_target) + r'\.(tsx|ts|js|jsx)\b', re.IGNORECASE)
+            if pattern.search(text_lower):
+                score += 400
+
         for kw in core_keywords:
             base_word = kw[:-1] if kw.endswith("s") else kw
             plural_word = base_word + "s"
@@ -402,15 +258,25 @@ def search_internship_history(query: str) -> str:
     # [PHASE 6.8 FIX] SORT AND TRUNCATE FIRST!
     unique_docs.sort(key=calculate_relevance_score, reverse=True)
     
-    # [THE FIX: Increase K value to 8 to ensure deep retrieval for short-tail queries]
-    unique_docs = unique_docs[:10] 
-    print(f"🔧 [__DEV__] Increased K-value to 8. Sorting for broad short-tail queries completed.")
+    # Stage 1: Retrieval (Candidate Generation): Increase K to 20
+    unique_docs = unique_docs[:20] 
+    print(f"🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.")
 
-    print(f"\n📊 [DEBUG] Top 8 Vector Matches for General Search:")
+    # Stage 2: Reranking (Cross-Encoder)
+    if unique_docs:
+        pairs = [[query, doc.page_content] for doc in unique_docs]
+        scores = reranker.predict(pairs)
+        for doc, score in zip(unique_docs, scores):
+            doc.metadata["rerank_score"] = float(score)
+            
+        unique_docs.sort(key=lambda x: x.metadata.get("rerank_score", -9999.0), reverse=True)
+        unique_docs = unique_docs[:5]
+
+    print(f"\n📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:")
     for i, doc in enumerate(unique_docs):
-        score = calculate_relevance_score(doc)
+        score = doc.metadata.get("rerank_score", "N/A")
         preview = doc.page_content[:100].replace("\n", " ")
-        print(f"  {i+1}. Score: {score} | Preview: {preview}...")
+        print(f"  {i+1}. Rerank Score: {score} | Preview: {preview}...")
 
     # [PHASE 6.8 FIX ONLY ESCALATE PROBLEMS FOUND IN THE TOP 3 DOCS
     discovered_problems = set()
@@ -442,7 +308,7 @@ def search_internship_history(query: str) -> str:
         )
         try:
             BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", ".."))
+            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
             DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
 
             if os.path.exists(DATA_FILE):
@@ -467,9 +333,9 @@ def search_internship_history(query: str) -> str:
                         )
                         block = full_file_text[start_idx:end_idx].strip()
 
-                        if len(block) > 15000:
+                        if len(block) > 8000:
                             block = (
-                                block[:15000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
+                                block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
                             )
 
                         # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
@@ -534,11 +400,3 @@ def search_internship_history(query: str) -> str:
     final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
 
     return final_output
-
-
-tools = [
-    get_system_time,
-    get_internship_stats,
-    get_problem_index,
-    search_internship_history,
-]
