@@ -3,7 +3,7 @@ import json
 import asyncio
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 
-from backend.core.config import parse_problem_id, extract_problem_block
+from backend.core.config import parse_problem_id, extract_problem_block, cache_vectorstore, SEMANTIC_CACHE_THRESHOLD
 from backend.core.guardrails import (
     check_input_guardrail,
     mask_sensitive_data,
@@ -11,6 +11,27 @@ from backend.core.guardrails import (
     get_last_tool_output_length,
 )
 from backend.memory import save_thread_title
+
+
+def is_excluded_from_cache(message: str) -> bool:
+    """Checks if a user query should be excluded from semantic caching."""
+    if not message:
+        return True
+    
+    # Exclude exact problem-log requests (since they are handled deterministically by Programmatic Bypass)
+    if parse_problem_id(message):
+        return True
+    
+    # Exclude short general phrases (e.g., "hi", "ok", "yes")
+    clean_msg = message.strip().lower()
+    common_short_phrases = {
+        "hi", "hello", "hey", "ok", "yes", "no", "thanks", "thank you", "bye", "goodbye", "help",
+        "yep", "yup", "sure", "correct", "perfect", "awesome", "great"
+    }
+    if len(clean_msg) < 4 or clean_msg in common_short_phrases:
+        return True
+    
+    return False
 
 
 async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool):
@@ -69,6 +90,42 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             yield "data: [DONE]\n\n"
             return
 
+    # 2.5. Check Semantic Cache
+    if not is_excluded_from_cache(user_message):
+        try:
+            results = cache_vectorstore.similarity_search_with_relevance_scores(user_message, k=1)
+            if results and results[0][1] >= SEMANTIC_CACHE_THRESHOLD:
+                match_doc, score = results[0]
+                cached_response = match_doc.metadata.get("response")
+                if cached_response:
+                    print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
+                    # Save title before streaming starts
+                    await save_thread_title(async_pool, thread_id, user_message)
+
+                    # Persist state directly in PostgreSQL history
+                    ai_msg = AIMessage(content=cached_response)
+                    config = {"configurable": {"thread_id": thread_id}}
+                    await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]})
+
+                    # Stream the response chunk by chunk to simulate natural real-time streaming
+                    chunk_size = 120
+                    for i in range(0, len(cached_response), chunk_size):
+                        chunk = cached_response[i:i+chunk_size]
+                        safe_output = mask_sensitive_data(chunk)
+                        stream_event = {
+                            "event": "on_chat_model_stream",
+                            "name": "chatbot",
+                            "run_id": "cache_stream",
+                            "data": {"chunk": {"content": safe_output}}
+                        }
+                        yield f"data: {json.dumps(stream_event)}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    yield "data: [DONE]\n\n"
+                    return
+        except Exception as e:
+            print(f"⚠️ [WARNING] Semantic cache lookup failed: {e}")
+
     inputs = {"messages": [HumanMessage(content=user_message)]}
     config = {"configurable": {"thread_id": thread_id}}
 
@@ -81,6 +138,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
         last_tool_output_length = get_last_tool_output_length(state)
 
         generated_chars_count = 0
+        full_response = ""
         stream_buffer = ""
         BUFFER_WINDOW = 120
         max_allowed = max(2000, last_tool_output_length + 1500)
@@ -121,6 +179,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
 
                         safe_event["data"]["chunk"] = {"content": safe_output}
                         yield f"data: {json.dumps(safe_event)}\n\n"
+                        full_response += safe_output
 
             elif kind in ["on_tool_start", "on_tool_end"]:
                 if kind == "on_tool_end":
@@ -148,16 +207,30 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                 yield f"data: {json.dumps(flush_event)}\n\n"
             else:
                 yield f"data: {json.dumps(flush_event)}\n\n"
+                full_response += safe_output
 
         # Check if the graph is currently interrupted
         state = await graph.aget_state(config)
-        if state.next and "tools" in state.next:
+        is_interrupted = state.next and "tools" in state.next
+
+        if is_interrupted:
             # Send a special signal to the frontend
             interrupt_event = {
                 "event": "on_agent_interrupt",
                 "data": {"waiting_for": "tool_approval"}
             }
             yield f"data: {json.dumps(interrupt_event)}\n\n"
+        else:
+            # Save successful response to cache if not truncated and not excluded
+            if generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message):
+                try:
+                    cache_vectorstore.add_texts(
+                        texts=[user_message],
+                        metadatas=[{"response": full_response}]
+                    )
+                    print(f"💾 [CACHE STORE] Saved query and response to semantic cache.")
+                except Exception as e:
+                    print(f"⚠️ [WARNING] Failed to save query to semantic cache: {e}")
 
         yield "data: [DONE]\n\n"
 
@@ -181,6 +254,7 @@ async def resume_graph_stream(thread_id: str, graph):
 
         last_tool_output_length = get_last_tool_output_length(state)
         generated_chars_count = 0
+        full_response = ""
         stream_buffer = ""
         BUFFER_WINDOW = 120
         max_allowed = max(2000, last_tool_output_length + 1500)
@@ -219,6 +293,7 @@ async def resume_graph_stream(thread_id: str, graph):
 
                         safe_event["data"]["chunk"] = {"content": safe_output}
                         yield f"data: {json.dumps(safe_event)}\n\n"
+                        full_response += safe_output
 
             elif kind in ["on_tool_start", "on_tool_end"]:
                 if kind == "on_tool_end":
@@ -246,15 +321,35 @@ async def resume_graph_stream(thread_id: str, graph):
                 yield f"data: {json.dumps(flush_event)}\n\n"
             else:
                 yield f"data: {json.dumps(flush_event)}\n\n"
+                full_response += safe_output
 
         # Check if it hit ANOTHER interrupt (unlikely, but good practice)
         state = await graph.aget_state(config)
-        if state.next and "tools" in state.next:
+        is_interrupted = state.next and "tools" in state.next
+        if is_interrupted:
             interrupt_event = {
                 "event": "on_agent_interrupt",
                 "data": {"waiting_for": "tool_approval"}
             }
             yield f"data: {json.dumps(interrupt_event)}\n\n"
+        else:
+            # Resolve the original user message from the thread history
+            user_message = ""
+            if state and hasattr(state, "values") and "messages" in state.values:
+                for msg in reversed(state.values["messages"]):
+                    if msg.type == "human":
+                        user_message = msg.content
+                        break
+            # Save successful response to cache if not truncated and not excluded
+            if user_message and generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message):
+                try:
+                    cache_vectorstore.add_texts(
+                        texts=[user_message],
+                        metadatas=[{"response": full_response}]
+                    )
+                    print(f"💾 [CACHE STORE] Saved query and response to semantic cache from resume.")
+                except Exception as e:
+                    print(f"⚠️ [WARNING] Failed to save query to semantic cache from resume: {e}")
 
         yield "data: [DONE]\n\n"
 
