@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform 600+ fragmented technical internship logs into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Phase 8.1 - Modular Refactoring & 100% Logic Scores
+**Current Status:** Phase 8.2 - Input/Output Guardrails, DLP Masking & Production Security
 
 ---
 
@@ -41,6 +41,19 @@ Phase 8.1 focuses on **modular tooling, production performance optimization, and
 * **Advanced Markdown Rendering:** The frontend now utilizes `react-markdown` and `remark-gfm` to render technical logs, code blocks, and tables with full fidelity.
 * **Regex Sanitization Firewall:** Implemented frontend-side regex sanitization to strip hidden metadata, system anchors, and `<END OF PROBLEM>` tags.
 * **Internal Knowledge Base Branding:** Fully transitioned terminology from "Second Brain" to "Internal Knowledge Base" to align with enterprise standards.
+
+---
+
+## 🚀 Phase 8.2: Input/Output Guardrails, DLP Masking & Production Security
+
+Phase 8.2 introduces robust runtime security layers, token-protection guardrails, and Data Loss Prevention (DLP) to secure the agent against malicious inputs and cost abuse:
+
+* **Fast Input Gatekeeper:** Added an instant regex-based validator at the API gateway level to enforce a **1,000-character input limit** and immediately block jailbreaks, system prompt exposures, and credentials requests.
+* **Token-Abuse Prevention:** Intercepts requests for excessive content generation (e.g., writing stories, essays, novels, or infinite loops) at 0 token cost, protecting your API budget.
+* **DLP Secret Masking:** Implemented a real-time sliding 120-character buffer window that automatically scans and redacts sensitive environment variables (such as OpenRouter keys, OpenAI keys, and database passwords) before they are streamed to the user's screen.
+* **Dynamic Response Cap:** Replaces static text ceilings with a context-aware threshold: $\text{Max Allowed Chars} = \max(2000, \text{Last Tool Output Length} + 1500)$. General chat responses are capped at 2,000 characters, while legitimate debugging logs scale dynamically to avoid truncation.
+* **Tool Sanitization (Least Privilege):** Truncates tool query arguments to a maximum of 150 characters and applies defensive XML tagging around untrusted user inputs fed to the query expansion LLM to prevent prompt injection.
+* **Contextual UI Triggers:** The frontend "Generate Post-Mortem" button is now rendered conditionally, showing only when technical debugging logs (`# Problem`) have been active in the chat thread.
 
 ---
 
