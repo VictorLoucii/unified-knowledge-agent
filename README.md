@@ -73,6 +73,18 @@ Phase 9 introduces major architectural cleanups and cost optimization strategies
 
 ---
 
+## 🚀 Phase 10: Semantic Caching for Cost Optimization
+
+Phase 10 implements **Semantic Caching** to bypass LLM execution for previously answered queries, reducing input and output token costs to **0** on repeating or semantically similar user intents:
+
+* **Configurable Semantic Similarity**: Utilizes a configurable similarity threshold `SEMANTIC_CACHE_THRESHOLD` (defaulting to `0.92` Cosine Similarity) to match queries against the cache.
+* **Dedicated Local Vector Cache**: Configures a dedicated local Chroma collection (`semantic_cache`) using Cosine distance space (`hnsw:space = cosine`) to evaluate queries with precision.
+* **Exclusion Guardrails**: Excludes empty queries, exact problem-log requests (handled by the Programmatic Bypass), and short general phrases (e.g., "hi", "ok", "yes") from entering or hitting the cache.
+* **Stream & Ingestion Integration**: Automatically intercepts incoming queries in the streaming pipeline (`generate_chat_responses` and `resume_graph_stream`), serving cache hits instantly, or caching new LLM responses upon completion.
+* **Verification Suite**: Includes the integration test script `backend/scratch/test_semantic_cache.py` to evaluate cache hit/miss behavior, threshold bounds, and exclusion guardrails.
+
+---
+
 ## 🛠️ The Technical Stack
 
 | Layer | Technology | Key Function |
@@ -110,6 +122,8 @@ Phase 9 introduces major architectural cleanups and cost optimization strategies
 │   │   ├── eval.py        # Automated LLM-as-a-Judge evaluation
 │   │   └── qa_dataset.json # Phase 8.0 Golden Dataset (30 cases)
 │   ├── memory.py          # Persistence logic
+│   ├── scratch/           # Experimental & testing scripts
+│   │   └── test_semantic_cache.py # Semantic cache integration test
 │   └── static/            # Static assets for the backend
 ├── data/                  
 │   └── NEXTIER_Internship_Bugs.md   # Standardized source of truth
@@ -144,6 +158,13 @@ MODEL_NAME="google/gemini-2.0-flash-001" uv run python -m backend.evals.eval
 ```bash
 MODEL_NAME="deepseek/deepseek-chat" uv run python -m backend.evals.eval
 ```
+
+### Running the Semantic Cache Integration Test
+Verify the hit, miss, and exclusion behavior of the semantic cache locally:
+```bash
+uv run python -m backend.scratch.test_semantic_cache
+```
+
 
 ### Running the Application Locally
 You can run the full system using Docker Compose:
