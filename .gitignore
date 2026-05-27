@@ -14,7 +14,8 @@ wheels/
 **/.env
 .env.local
 .env.*
-!.env.example     # Excludes your template from being ignored
+# Excludes your template from being ignored
+!.env.example
 
 # Vector Database (This is inside your nested folder)
 **/chroma_db/
