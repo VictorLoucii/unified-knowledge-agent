@@ -92,7 +92,7 @@ export default function MessageList({
               "What was the fix for the Chiiro loader?",
               "Summarize the React Native Yarn vs NPM issue.",
               "How do I handle the MultiSelect scrolling bug?",
-              "Find the solution for //problem82.",
+              "Find the solution for problem 82.",
             ].map((query, idx) => (
               <button
                 key={idx}

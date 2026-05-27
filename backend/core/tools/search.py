@@ -348,9 +348,9 @@ def search_internship_history(query: str) -> str:
                         )
                         block = full_file_text[start_idx:end_idx].strip()
 
-                        if len(block) > 8000:
+                        if len(block) > 5000:
                             block = (
-                                block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
+                                block[:5000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
                             )
 
                         # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
