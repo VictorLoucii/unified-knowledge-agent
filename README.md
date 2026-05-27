@@ -57,6 +57,22 @@ Phase 8.2 introduces robust runtime security layers, token-protection guardrails
 
 ---
 
+## 🚀 Phase 9: Token Optimization, Output Guardrail Truncation Fix & Server Modularization
+
+Phase 9 introduces major architectural cleanups and cost optimization strategies, dramatically lowering LLM token consumption while fixing crucial output guardrail bugs:
+
+* **Token Optimization & Cost Control**:
+  * **Programmatic LLM Bypass**: Intercepts direct Problem requests (e.g. `Problem 33`, `details of problem 5`) at the API and Graph levels, fetching raw markdown blocks directly from the source logs. Streams the response in chunks simulating real-time LLM output, reducing both input and output token consumption to **0** for log-retrieval queries.
+  * **System Prompt Compression**: Compressed rules, instructions, and query-mapping lists in the base system prompt by ~50%, saving 500-600 input tokens per turn.
+  * **Context Diet**: Optimized vector store retrieval limits (`parent_splitter` chunk size from 1500 to 1000 characters, top matches limited to 5) and capped search block truncation limits to 5000 characters, minimizing input token leakage.
+* **Output Guardrail Truncation Fix**:
+  * **Robust Length Parser**: Replaced simple type checks in length validation with a comprehensive `get_content_length` parser that extracts sizes from `ToolMessage`, `BaseMessage`, list, and dict types, fixing premature connection cancellations and response truncations on large log retrievals.
+* **Backend Server Modularization**:
+  * **Clean Architecture**: Split the main `backend/app.py` file to move heavy streaming handlers and bypass workflows to a dedicated `backend/core/chat.py` module, guardrail helpers to `backend/core/guardrails.py`, and automatic database ingestion to `backend/core/ingest.py`.
+  * **Lightweight Files**: Brought the main server code length down by 55% to just 206 lines, satisfying the project's under-450-line modularity rule (`.agents/rules/logic-constraints.md`).
+
+---
+
 ## 🛠️ The Technical Stack
 
 | Layer | Technology | Key Function |
@@ -75,12 +91,15 @@ Phase 8.2 introduces robust runtime security layers, token-protection guardrails
 .
 ├── assets/                # UI snapshots and demo media
 ├── backend/          
-│   ├── app.py             # FastAPI Entry & Lifecycle
+│   ├── app.py             # FastAPI Entry & Lifecycle (Streamlined to ~200 lines)
 │   ├── basics.ipynb       # RAG experimentation & embedding logic
 │   ├── chroma_db/         # Local vector database storage
 │   ├── core/              
 │   │   ├── agents.py      # LangGraph node logic & system rules
+│   │   ├── chat.py        # Core agent execution & streaming handlers
 │   │   ├── config.py      # VectorStore & Supabase PostgresSaver setup
+│   │   ├── guardrails.py  # Runtime input/output guardrail checks
+│   │   ├── ingest.py      # RAG auto-ingestion & schema setup
 │   │   └── tools/         # Modular Librarian Triage & Search sub-package
 │   │       ├── __init__.py
 │   │       ├── problem_index.py
