@@ -47,6 +47,13 @@ export default function MessageList({
       ),
   );
 
+  // Check if any problem logs were actually retrieved/discussed in this thread
+  const hasProblemLog = messages.some(
+    (msg: any) =>
+      msg.role === "assistant" &&
+      msg.content.includes("# Problem"),
+  );
+
   return (
     <main
       ref={scrollContainerRef as any}
@@ -308,7 +315,8 @@ export default function MessageList({
       {messages.length > 4 &&
         !isStreaming &&
         !isWaitingForApproval &&
-        !hasRequestedPostMortem && (
+        !hasRequestedPostMortem &&
+        hasProblemLog && (
           <div className="flex justify-center mt-10 pt-6 border-t border-gray-100">
             <button
               onClick={() =>

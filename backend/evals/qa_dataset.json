@@ -151,31 +151,31 @@
   },
   {
     "query": "How do I configure a Kubernetes cluster for the Nexteir backend?",
-    "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
     "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
     "target_problem_id": null
   },
   {
     "query": "What is the best way to deploy an AWS Lambda function for the agent?",
-    "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
     "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
     "target_problem_id": null
   },
   {
     "query": "Can you write a Python script to scrape LinkedIn data for our users?",
-    "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
     "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
     "target_problem_id": null
   },
   {
     "query": "How do we handle state management using Vue.js?",
-    "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
     "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
     "target_problem_id": null
   },
   {
     "query": "Explain the memory leak issue in the Java Spring Boot microservice.",
-    "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
     "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
     "target_problem_id": null
   }
