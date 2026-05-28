@@ -43,6 +43,18 @@ def initialize_rag():
     )
     md_header_splits = markdown_splitter.split_text(markdown_document)
 
+    # Prepend headers to page_content so vector embeddings include them
+    for doc in md_header_splits:
+        header_parts = []
+        if "Header 1" in doc.metadata:
+            header_parts.append(f"# {doc.metadata['Header 1']}")
+        if "Header 2" in doc.metadata:
+            header_parts.append(f"## {doc.metadata['Header 2']}")
+        if "Header 3" in doc.metadata:
+            header_parts.append(f"### {doc.metadata['Header 3']}")
+        if header_parts:
+            doc.page_content = "\n".join(header_parts) + "\n\n" + doc.page_content
+
     # ==========================================
     # Pre-split these header sections so no single document
     # overflows the Langchain -> ChromaDB transaction limit.

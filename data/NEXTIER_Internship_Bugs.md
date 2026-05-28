@@ -393,7 +393,7 @@ color hex code\*\* and search for that.
 # Problem 2
 
 ![](data/media_dump/media/image5.png){width="2.15625in"
-height="4.302638888888889in"}![](data/media_dump/media/image1.png){width="1.9322922134733158in"
+height="4.302638888888889in"}![](data/media_dump/media/image3.png){width="1.9322922134733158in"
 height="4.286578083989501in"}
 
 **filepath : src/screens/profile/components/EditAbout.tsx**
@@ -595,8 +595,8 @@ Investment** button is not uniform with other buttons used across the
 application, and this should be standardized to maintain design
 consistency. (Victor)\
 \
-![](data/media_dump/media/image4.png){width="1.796875546806649in"
-height="3.979745188101487in"}![](data/media_dump/media/image3.png){width="1.7864588801399826in"
+![](data/media_dump/media/image2.png){width="1.796875546806649in"
+height="3.979745188101487in"}![](data/media_dump/media/image1.png){width="1.7864588801399826in"
 height="3.9771522309711287in"}
 
 The first image was the problem and the second one is the solution
@@ -2330,7 +2330,7 @@ same.
 
 # Problem 17
 
-![](data/media_dump/media/image11.png){width="5.880208880139983in"
+![](data/media_dump/media/image13.png){width="5.880208880139983in"
 height="4.636317804024497in"}
 
 Note:
@@ -6190,7 +6190,7 @@ the Feed.tsx list next?
 
 # Problem 40
 
-![](data/media_dump/media/image12.png){width="0.651337489063867in"
+![](data/media_dump/media/image9.png){width="0.651337489063867in"
 height="1.1927088801399826in"}
 
 Here is a complete summary of the blank screen transition bug and how we
@@ -6431,7 +6431,7 @@ Guide\" markdown file for your team?
 Here is a complete summary of the issue and the fix for your project
 documentation.
 
-![](data/media_dump/media/image13.png){width="1.7353762029746282in"
+![](data/media_dump/media/image11.png){width="1.7353762029746282in"
 height="3.7400339020122484in"}
 
 ## **The Problem**
@@ -6532,7 +6532,7 @@ hook on your individual screens so your content doesn\'t get hidden
 behind the tab bar?
 
 # Problem 42\
-![](data/media_dump/media/image9.png){width="1.671875546806649in"
+![](data/media_dump/media/image12.png){width="1.671875546806649in"
 height="3.6910476815398074in"}
 
 Here is the updated summary reflecting your adoption of the
@@ -8199,8 +8199,8 @@ In the AI Chatbot interface, the input field shifts its position
 whenever a search is performed or when the keyboard opens for typing.
 This causes layout instability and affects the typing experience.
 
-After typing in the search bar when keyboard is closed, the Input Fields
-shifts above. check the screenshot for reference.
+After typing in the search bar when the keyboard is closed, the Input
+Fields shift above. check the screenshot for reference.
 
 You need to make modifications in exactly **two places** in your file.
 
@@ -8998,9 +8998,9 @@ In Chats-\>any chat tab
 ![](data/media_dump/media/image10.png){width="1.6716316710411199in"
 height="3.6718755468066493in"}
 
-Here is a complete summary of the keyboard overlap issue, the root
-cause, the solution, and best practices to keep in your engineering
-notes for future reference.
+Here is a complete summary of the keyboard overlap(keyboard hiding)
+issue, the root cause, the solution, and best practices to keep in your
+engineering notes for future reference.
 
 **File: src/screens/chat/ChatRoomScreen.tsx**
 
@@ -10031,7 +10031,7 @@ results down as props. Using optional props (currentUserId?) allows you
 to optimize heavily used components incrementally without breaking the
 rest of your app!
 
-# Problem 69
+//problem:69:
 
 ## **The Problem**
 
@@ -10334,7 +10334,7 @@ searchType: \'employmentType\',
 Here is a quick summary of the issue and the exact code snippets you
 need for your future reference.
 
-![](data/media_dump/media/image2.png){width="2.0656955380577426in"
+![](data/media_dump/media/image4.png){width="2.0656955380577426in"
 height="4.328125546806649in"}![](data/media_dump/media/image8.png){width="1.995916447944007in"
 height="4.338542213473316in"}
 
@@ -16241,3 +16241,163 @@ nested \`FlatList\` inside \`ScrollView\` found.
 
 \-
 \[ChatBotScreen.tsx\](file:///Users/victorloucii/Nexteir_Technologies/CHHIRO_COMMUNITY_MOBILE_APP/src/screens/chat_bot/ChatBotScreen.tsx)
+
+# Problem 116
+
+\# Reference Guide: Android Keyboard Overlap Fix in Translucent Modals
+
+This document serves as a reference for the keyboard overlap bug
+encountered in \`AddTransactionModal\` on Android, the root cause
+analysis, the modified files, and the focus-based padding solution.
+
+\-\--
+
+\## 📌 The Problem
+
+When using the transaction modal on Android, the \*\*\"Add to
+Ledger\"\*\* save button at the bottom of the screen would get covered
+by the soft keyboard if the user did the following sequence:
+
+1\. Open the transaction modal (which auto-focuses the \*\*Amount\*\*
+field and displays the decimal keyboard).
+
+2\. Enter an amount.
+
+3\. Tap the \*\*Note / Description\*\* field to enter a text note.
+
+4\. Begin typing a note.
+
+At this point, the soft keyboard covered the bottom of the save button.
+
+\-\--
+
+\## 🔍 Root Cause Analysis
+
+\### 1. Window Soft Input Mode: \`\"pan\"\`
+
+In the project\'s configuration (\`app.json\`), the Android window soft
+input mode is configured as:
+
+\`\`\`json
+
+\"softwareKeyboardLayoutMode\": \"pan\"
+
+\`\`\`
+
+Under \`\"pan\"\` mode, the Android system does not resize the layout
+when the keyboard is displayed. Instead, it slides (pans) the entire
+screen up just enough to keep the currently focused \`TextInput\`
+visible. It does not account for elements positioned \*below\* the
+focused input field, such as buttons.
+
+\### 2. Lack of Keyboard Events on Type Transition
+
+Because the screen does not resize under \`\"pan\"\` mode and the
+keyboard doesn\'t close/re-open when changing focus from Amount to Note,
+the Android system \*\*does not dispatch any keyboard state change
+events\*\* (neither \`keyboardDidShow\` nor \`keyboardDidChangeFrame\`
+fire).
+
+\* The \`keyboardPadding\` state in the React Native component remains
+stale at \*\*288px\*\* (the height of the numeric keypad).
+
+\* Standard text keyboards are taller (typically requiring an extra
+\*\*\~50px\*\* for the suggestion bar and extra letter rows).
+
+\* When the warning hint hides (which happens once a note character is
+typed), the bottom padding recalculates, but uses the stale 288px
+height. This results in the modal\'s bottom padding being too short for
+the actual alphanumeric keyboard, cutting off the save button.
+
+\-\--
+
+\## 🛠️ The Fix: Focus-Based Keyboard Padding Offset
+
+Since we cannot rely on global keyboard event listeners on Android under
+\`\"pan\"\` mode, we resolved the issue by dynamically applying a
+focus-based offset based on the active \`TextInput\`.
+
+\### Modified File
+
+\*
+\*\*\[AddTransactionModal.tsx\](file:///Users/victorloucii/wealthra-finance-companion/src/components/AddTransactionModal.tsx)\*\*
+
+\### 💡 Key Implementation Details
+
+1\. \*\*State Definition\*\*:
+
+Create a boolean state to track if the notes/description text input is
+focused:
+
+\`\`\`typescript
+
+const \[isNotesFocused, setIsNotesFocused\] = useState(false);
+
+\`\`\`
+
+2\. \*\*Event Handlers\*\*:
+
+Attach \`onFocus\` and \`onBlur\` listeners to the Note \`TextInput\`:
+
+\`\`\`tsx
+
+\<TextInput
+
+style={\[
+
+styles.notesInput,
+
+{ color: colors.textMain, borderBottomColor: colors.border },
+
+\]}
+
+placeholder=\"What was this for?\"
+
+value={notes}
+
+onChangeText={setNotes}
+
+placeholderTextColor={colors.textSecondary}
+
+maxLength={50}
+
+onFocus={() =\> setIsNotesFocused(true)} // Toggle true
+
+onBlur={() =\> setIsNotesFocused(false)} // Toggle false
+
+/\>
+
+\`\`\`
+
+3\. \*\*Dynamic Padding Bottom\*\*:
+
+On Android, when \`isNotesFocused\` is \`true\`, add an extra \`50px\`
+buffer to compensate for the taller alphanumeric keyboard:
+
+\`\`\`typescript
+
+paddingBottom:
+
+Platform.OS === \"android\"
+
+? keyboardPadding \> 0
+
+? keyboardPadding + (showNoteHint ? 16 : 64) + (isNotesFocused ? 50 : 0)
+
+: 40
+
+: 40,
+
+\`\`\`
+
+\-\--
+
+\## 📈 Key Takeaways for Future Layouts
+
+\* When building modals on Android with \`\"pan\"\` input mode, always
+assume keyboard type transitions will \*\*not\*\* trigger React Native
+keyboard listeners.
+
+\* For forms with mixed keyboard types (e.g., numeric to text), use
+focus state listeners (\`onFocus\`/\`onBlur\`) to dynamically inject
+spacing offsets for the text fields.

@@ -20,15 +20,27 @@ if not os.getenv("OPENROUTER_API_KEY"):
 os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
 
-llm = ChatOpenAI(
+primary_llm = ChatOpenAI(
     model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
     streaming=True,
     request_timeout=45,
-    max_retries=5,
+    max_retries=2,  # Reduced so it fails over faster
 )
+
+fallback_llm = ChatOpenAI(
+    model="google/gemini-2.0-flash-001",
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0,
+    streaming=True,
+    request_timeout=45,
+    max_retries=3,
+)
+
+llm = primary_llm.with_fallbacks([fallback_llm])
 print(f"🤖 Loading LLM model: {llm.model_name}")
 
 # ==========================================
@@ -71,7 +83,7 @@ retriever = ParentDocumentRetriever(
     docstore=store,  # Now uses the wrapped store
     child_splitter=child_splitter,
     parent_splitter=parent_splitter, # <-- Now enforces a size limit on the stored memory
-    search_kwargs={"k": 25},         # <-- [FIX] Pulls top 25 most relevant sections to feed the reranker
+    search_kwargs={"k": 40},         # <-- [FIX] Pulls top 40 most relevant sections to feed the reranker
 )
 
 print(f"✅ Connected to local ChromaDB & DocStore at: {BASE_DIR}")

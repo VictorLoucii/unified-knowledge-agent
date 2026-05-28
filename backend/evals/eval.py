@@ -121,13 +121,29 @@ def run_evals():
                 is_hit = True
                 recall_hits += 1
         
-        # 3. Grade with LLM Judge
-        verdict: EvalResult = evaluator_chain.invoke({
-            "query": test["query"],
-            "expected_output": test["expected_output"],
-            "evaluation_criteria": test["evaluation_criteria"],
-            "agent_output": agent_output
-        })
+        # 3. Grade with LLM Judge (with retries for transient JSON/validation errors)
+        verdict = None
+        max_eval_retries = 3
+        for attempt in range(max_eval_retries):
+            try:
+                verdict = evaluator_chain.invoke({
+                    "query": test["query"],
+                    "expected_output": test["expected_output"],
+                    "evaluation_criteria": test["evaluation_criteria"],
+                    "agent_output": agent_output
+                })
+                break
+            except Exception as e:
+                print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
+                if attempt < max_eval_retries - 1:
+                    import time
+                    time.sleep(2)  # Wait a bit before retrying
+                else:
+                    # Final fallback if all attempts fail
+                    verdict = EvalResult(
+                        passed=False,
+                        reason=f"LLM Judge failed to return valid JSON output after {max_eval_retries} attempts. Error: {str(e)}"
+                    )
         
         # 4. Print Pipeline Results
         if verdict.passed:
