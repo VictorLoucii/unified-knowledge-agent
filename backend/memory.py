@@ -1,5 +1,6 @@
 # backend/memory.py
 import os
+import asyncio
 import psycopg
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
@@ -57,6 +58,38 @@ def setup_database_tables():
         print("👉 Ensure Postgres is running and DATABASE_URL in .env is correct.")
 
 
+async def generate_title_from_llm(user_message: str) -> str:
+    """Invokes LLM to generate a concise 1-4 word topic title for the chat."""
+    try:
+        from backend.core.config import llm
+        from langchain_core.messages import SystemMessage, HumanMessage
+        
+        system_prompt = SystemMessage(
+            content=(
+                "You are a helpful assistant. Summarize the user's initial query into a concise, meaningful chat title.\n"
+                "The title must be extremely brief (1 to 4 words, maximum 40 characters).\n"
+                "Never use quotes, prefix, suffix, period, or formatting. Just output the raw summary text.\n"
+                "Examples:\n"
+                "Input: 'What is the project rule regarding npm vs yarn?' -> 'npm vs yarn Rule'\n"
+                "Input: 'What was the fix for the Chiiro loader?' -> 'Chiiro Loader Fix'\n"
+                "Input: 'How do I handle the MultiSelect scrolling bug?' -> 'MultiSelect Scroll Bug'"
+            )
+        )
+        
+        response = await llm.ainvoke([system_prompt, HumanMessage(content=user_message)])
+        title = response.content.strip()
+        # Strip any "title:" prefix case-insensitively if generated
+        if title.lower().startswith("title:"):
+            title = title[6:].strip()
+        title = title.replace('"', '').replace("'", "")
+        if len(title) > 45:
+            title = title[:42] + "..."
+        return title or user_message[:40]
+    except Exception as e:
+        print(f"⚠️ [WARNING] Failed to generate title from LLM: {e}")
+        return user_message[:40] + ("..." if len(user_message) > 40 else "")
+
+
 async def save_thread_title(
     async_pool: AsyncConnectionPool, thread_id: str, user_message: str
 ):
@@ -67,12 +100,27 @@ async def save_thread_title(
                 "SELECT title FROM thread_metadata WHERE thread_id = %s", (thread_id,)
             )
             if not await cur.fetchone():
-                # Simple logic: Take first 40 chars as the title
+                # Write an optimistic title first to avoid blocking stream startup
                 title = user_message[:40] + ("..." if len(user_message) > 40 else "")
                 await cur.execute(
                     "INSERT INTO thread_metadata (thread_id, title) VALUES (%s, %s)",
                     (thread_id, title),
                 )
+                
+                # Kick off background LLM call to update it to a meaningful title
+                async def update_title_bg():
+                    try:
+                        clean_title = await generate_title_from_llm(user_message)
+                        async with async_pool.connection() as conn_bg:
+                            async with conn_bg.cursor() as cur_bg:
+                                await cur_bg.execute(
+                                    "UPDATE thread_metadata SET title = %s WHERE thread_id = %s",
+                                    (clean_title, thread_id),
+                                )
+                    except Exception as e:
+                        print(f"⚠️ [WARNING] Background title update failed: {e}")
+
+                asyncio.create_task(update_title_bg())
 
 
 async def get_all_threads_history(async_pool: AsyncConnectionPool, limit: int = 20, offset: int = 0):

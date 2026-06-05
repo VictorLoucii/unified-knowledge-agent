@@ -71,7 +71,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             ai_msg = AIMessage(content=block)
 
             config = {"configurable": {"thread_id": thread_id}}
-            await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), tool_msg, ai_msg]})
+            await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), tool_msg, ai_msg]}, as_node="chatbot")
 
             # Stream the response chunk by chunk to simulate natural real-time streaming
             chunk_size = 120
@@ -105,7 +105,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                     # Persist state directly in PostgreSQL history
                     ai_msg = AIMessage(content=cached_response)
                     config = {"configurable": {"thread_id": thread_id}}
-                    await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]})
+                    await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
 
                     # Stream the response chunk by chunk to simulate natural real-time streaming
                     chunk_size = 120
