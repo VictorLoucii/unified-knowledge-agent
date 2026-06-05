@@ -23,6 +23,8 @@ interface SidebarProps {
   setSelectedThreads?: React.Dispatch<React.SetStateAction<Set<string>>>;
   setPinnedThreads?: React.Dispatch<React.SetStateAction<Set<string>>>;
   fetchHistory?: (isReset?: boolean) => void;
+  isSidebarOpen?: boolean;
+  onCloseSidebar?: () => void;
 }
 
 export default function Sidebar({
@@ -42,6 +44,8 @@ export default function Sidebar({
   setSelectedThreads = () => {},
   setPinnedThreads = () => {},
   fetchHistory = () => {},
+  isSidebarOpen = false,
+  onCloseSidebar = () => {},
 }: SidebarProps) {
   const sortedThreads = [...threads].sort((a, b) => {
     const aPinned = pinnedThreads.has(a.id);
@@ -52,12 +56,40 @@ export default function Sidebar({
   });
 
   return (
-    <aside className="w-64 bg-gray-100 border-r border-gray-200 flex flex-col hidden md:flex">
+    <aside
+      className={`w-64 bg-gray-100 border-r border-gray-200 flex flex-col fixed inset-y-0 left-0 z-50 transition-transform duration-300 ease-in-out ${
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      } md:relative md:translate-x-0 md:flex`}
+    >
       <div className="p-4 border-b border-gray-200 bg-white flex flex-col gap-3">
-        <h2 className="text-lg font-semibold text-gray-800">Chat History</h2>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold text-gray-800">Chat History</h2>
+          <button
+            onClick={onCloseSidebar}
+            className="p-1 rounded-md text-gray-500 hover:bg-gray-100 md:hidden"
+            aria-label="Close sidebar"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
 
         <button
-          onClick={createNewChat}
+          onClick={() => {
+            createNewChat();
+            onCloseSidebar();
+          }}
           className="w-full bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors flex items-center justify-center gap-2 shadow-sm"
         >
           <svg
@@ -130,6 +162,7 @@ export default function Sidebar({
                     loadThread(thread.id);
                     window.history.pushState(null, "", `?thread=${thread.id}`);
                   }
+                  onCloseSidebar();
                 }}
               >
                 {thread.title?.startsWith("thread_")

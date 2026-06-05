@@ -23,6 +23,7 @@ export default function ChatUI() {
   } = useChatStream() as any;
 
   const [input, setInput] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const [threads, setThreads] = useState<any[]>([]);
@@ -236,6 +237,13 @@ export default function ChatUI() {
 
   return (
     <div className="flex h-screen w-full bg-white">
+      {isSidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 md:hidden"
+          onClick={() => setIsSidebarOpen(false)}
+        />
+      )}
+
       <Sidebar
         threads={threads}
         pinnedThreads={pinnedThreads}
@@ -253,10 +261,15 @@ export default function ChatUI() {
         setSelectedThreads={setSelectedThreads}
         setPinnedThreads={setPinnedThreads}
         fetchHistory={fetchHistory}
+        isSidebarOpen={isSidebarOpen}
+        onCloseSidebar={() => setIsSidebarOpen(false)}
       />
 
       <div className="flex flex-col flex-1 h-screen bg-gray-50 text-gray-900 overflow-hidden">
-        <ChatHeader isStreaming={isStreaming} />
+        <ChatHeader
+          isStreaming={isStreaming}
+          onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
+        />
 
         <MessageList
           messages={messages}
