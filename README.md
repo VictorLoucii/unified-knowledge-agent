@@ -101,13 +101,13 @@ This system is built for deterministic reliability, performance optimization, an
 │   ├── scratch/           # Experimental & testing scripts
 │   │   └── test_semantic_cache.py # Semantic cache integration test
 │   └── static/            # Static assets for the backend
-│   ├── data/                  
-│   │   ├── NEXTIER_Internship_Bugs.md   # Standardized source of truth
-│   │   └── media_dump/        # Parsed document assets and diagrams
+├── data/                  
+│   ├── NEXTIER_Internship_Bugs.md   # Standardized source of truth
+│   └── media_dump/        # Parsed document assets and diagrams
 ├── frontend/         
 │   ├── src/               
 │   │   ├── app/           # Next.js App Router (layout/page)
-│   │   ├── components/    # Chat UI (Header, Input, MessageList, Sidebar)
+│   │   ├── components/    # Chat UI (ChatHeader, ChatInput, MessageList, Sidebar, CodeBlock)
 │   │   ├── hooks/         # useChatStream for HITL approval flow
 │   │   └── types/         # TypeScript definitions for agents
 │   ├── next.config.ts     # Frontend configuration
