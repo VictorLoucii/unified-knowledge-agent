@@ -28,6 +28,11 @@ The agent utilizes `on_agent_interrupt` to pause before executing heavy tools, r
   <img src="./assets/ss2.png" alt="Interface Snapshot 2" width="48%">
 </div>
 
+<div align="center" style="margin-top: 10px;">
+  <img src="./assets/ss3.png" alt="Interface Snapshot 3" width="48%">
+  <img src="./assets/ss4.png" alt="Interface Snapshot 4" width="48%">
+</div>
+
 ---
 
 ## 🚀 Key Features & Capabilities
