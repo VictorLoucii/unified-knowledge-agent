@@ -4,6 +4,15 @@
 import React from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import CodeBlock from "./CodeBlock";
+
+const extractText = (node: any): string => {
+  if (typeof node === "string") return node;
+  if (typeof node === "number") return String(node);
+  if (Array.isArray(node)) return node.map(extractText).join("");
+  if (node?.props?.children) return extractText(node.props.children);
+  return "";
+};
 
 interface MessageListProps {
   messages?: any[];
@@ -143,19 +152,22 @@ export default function MessageList({
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        // 1. Style the block wrapper (the dark box)
-                        pre({ node, children, ...props }: any) {
+                        // 1. Style the block wrapper (the dark box) with copy support
+                        pre({ children }: { children?: React.ReactNode }) {
+                          const codeText = extractText(children);
+                          const codeElement = React.Children.toArray(children)[0] as React.ReactElement<{ className?: string }> | undefined;
+                          const className = codeElement?.props?.className || "";
+                          const matches = /language-(\w+)/.exec(className);
+                          const language = matches ? matches[1] : "";
+
                           return (
-                            <pre
-                              className="bg-gray-900 text-gray-100 rounded-lg p-4 overflow-x-auto my-4 text-sm"
-                              {...props}
-                            >
+                            <CodeBlock language={language} codeText={codeText}>
                               {children}
-                            </pre>
+                            </CodeBlock>
                           );
                         },
                         // 2. Style the text inside (inline vs block text)
-                        code({ node, className, children, ...props }: any) {
+                        code({ className, children, ...props }: React.ComponentPropsWithoutRef<"code"> & { node?: unknown }) {
                           // Block code usually gets a language class like "language-js"
                           // If it doesn't have one, we treat it as an inline ` snippet
                           const isInline = !className;
