@@ -26,6 +26,7 @@ export const useChatStream = (initialThreadId?: string) => {
   
   // Track the current assistant message ID to reliably resume streams
   const latestAssistantIdRef = useRef<string | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null); // <-- [NEW] Abort controller ref
 
   const [threadId, setThreadId] = useState<string>(() => {
     if (initialThreadId) return initialThreadId;
@@ -157,18 +158,33 @@ export const useChatStream = (initialThreadId?: string) => {
     setIsStreaming(true);
     setIsWaitingForApproval(false); // Reset lock on new message
 
+    // Create abort controller for streaming cancellation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const response = await fetch(`${API_BASE_URL}/chat_stream`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: userText, thread_id: threadId }),
+        signal: controller.signal,
       });
 
       await readStream(response, assistantId);
 
-    } catch (error) {
-      console.error("Stream connection failed:", error);
+    } catch (error: unknown) {
+      if (error instanceof Error && error.name === "AbortError") {
+        console.log("Stream connection stopped by user.");
+      } else {
+        console.error("Stream connection failed:", error);
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setMessages((prev) => {
         const targetMsg = prev.find((m) => m.id === assistantId);
         const isInterrupted = targetMsg?.currentTool === "Action Required: Pending approval.";
@@ -228,18 +244,33 @@ export const useChatStream = (initialThreadId?: string) => {
       )
     );
 
+    // Create abort controller for streaming cancellation
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
     try {
       const response = await fetch(`${API_BASE_URL}/chat_approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ thread_id: threadId, approve: true }),
+        signal: controller.signal,
       });
 
       await readStream(response, targetAssistantId);
 
-    } catch (err) {
-      console.error("Stream resumption failed:", err);
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") {
+        console.log("Stream resumption stopped by user.");
+      } else {
+        console.error("Stream resumption failed:", err);
+      }
     } finally {
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
       setIsStreaming(false);
       setMessages((prev) =>
         prev.map((msg) =>
@@ -280,6 +311,14 @@ export const useChatStream = (initialThreadId?: string) => {
     }
   };
 
+  const stopResponse = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setIsStreaming(false);
+  };
+
   return {
     messages,
     sendMessage,
@@ -290,5 +329,6 @@ export const useChatStream = (initialThreadId?: string) => {
     threadId,
     deleteThread,
     createNewChat,
+    stopResponse, // <-- [NEW] Expose stopResponse
   };
 };

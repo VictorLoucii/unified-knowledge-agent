@@ -19,6 +19,7 @@ export default function ChatUI() {
     deleteThread,
     threadId: currentThreadId,
     createNewChat,
+    stopResponse,         // <-- [NEW] Extracted stop handler
   } = useChatStream() as any;
 
   const [input, setInput] = useState("");
@@ -276,6 +277,7 @@ export default function ChatUI() {
           handleSubmit={handleSubmit}
           isStreaming={isStreaming}
           isWaitingForApproval={isWaitingForApproval} // <-- [PHASE 7 NEW] Passed down to lock input
+          onStop={stopResponse}                       // <-- [NEW] Passed down to stop stream
         />
       </div>
     </div>
