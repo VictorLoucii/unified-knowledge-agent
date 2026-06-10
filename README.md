@@ -45,7 +45,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
 
 ### 2. Token Optimization & Cost Control
-* **High-Speed Input Classifier:** Employs `google/gemini-2.0-flash-001` to triage requests instantly. Conversational chatter and generic questions are handled directly by the fast model, saving cost and reducing latency by bypassing the core RAG/LangGraph pipeline.
+* **High-Speed Input Classifier:** Employs `google/gemini-2.5-flash` to triage requests instantly. Conversational chatter and generic questions are handled directly by the fast model, saving cost and reducing latency by bypassing the core RAG/LangGraph pipeline.
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
@@ -131,7 +131,7 @@ You can customize the model used for testing by setting the `MODEL_NAME` environ
 
 **1. Iterating on a Cheap Model (Gemini 2.0 Flash):**
 ```bash
-MODEL_NAME="google/gemini-2.0-flash-001" uv run python -m backend.evals.eval
+MODEL_NAME="google/gemini-2.5-flash" uv run python -m backend.evals.eval
 ```
 
 **2. Final Production "Golden Run" (DeepSeek V3):**
@@ -142,7 +142,7 @@ MODEL_NAME="deepseek/deepseek-chat" uv run python -m backend.evals.eval
 ### Running the Corpus Growth Evaluation Stress-Test
 Verify retrieval recall against expanding database sizes:
 ```bash
-MODEL_NAME="google/gemini-2.0-flash-001" uv run python -m backend.evals.eval_corpus_growth
+MODEL_NAME="google/gemini-2.5-flash" uv run python -m backend.evals.eval_corpus_growth
 ```
 
 ### Running the Semantic Cache Integration Test

@@ -31,7 +31,7 @@ primary_llm = ChatOpenAI(
 )
 
 fallback_llm = ChatOpenAI(
-    model="google/gemini-2.0-flash-001",
+    model="google/gemini-2.5-flash",
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
@@ -41,7 +41,7 @@ fallback_llm = ChatOpenAI(
 )
 
 fast_llm = ChatOpenAI(
-    model="google/gemini-2.0-flash-001",
+    model="google/gemini-2.5-flash",
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
