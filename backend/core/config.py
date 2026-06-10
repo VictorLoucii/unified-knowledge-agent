@@ -40,6 +40,15 @@ fallback_llm = ChatOpenAI(
     max_retries=3,
 )
 
+fast_llm = ChatOpenAI(
+    model="google/gemini-2.0-flash-001",
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0,
+    streaming=False,
+    max_retries=2,
+)
+
 llm = primary_llm.with_fallbacks([fallback_llm])
 print(f"🤖 Loading LLM model: {llm.model_name}")
 
