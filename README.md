@@ -45,6 +45,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
 
 ### 2. Token Optimization & Cost Control
+* **High-Speed Input Classifier:** Employs `google/gemini-2.0-flash-001` to triage requests instantly. Conversational chatter and generic questions are handled directly by the fast model, saving cost and reducing latency by bypassing the core RAG/LangGraph pipeline.
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
@@ -116,6 +117,8 @@ This system is built for deterministic reliability, performance optimization, an
 ├── Dockerfile             # Backend containerization
 ├── generate_dataset.py    # Synthetic dataset generation script
 ├── pyproject.toml         # Python dependencies (uv)
+├── scratch/               # Experimental root-level tests (test_agent.py, test_guardrails.py, test_params.py)
+├── test_conn.py           # Database connectivity test script
 └── uv.lock                # Deterministic lockfile
 ```
 
