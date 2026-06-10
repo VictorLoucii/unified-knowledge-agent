@@ -266,7 +266,7 @@ def search_internship_history(query: str) -> str:
 
             if re.search(pattern, text_lower):
                 # [THE FIX: Heavily boost the weight if the user only typed 1-3 words]
-                score += 15 if len(core_keywords) <= 3 else 5
+                score += 50 if len(core_keywords) <= 3 else 10
 
         return score
 
@@ -348,16 +348,16 @@ def search_internship_history(query: str) -> str:
                         )
                         block = full_file_text[start_idx:end_idx].strip()
 
-                        if len(block) > 5000:
+                        if len(block) > 8000:
                             block = (
-                                block[:5000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
+                                block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
                             )
 
                         # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
                         escalated_blocks.append(
                             f"=== AUTO-ESCALATED CONTEXT: PROBLEM {prob_num} ===\n"
-                            f"(AGENT INSTRUCTION: This is the COMPLETE log for Problem {prob_num}. You MUST prioritize this full text to answer the query instead of the partial vector matches below. Include both the problem description and the solution. Do NOT summarize code blocks—output them exactly. "
-                            f"Only act as a Librarian (listing IDs) if the query is extremely vague and matches many completely UNRELATED problems.)\n\n"
+                            f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID, or a highly specific technical error, you MUST synthesize the entire text below this line including code and paths. "
+                            f"Act as a Librarian (listing ONLY IDs) if the query is vague/ambiguous and matches 2 or more completely unrelated problems (e.g., 'file upload bug' matching 3 different IDs). You are STRICTLY FORBIDDEN from summarizing code blocks—output them exactly.)\n\n"
                             f"{block}\n==============================================\n"
                         )
 
@@ -390,13 +390,13 @@ def search_internship_history(query: str) -> str:
         [format_doc_for_llm(doc) for doc in unique_docs]
     )
 
-    # FIX: Prioritize Escalated Problems to provide full context BEFORE partial Vector Matches
+    # FIX: Prioritize Top Vector Matches (General Knowledge) BEFORE bulky Escalated Problems
     if escalated_text:
         final_output = (
-            escalated_text
-            + "\n\n"
-            + "=== TOP VECTOR MATCHES (GENERAL KNOWLEDGE / WORKFLOW RULES) ===\n\n"
+            "=== TOP VECTOR MATCHES (GENERAL KNOWLEDGE / WORKFLOW RULES) ===\n\n"
             + formatted_context
+            + "\n\n"
+            + escalated_text
         )
     else:
         final_output = formatted_context
