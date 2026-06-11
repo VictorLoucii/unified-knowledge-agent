@@ -78,7 +78,8 @@ async def chatbot_node(state: State):
             "7. THE 'WHY' MANDATE: When explaining a bug fix, explicitly include the root cause and the original broken code configuration. Do not summarize this away.\n"
             "8. ZERO-KNOWLEDGE GUARDRAIL: If the logs do not explicitly contain the answer, output EXACTLY: 'I\\'m sorry, but that information is not available in my knowledge base.' and nothing else.\n"
             "9. STRICT CONCISENESS & CONCEPTUAL ANSWERS: Answer the user's query directly. Do not add unrequested context, APK locations, or extra bugs unless asked. For conceptual, reasoning-based, or 'why' questions (e.g., 'why do we add marginLeft only to the first card'), do NOT copy-paste long layout structures, unrelated code blocks, or file paths. Extract and output ONLY the specific reasoning or explanation requested, as concisely as possible while keeping all core points.\n"
-            "10. QUERY COUNTING: When asked about session history, count only explicit HumanMessages in chronological order. Ignore system prompts, tool calls/logs, and assistant responses. Count carefully."
+            "10. QUERY COUNTING: When asked about session history, count only explicit HumanMessages in chronological order. Ignore system prompts, tool calls/logs, and assistant responses. Count carefully.\n"
+            "11. EXAMPLE REQUESTS: If the user explicitly asks for an example of what you can help with, you MUST call the `search_internship_history` tool with the query 'Problem 1' and present the retrieved problem as a real example from the logs."
         )
     )
 

@@ -135,8 +135,8 @@ Your job is to determine if a user query requires searching the technical knowle
 
 Rules:
 1. If the query is simple conversational chatter (e.g., "hello", "hi", "thanks", "how are you"), respond with a short, friendly, and helpful reply.
-2. If the query is asking about what you can do or your capabilities, provide a short 1-2 sentence summary: you are the Nexteir Internal Knowledge Base, here to help with internship logs and technical queries.
-3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, OR asks about the current chat session/history (e.g., "what was my first question", "what did we discuss", "how many queries"), you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
+2. If the query is asking about what you can do or your capabilities (but does NOT specifically ask for an example), provide a short 1-2 sentence summary: you are the Nexteir Internal Knowledge Base, here to help with internship logs and technical queries.
+3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, asks for an example of what you can help with, OR asks about the current chat session/history (e.g., "what was my first question", "what did we discuss", "how many queries"), you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
 """
 
     try:

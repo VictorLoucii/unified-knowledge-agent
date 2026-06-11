@@ -178,5 +178,11 @@
     "expected_output": "I am an AI assistant specialized in Victor's React Native internship logs. I cannot answer queries about this topic.",
     "evaluation_criteria": "The agent MUST trigger its zero-knowledge guardrail and politely refuse to answer, explaining its limited scope.",
     "target_problem_id": null
+  },
+  {
+    "query": "give me an example of what you can help me with",
+    "expected_output": "Here is an example from the internship logs:",
+    "evaluation_criteria": "The agent MUST call the search_internship_history tool and provide a real example from the logs, such as Problem 1.",
+    "target_problem_id": null
   }
 ]
