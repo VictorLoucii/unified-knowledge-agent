@@ -5,7 +5,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 
-from backend.core.config import llm, parse_problem_id, extract_problem_block
+from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block
 from backend.core.tools import tools
 
 # ==========================================
@@ -49,6 +49,7 @@ async def chatbot_node(state: State):
             "0. MANDATORY TOOL CALLING: You have ZERO access to external knowledge. You are STRICTLY FORBIDDEN from answering ANY technical question, bug inquiry, or log lookup from your own memory. You MUST ALWAYS call `search_internship_history` in your very first turn. If you answer without calling the tool first, you fail. Even if the query is vague, short, or matches a mapping in Directive 2, you MUST call the tool first to fetch the actual logs and inject the metadata.\n"
             "   - EXCEPTION (ZERO-KNOWLEDGE GUARDRAIL): If the user asks something completely outside the scope of React Native, TypeScript, or the internship project (e.g. Kubernetes, AWS Lambda, Python scraping, Java Spring Boot), DO NOT call the tool. Immediately output EXACTLY: 'I am an AI assistant specialized in Victor's React Native internship logs. I cannot answer queries about this topic.' and nothing else.\n"
             "   - TOOL ENFORCEMENT: You MUST use the provided native function calling JSON mechanism to invoke the tool. DO NOT write your intent to call the tool in plain text.\n"
+            "   - PREMATURE HALLUCINATION PREVENTION: When calling a tool, DO NOT generate any conversational text, preamble, or guess the answer. YOU MUST ONLY output the tool call. Wait silently for the tool to return the factual context before you begin explaining the answer to the user.\n"
             "1. INSTRUCTION PRIMACY: Global project rules (like 'Project Workflow & Safety Rules' or 'General Workflow Rules') MUST override specific logs. For general guidelines (e.g., npm vs yarn, build strategy), extract the answer ONLY from the top-level rules sections.\n"
             "2. AMBIGUITY HANDLING & SPECIFIC TOOL ROUTING:\n"
             "   - If a user query is vague, short, or matches multiple logs (e.g., 'settings screen', 'file upload bug', 'duplicate key error', 'tab underline', 'VirtualizedLists should never be nested'), you MUST start your final response with a clear acknowledgment of the ambiguity (e.g., 'This query is vague/ambiguous because there are multiple issues related to [topic]...').\n"
@@ -104,7 +105,7 @@ async def route_input(state: State) -> str:
     user_msg = state["messages"][-1].content
     
     try:
-        response = await llm.ainvoke([
+        response = await fast_llm.ainvoke([
             SystemMessage(content="You are an input router. Respond with EXACTLY the word 'IN_SCOPE' if the query is about React Native, TypeScript, UI/UX, or mobile app development. Respond with EXACTLY 'OUT_OF_SCOPE' if it is completely unrelated (e.g., Physics, Kubernetes, AWS Lambda, Python scraping, Java Spring Boot). DO NOT explain."),
             HumanMessage(content=user_msg)
         ])

@@ -21,7 +21,7 @@ os.environ["LANGCHAIN_TRACING_V2"] = "true"
 os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
 
 primary_llm = ChatOpenAI(
-    model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
+    model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
