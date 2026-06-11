@@ -44,8 +44,9 @@ This system is built for deterministic reliability, performance optimization, an
 * **Corpus Growth Stress-Testing:** Includes a validation suite (`eval_corpus_growth.py`) that slices the document base to evaluate recall stability against growing datasets, verifying retrieval resilience.
 * **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
 
-### 2. Token Optimization & Cost Control
-* **High-Speed Input Classifier:** Employs `google/gemini-2.5-flash` to triage requests instantly. Conversational chatter and generic questions are handled directly by the fast model, saving cost and reducing latency by bypassing the core RAG/LangGraph pipeline.
+### 2. Unified LLM Architecture & Cost Control
+* **Unified Model Driver (Gemini 2.5 Flash):** Uses `google/gemini-2.5-flash` as the primary, fallback, and triage classifier model. This provides strict tool-calling hygiene (preventing pre-execution text leakage that breaks the HITL UI), ultra-low latency, and maximum token efficiency.
+* **High-Speed Input Classifier:** Triage routing runs on a non-streaming, fast setup of Gemini 2.5 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency.
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
@@ -127,14 +128,16 @@ This system is built for deterministic reliability, performance optimization, an
 ## 🚦 Developer Commands & Evaluation Workflow
 
 ### Running the Evaluation Suite
-You can customize the model used for testing by setting the `MODEL_NAME` environment variable. By default, it uses `deepseek/deepseek-chat`.
+By default, the evaluation suite now runs on the primary model, `google/gemini-2.5-flash`.
 
-**1. Iterating on a Cheap Model (Gemini 2.0 Flash):**
+**1. Running the Standard Evaluation (Gemini 2.5 Flash):**
 ```bash
-MODEL_NAME="google/gemini-2.5-flash" uv run python -m backend.evals.eval
+uv run python -m backend.evals.eval
 ```
 
-**2. Final Production "Golden Run" (DeepSeek V3):**
+**2. Running with alternative models (e.g., DeepSeek V3):**
+> [!WARNING]
+> While DeepSeek V3 can be evaluated by setting `MODEL_NAME`, it exhibits pre-execution hallucinations during tool calls that break the frontend's HITL approval panel.
 ```bash
 MODEL_NAME="deepseek/deepseek-chat" uv run python -m backend.evals.eval
 ```
