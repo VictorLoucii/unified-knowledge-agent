@@ -13,6 +13,14 @@ This is the Next.js frontend client for the **Unified Knowledge Agent**. It prov
 
 ---
 
+## 🤖 Backend LLM Requirements
+
+For the **Human-in-the-Loop (HITL) "Yellow Card"** interface to work correctly, the backend's primary LLM configuration is critical:
+* **Recommended Model:** `google/gemini-2.5-flash` is promoted to the primary LLM role due to its strict, native tool-calling hygiene.
+* **Why Conversational Models Fail (e.g., DeepSeek-Chat):** More conversational models often stream conversational preambles or guess the outcomes alongside the tool call block. In a streaming interface with execution interrupts, this causes a "premature hallucination leak" to the frontend before the user can approve/deny the database action, creating a confusing UI double-response. Gemini 2.5 Flash pauses cleanly on tool calls without pre-execution text leakage.
+
+---
+
 ## 📂 Directory Layout
 
 *   `src/app/`: Next.js App Router setup (layout and page views).
