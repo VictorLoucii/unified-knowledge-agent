@@ -64,8 +64,9 @@ export default function ChatUI() {
 
   const fetchHistory = (isReset = false) => {
     const currentOffset = isReset ? 0 : offset;
+    const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
     fetch(
-      `http://localhost:7860/history?limit=${LIMIT}&offset=${currentOffset}`,
+      `${API_BASE_URL}/history?limit=${LIMIT}&offset=${currentOffset}`,
     )
       .then((res) => res.json())
       .then((data) => {
