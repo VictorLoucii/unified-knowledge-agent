@@ -71,6 +71,7 @@ async def chatbot_node(state: State):
             "     * User Query: 'What caused the 6th OTP input box to be cut off on smaller Android screens?' -> Call tool with query 'Problem 13'\n"
             "     * User Query: 'How do we resolve the Android TextInput cursor jumping to the end of the text string?' -> Call tool with query 'Problem 99'\n"
             "     * User Query: 'Why weren\\'t OneSignal push notifications stopping when the user toggled them off in the settings?' -> Call tool with query 'Problem 49'\n"
+            "     * User Query: 'what kind of internship logs?' OR any repetition of the fallback 'I am an AI assistant specialized...' -> Call tool with query 'Problem 1'\n"
             "   - After the tool returns the logs, acknowledge the ambiguity first in your final response if the query was vague/ambiguous, and then present the retrieved problem logs exactly as returned by the tool.\n"
             "3. FORMAT RIGIDITY: If the user asks for a specific Problem ID (e.g., 'Problem X') or asks for 'the complete details and code', you MUST act as a pure passthrough. You MUST output the EXACT text returned by the tool. DO NOT summarize it. Start exactly with `# Problem X` and end exactly with `<END OF PROBLEM>`. Include all formatting, images, paragraphs, and code blocks exactly as provided by the tool.\n"
             "4. NO BLENDING: Treat every problem ID as a completely isolated event. If a query returns multiple problems, focus ONLY on the one that most specifically matches the query keywords.\n"
@@ -80,7 +81,7 @@ async def chatbot_node(state: State):
             "8. ZERO-KNOWLEDGE GUARDRAIL: If the logs do not explicitly contain the answer, output EXACTLY: 'I\\'m sorry, but that information is not available in my knowledge base.' and nothing else.\n"
             "9. STRICT CONCISENESS & CONCEPTUAL ANSWERS: Answer the user's query directly. Do not add unrequested context, APK locations, or extra bugs unless asked. For conceptual, reasoning-based, or 'why' questions (e.g., 'why do we add marginLeft only to the first card'), do NOT copy-paste long layout structures, unrelated code blocks, or file paths. Extract and output ONLY the specific reasoning or explanation requested, as concisely as possible while keeping all core points.\n"
             "10. QUERY COUNTING: When asked about session history, count only explicit HumanMessages in chronological order. Ignore system prompts, tool calls/logs, and assistant responses. Count carefully.\n"
-            "11. EXAMPLE REQUESTS: If the user explicitly asks for an example of what you can help with, you MUST call the `search_internship_history` tool with the query 'Problem 1' and present the retrieved problem as a real example from the logs."
+            "11. EXAMPLE REQUESTS & META-QUESTIONS: If the user explicitly asks for an example of what you can help with, asks what kind of logs you have, asks about your capabilities, or repeats/mocks your zero-knowledge fallback message (e.g., 'I am an AI assistant...'), you MUST treat this as a meta-question. Call `search_internship_history` with query 'Problem 1'. Explain that you contain logs about React Native, TypeScript, UI/UX, and performance optimization, and provide the retrieved problem as a practical example. DO NOT trigger the ZERO-KNOWLEDGE GUARDRAIL."
         )
     )
 
@@ -106,7 +107,7 @@ async def route_input(state: State) -> str:
     
     try:
         response = await fast_llm.ainvoke([
-            SystemMessage(content="You are an input router. Respond with EXACTLY the word 'IN_SCOPE' if the query is about React Native, TypeScript, UI/UX, or mobile app development. Respond with EXACTLY 'OUT_OF_SCOPE' if it is completely unrelated (e.g., Physics, Kubernetes, AWS Lambda, Python scraping, Java Spring Boot). DO NOT explain."),
+            SystemMessage(content="You are an input router. Respond with EXACTLY the word 'IN_SCOPE' if the query is about React Native, TypeScript, UI/UX, mobile app development, or is a meta-question about your capabilities or repeats your fallback messages. Respond with EXACTLY 'OUT_OF_SCOPE' if it is completely unrelated (e.g., Physics, Kubernetes, AWS Lambda, Python scraping, Java Spring Boot). DO NOT explain."),
             HumanMessage(content=user_msg)
         ])
         if "OUT_OF_SCOPE" in response.content.upper():

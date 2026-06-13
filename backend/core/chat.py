@@ -93,10 +93,12 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
     # 2.5. Check Semantic Cache
     if not is_excluded_from_cache(user_message):
         try:
-            results = cache_vectorstore.similarity_search_with_relevance_scores(user_message, k=1)
-            if results and results[0][1] >= SEMANTIC_CACHE_THRESHOLD:
-                match_doc, score = results[0]
-                cached_response = match_doc.metadata.get("response")
+            results = cache_vectorstore.similarity_search_with_score(user_message, k=1)
+            if results:
+                match_doc, distance = results[0]
+                score = 1.0 - distance
+                if score >= SEMANTIC_CACHE_THRESHOLD:
+                    cached_response = match_doc.metadata.get("response")
                 if cached_response:
                     print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
                     # Save title before streaming starts
@@ -136,7 +138,7 @@ Your job is to determine if a user query requires searching the technical knowle
 Rules:
 1. If the query is simple conversational chatter (e.g., "hello", "hi", "thanks", "how are you"), respond with a short, friendly, and helpful reply.
 2. If the query is asking about what you can do or your capabilities (but does NOT specifically ask for an example), provide a short 1-2 sentence summary: you are the Nexteir Internal Knowledge Base, here to help with internship logs and technical queries.
-3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, asks for an example of what you can help with, OR asks about the current chat session/history (e.g., "what was my first question", "what did we discuss", "how many queries"), you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
+3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, asks for an example of what you can help with, asks about the current chat session/history, asks what kind of logs you have, or repeats your fallback messages (e.g., "I am an AI assistant specialized..."), you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
 """
 
     try:

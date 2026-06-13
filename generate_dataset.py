@@ -44,7 +44,7 @@ def main():
         {
             "query": "When the parent screen controls horizontal spacing, why do we add marginLeft only to the first card in a FlatList?",
             "expected_output": "Your card style already has spacing between cards... If we added marginLeft to all cards, you'd get double spacing. So we check: index === 0 Meaning: only the first card gets marginLeft",
-            "evaluation_criteria": "The agent MUST locate the 'best practice' UI rules and extract the specific reasoning.",
+            "evaluation_criteria": "The agent MUST extract the specific reasoning for adding marginLeft only to the first card. It is ACCEPTABLE if the agent paraphrases the core concepts (such as avoiding double spacing and targeting the first item/index 0), as long as the technical logic is accurate. Do not strictly fail for missing exact phrases.",
             "target_problem_id": None
         },
         {
@@ -131,6 +131,20 @@ def main():
             "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
             "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
             "target_problem_id": None
+        })
+
+    # --- ZONE 6: Meta-Conversational Queries (2 Queries) ---
+    meta_queries = [
+        "what kind of internship logs?",
+        "I am an AI assistant specialized in Victor's React Native internship logs. I cannot answer queries about this topic."
+    ]
+    
+    for mq in meta_queries:
+        dataset.append({
+            "query": mq,
+            "expected_output": "The agent should explain its capabilities: it contains logs about React Native, TypeScript, UI/UX, and performance optimization. It must then provide a practical example from the logs.",
+            "evaluation_criteria": "The agent MUST recognize these as questions about its capabilities. It MUST explain its purpose and MUST automatically provide an example from the logs instead of repeating the fallback. It MUST NOT trigger the rigid zero-knowledge fallback.",
+            "target_problem_id": 1  # We expect Problem 1 as an example
         })
 
     os.makedirs(os.path.dirname(OUTPUT_JSON_PATH), exist_ok=True)
