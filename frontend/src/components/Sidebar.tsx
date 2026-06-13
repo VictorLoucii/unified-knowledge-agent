@@ -25,6 +25,7 @@ interface SidebarProps {
   fetchHistory?: (isReset?: boolean) => void;
   isSidebarOpen?: boolean;
   onCloseSidebar?: () => void;
+  isLoadingHistory?: boolean;
 }
 
 export default function Sidebar({
@@ -46,6 +47,7 @@ export default function Sidebar({
   fetchHistory = () => {},
   isSidebarOpen = false,
   onCloseSidebar = () => {},
+  isLoadingHistory = false,
 }: SidebarProps) {
   const sortedThreads = [...threads].sort((a, b) => {
     const aPinned = pinnedThreads.has(a.id);
@@ -133,7 +135,11 @@ export default function Sidebar({
         )}
       </div>
       <div className="flex-1 overflow-y-auto p-2 space-y-1">
-        {sortedThreads.length === 0 ? (
+        {isLoadingHistory ? (
+          <div className="flex justify-center items-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+          </div>
+        ) : sortedThreads.length === 0 ? (
           <p className="text-sm text-gray-500 p-2 text-center mt-4">
             No history yet.
           </p>

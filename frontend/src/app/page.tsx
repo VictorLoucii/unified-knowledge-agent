@@ -35,6 +35,7 @@ export default function ChatUI() {
 
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const LIMIT = 20;
 
   const [pinnedThreads, setPinnedThreads] = useState<Set<string>>(new Set());
@@ -64,6 +65,7 @@ export default function ChatUI() {
 
   const fetchHistory = (isReset = false) => {
     const currentOffset = isReset ? 0 : offset;
+    if (isReset && threads.length === 0) setIsLoadingHistory(true);
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
     fetch(
       `${API_BASE_URL}/history?limit=${LIMIT}&offset=${currentOffset}`,
@@ -85,7 +87,10 @@ export default function ChatUI() {
           setHasMore(data.has_more);
         }
       })
-      .catch((err) => console.error("Failed to fetch history:", err));
+      .catch((err) => console.error("Failed to fetch history:", err))
+      .finally(() => {
+        setIsLoadingHistory(false);
+      });
   };
 
   useEffect(() => {
@@ -251,6 +256,7 @@ export default function ChatUI() {
         selectedThreads={selectedThreads}
         currentThreadId={currentThreadId}
         hasMore={hasMore}
+        isLoadingHistory={isLoadingHistory}
         createNewChat={createNewChat}
         handleSelectAll={handleSelectAll}
         handleBulkDelete={handleBulkDelete}
