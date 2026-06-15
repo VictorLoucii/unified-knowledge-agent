@@ -105,8 +105,7 @@ def get_data_file_path() -> str:
     base_dir = os.path.abspath(os.path.dirname(__file__))
     possible_paths = [
         os.path.join(base_dir, "..", "..", "data", "NEXTIER_Internship_Bugs.md"),
-        os.path.join(base_dir, "..", "data", "NEXTIER_Internship_Bugs.md"),
-        "/Users/victorloucii/agentic_ai_engineer/Unified-Knowledge-Agent/data/NEXTIER_Internship_Bugs.md"
+        os.path.join(base_dir, "..", "data", "NEXTIER_Internship_Bugs.md")
     ]
     for p in possible_paths:
         if os.path.exists(p):

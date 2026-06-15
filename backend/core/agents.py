@@ -1,6 +1,6 @@
 # backend/core/agents.py
 from typing import TypedDict, Annotated
-from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, AIMessage
+from langchain_core.messages import BaseMessage, SystemMessage, ToolMessage, AIMessage, HumanMessage
 from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -107,7 +107,7 @@ async def route_input(state: State) -> str:
     
     try:
         response = await fast_llm.ainvoke([
-            SystemMessage(content="You are an input router. Respond with EXACTLY the word 'IN_SCOPE' if the query is about React Native, TypeScript, UI/UX, mobile app development, or is a meta-question about your capabilities or repeats your fallback messages. Respond with EXACTLY 'OUT_OF_SCOPE' if it is completely unrelated (e.g., Physics, Kubernetes, AWS Lambda, Python scraping, Java Spring Boot). DO NOT explain."),
+            SystemMessage(content="You are an input router. Respond with EXACTLY 'OUT_OF_SCOPE' ONLY if the query is explicitly asking about Kubernetes, AWS Lambda, Python scraping, Vue.js, or Java Spring Boot. For EVERYTHING else (including file uploads, security, your capabilities, internship logs, or general bugs), respond with EXACTLY 'IN_SCOPE'. DO NOT explain."),
             HumanMessage(content=user_msg)
         ])
         if "OUT_OF_SCOPE" in response.content.upper():

@@ -57,7 +57,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Dynamic Response Capping:** Prevents response truncations by scaling content length restrictions dynamically: $\text{Max Allowed Chars} = \max(2000, \text{Last Tool Output Length} + 1500)$.
 
 ### 4. Robust Automated Testing
-* **LLM-as-a-Judge Evaluation Suite:** Automatically grades generated answers against a 30-case Golden Dataset (`qa_dataset.json`) assessing correctness and alignment.
+* **LLM-as-a-Judge Evaluation Suite:** Automatically grades generated answers against a 30+ case Golden Dataset (`qa_dataset.json`) assessing correctness and alignment.
 * **Resilient Parsing Retries:** Features automatic retry loops with backoff delays to safeguard against transient OpenRouter/LLM JSON parsing errors.
 
 ---
@@ -98,7 +98,7 @@ This system is built for deterministic reliability, performance optimization, an
 │   ├── evals/             
 │   │   ├── eval.py        # Automated LLM-as-a-Judge evaluation (with retry support)
 │   │   ├── eval_corpus_growth.py # Recall vs. Corpus Growth evaluation tool
-│   │   └── qa_dataset.json # Golden Dataset (30 cases)
+│   │   └── qa_dataset.json # Golden Dataset (30+ cases)
 │   ├── memory.py          # Persistence logic
 │   ├── scratch/           # Experimental & testing scripts
 │   │   └── test_semantic_cache.py # Semantic cache integration test

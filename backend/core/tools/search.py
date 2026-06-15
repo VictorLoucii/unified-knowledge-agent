@@ -33,7 +33,7 @@ def search_internship_history(query: str) -> str:
     print(f"\n📥 [TOOL CALL] search_internship_history triggered with query: '{query}'")
 
     expansion_llm = ChatOpenAI(
-        model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat"),
+        model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
         openai_api_key=os.getenv("OPENROUTER_API_KEY"),
         openai_api_base="https://openrouter.ai/api/v1",
         temperature=0,
