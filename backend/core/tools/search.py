@@ -3,9 +3,14 @@ import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from backend.core.config import retriever
-from sentence_transformers import CrossEncoder
+_reranker = None
 
-reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+def get_reranker():
+    global _reranker
+    if _reranker is None:
+        from sentence_transformers import CrossEncoder
+        _reranker = CrossEncoder('cross-encoder/ms-marco-MiniLM-L-6-v2')
+    return _reranker
 
 expansion_llm = ChatOpenAI(
     model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
@@ -18,7 +23,7 @@ expansion_llm = ChatOpenAI(
 )
 
 @tool
-def search_internship_history(query: str) -> str:
+async def search_internship_history(query: str) -> str:
     """
     CRITICAL DIRECTIVE: You MUST call this tool for EVERY technical question, bug inquiry,
     UI styling rule, or project workflow question. Do NOT rely on your internal programming knowledge.
@@ -57,7 +62,8 @@ def search_internship_history(query: str) -> str:
                 "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query.\n"
                 "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
             )
-            search_variants = expansion_llm.invoke(prompt_content).content.split("\n")
+            response = await expansion_llm.ainvoke(prompt_content)
+            search_variants = response.content.split("\n")
         except Exception as e:
             print(f"🚨 [ERROR] expansion_llm.invoke failed: {e}")
             import traceback
@@ -284,6 +290,7 @@ def search_internship_history(query: str) -> str:
     # Stage 2: Reranking (Cross-Encoder)
     if unique_docs:
         pairs = [[query, doc.page_content] for doc in unique_docs]
+        reranker = get_reranker()
         scores = reranker.predict(pairs)
         for doc, score in zip(unique_docs, scores):
             doc.metadata["rerank_score"] = float(score)

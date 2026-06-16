@@ -70,6 +70,7 @@ judge_prompt = ChatPromptTemplate.from_messages([
     1. RUTHLESS ON CONSTRAINTS: If the Evaluation Criteria says the agent "MUST NOT" do something, and it does it, you must fail it.
     2. FLEXIBLE ON EXTRACTION CONTEXT: The agent is instructed to copy-paste entire blocks. If the Actual Output contains the core Expected Output, but also includes surrounding headers, file names, or related sentences from the exact same document section, DO NOT fail it. 
     3. TOLERATE MARKDOWN STYLING: The agent is instructed to format code. If it adds markdown backticks around file paths, variables, or adds bolding that isn't in the Expected Output, DO NOT fail it for formatting differences, as long as the technical text content is accurate.
+    4. FLEXIBLE ON PARAPHRASING FOR CONCEPTUAL ANSWERS: If the query asks for reasoning (e.g., 'why do we...'), do not fail the agent for paraphrasing the expected output or missing specific phrasing, provided the core technical reasoning is present and accurate.
     """),
     ("user", """
     ### Query Sent to Agent:

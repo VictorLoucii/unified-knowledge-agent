@@ -4,7 +4,7 @@ from backend.core.config import vectorstore
 
 @tool
 def get_internship_stats() -> str:
-    """Returns the total number of problems and logs stored in the Second Brain."""
+    """Returns the total number of problems and logs stored in the knowledge base."""
     unique_problems = set()
     unique_notes = set()
     try:
@@ -33,7 +33,7 @@ def get_internship_stats() -> str:
         note_count = len(unique_notes)
 
         return (
-            f"The Second Brain currently contains {problem_count} uniquely numbered debugging logs, "
+            f"The knowledge base currently contains {problem_count} uniquely numbered debugging logs, "
             f"plus {note_count} general engineering notes and post-mortems. "
             f"Total knowledge documents: {problem_count + note_count}."
         )

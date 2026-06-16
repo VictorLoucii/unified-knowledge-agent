@@ -17,7 +17,7 @@ def setup_database_tables():
             setup_memory = PostgresSaver(conn)
             setup_memory.setup()
 
-# 2. Setup custom Second Brain metadata table and Cascade rules
+# 2. Setup custom knowledge base metadata table and Cascade rules
             with conn.cursor() as cur:
                 cur.execute(
                     """

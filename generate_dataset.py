@@ -128,7 +128,7 @@ def main():
     for nq in negative_queries:
         dataset.append({
             "query": nq,
-            "expected_output": "I'm sorry, but that information is not available in my Second Brain.",
+            "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
             "evaluation_criteria": "The agent MUST trigger its 'Zero-Knowledge' guardrail. It MUST politely refuse to answer and clearly state the information is not in the logs.",
             "target_problem_id": None
         })
@@ -136,7 +136,7 @@ def main():
     # --- ZONE 6: Meta-Conversational Queries (2 Queries) ---
     meta_queries = [
         "what kind of internship logs?",
-        "I am an AI assistant specialized in Victor's React Native internship logs. I cannot answer queries about this topic."
+        "I'm sorry, but that information is not available in my knowledge base."
     ]
     
     for mq in meta_queries:
