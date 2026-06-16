@@ -101,39 +101,40 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
     # 2.5. Check Semantic Cache
     if not is_excluded_from_cache(user_message):
         try:
+            cached_response = None
             results = cache_vectorstore.similarity_search_with_score(user_message, k=1)
             if results:
                 match_doc, distance = results[0]
                 score = 1.0 - distance
                 if score >= SEMANTIC_CACHE_THRESHOLD:
                     cached_response = match_doc.metadata.get("response")
-                if cached_response:
-                    print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
-                    # Save title before streaming starts
-                    await save_thread_title(async_pool, thread_id, user_message)
+            if cached_response:
+                print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
+                # Save title before streaming starts
+                await save_thread_title(async_pool, thread_id, user_message)
 
-                    # Persist state directly in PostgreSQL history
-                    ai_msg = AIMessage(content=cached_response)
-                    config = {"configurable": {"thread_id": thread_id}}
-                    await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
+                # Persist state directly in PostgreSQL history
+                ai_msg = AIMessage(content=cached_response)
+                config = {"configurable": {"thread_id": thread_id}}
+                await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
 
-                    # Stream the response chunk by chunk to simulate natural real-time streaming
-                    chunk_size = 120
-                    for i in range(0, len(cached_response), chunk_size):
-                        chunk = cached_response[i:i+chunk_size]
-                        safe_output = mask_sensitive_data(chunk)
-                        stream_event = {
-                            "event": "on_chat_model_stream",
-                            "name": "chatbot",
-                            "run_id": "cache_stream",
-                            "data": {"chunk": {"content": safe_output}}
-                        }
-                        yield f"data: {json.dumps(stream_event)}\n\n"
-                        await asyncio.sleep(0.01)
+                # Stream the response chunk by chunk to simulate natural real-time streaming
+                chunk_size = 120
+                for i in range(0, len(cached_response), chunk_size):
+                    chunk = cached_response[i:i+chunk_size]
+                    safe_output = mask_sensitive_data(chunk)
+                    stream_event = {
+                        "event": "on_chat_model_stream",
+                        "name": "chatbot",
+                        "run_id": "cache_stream",
+                        "data": {"chunk": {"content": safe_output}}
+                    }
+                    yield f"data: {json.dumps(stream_event)}\n\n"
+                    await asyncio.sleep(0.01)
 
-                    print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{cached_response[:100].replace(chr(10), ' ')}...'")
-                    yield "data: [DONE]\n\n"
-                    return
+                print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{cached_response[:100].replace(chr(10), ' ')}...'")
+                yield "data: [DONE]\n\n"
+                return
         except Exception as e:
             print(f"⚠️ [WARNING] Semantic cache lookup failed: {e}")
 
