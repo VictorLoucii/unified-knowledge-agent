@@ -48,8 +48,10 @@ This system is built for deterministic reliability, performance optimization, an
 * **Unified Model Driver (Gemini 2.5 Flash):** Uses `google/gemini-2.5-flash` as the primary, fallback, and triage classifier model. This provides strict tool-calling hygiene (preventing pre-execution text leakage that breaks the HITL UI), ultra-low latency, and maximum token efficiency.
 * **High-Speed Input Classifier:** Triage routing runs on a non-streaming, fast setup of Gemini 2.5 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency.
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
+* **Direct Query Bypass for Search Expansion:** Intercepts searches referencing specific problem IDs to bypass the query expansion LLM entirely, conserving OpenRouter API credits.
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
+* **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
 
 ### 3. Production Security & Guardrails
 * **Fast Input Firewall:** An instant API gateway guardrail enforcing a **1,000-character input ceiling** and blocking jailbreaks, system prompt exposure attempts, and credential leaks.
