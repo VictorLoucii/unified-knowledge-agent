@@ -31,6 +31,11 @@ def is_excluded_from_cache(message: str) -> bool:
     if len(clean_msg) < 4 or clean_msg in common_short_phrases:
         return True
     
+    # Exclude time-sensitive and dynamic stat queries
+    dynamic_keywords = ["time", "stats", "statistics"]
+    if any(kw in clean_msg for kw in dynamic_keywords):
+        return True
+    
     return False
 
 
