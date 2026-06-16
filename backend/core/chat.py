@@ -11,7 +11,7 @@ from backend.core.guardrails import (
     get_last_tool_output_length,
 )
 from backend.memory import save_thread_title
-
+import time
 
 def is_excluded_from_cache(message: str) -> bool:
     """Checks if a user query should be excluded from semantic caching."""
@@ -44,6 +44,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
     Handles input validation, LLM bypass check for direct problem queries,
     and streams responses from the LangGraph workflow.
     """
+    start_time = time.time()
     # 1. Run Input Guardrail Check
     refusal = check_input_guardrail(user_message)
     if refusal:
@@ -56,6 +57,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             "data": {"chunk": {"content": refusal}},
         }
         yield f"data: {json.dumps(error_event)}\n\n"
+        print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Guardrail Refusal")
         yield "data: [DONE]\n\n"
         return
 
@@ -92,6 +94,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                 yield f"data: {json.dumps(stream_event)}\n\n"
                 await asyncio.sleep(0.01)
 
+            print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{block[:100].replace(chr(10), ' ')}...'")
             yield "data: [DONE]\n\n"
             return
 
@@ -128,6 +131,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                         yield f"data: {json.dumps(stream_event)}\n\n"
                         await asyncio.sleep(0.01)
 
+                    print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{cached_response[:100].replace(chr(10), ' ')}...'")
                     yield "data: [DONE]\n\n"
                     return
         except Exception as e:
@@ -177,6 +181,7 @@ Rules:
                 yield f"data: {json.dumps(stream_event)}\n\n"
                 await asyncio.sleep(0.01)
                 
+            print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{triage_content[:100].replace(chr(10), ' ')}...'")
             yield "data: [DONE]\n\n"
             return
 
@@ -232,6 +237,7 @@ Rules:
                             warning = "\n\n⚠️ [Output Truncated: Security Guardrail - Response length limit exceeded to prevent token abuse]"
                             safe_event["data"]["chunk"] = {"content": warning}
                             yield f"data: {json.dumps(safe_event)}\n\n"
+                            print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Truncated")
                             yield "data: [DONE]\n\n"
                             return
 
@@ -290,6 +296,7 @@ Rules:
                 except Exception as e:
                     print(f"⚠️ [WARNING] Failed to save query to semantic cache: {e}")
 
+        print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{full_response[:100].replace(chr(10), ' ')}...'")
         yield "data: [DONE]\n\n"
 
     except Exception as e:
@@ -300,6 +307,7 @@ Rules:
 
         print(f"🚨 Raw Error: {repr(e)}")
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Error")
         yield "data: [DONE]\n\n"
 
 

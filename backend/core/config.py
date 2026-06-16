@@ -147,13 +147,13 @@ def extract_problem_block(problem_id: str) -> str | None:
                 )
                 block = full_file_text[start_idx:end_idx].strip()
                 
-                # Normalize header to '# Problem X'
-                if not block.startswith(f"# Problem {problem_id}"):
+                # Normalize header to '**# Problem X**'
+                if not block.startswith(f"**# Problem {problem_id}**"):
                     first_line_end = block.find("\n")
                     if first_line_end != -1:
-                        block = f"# Problem {problem_id}" + block[first_line_end:]
+                        block = f"**# Problem {problem_id}**" + block[first_line_end:]
                     else:
-                        block = f"# Problem {problem_id}"
+                        block = f"**# Problem {problem_id}**"
                 
                 return f"{block}\n\n<END OF PROBLEM>"
     except Exception as e:

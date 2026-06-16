@@ -37,12 +37,12 @@ def run_corpus_growth_eval():
         block = full_text[start_idx:end_idx].strip()
         
         # Normalize header
-        if not block.startswith(f"# Problem {prob_num}"):
+        if not block.startswith(f"**# Problem {prob_num}**"):
             first_line_end = block.find("\n")
             if first_line_end != -1:
-                block = f"# Problem {prob_num}" + block[first_line_end:]
+                block = f"**# Problem {prob_num}**" + block[first_line_end:]
             else:
-                block = f"# Problem {prob_num}"
+                block = f"**# Problem {prob_num}**"
                 
         problems.append({"id": prob_num, "content": block})
 
@@ -129,7 +129,7 @@ def run_corpus_growth_eval():
             is_hit = False
             for doc in retrieved_docs:
                 h1 = doc.metadata.get("Header 1", "")
-                if f"Problem {target_id}" in h1:
+                if f"**# Problem {target_id}**" in h1:
                     is_hit = True
                     break
                 
