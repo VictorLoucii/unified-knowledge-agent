@@ -2,7 +2,7 @@ import os
 import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from backend.core.config import retriever
+from backend.core.config import retriever, get_data_file_paths
 _reranker = None
 
 def get_reranker():
@@ -39,7 +39,8 @@ async def search_internship_history(query: str) -> str:
     you MUST use this tool and pass that exact phrase as the query.
 
     CRITICAL FORMATTING: When the tool returns data wrapped in `=== ABSOLUTE SOURCE OF TRUTH ===`, 
-    you must output the enclosed text EXACTLY as is, character-for-character, without summarizing.
+    you must output the enclosed text EXACTLY as is, character-for-character, without summarizing. 
+    (EXCEPTION: If answering a meta-query about your capabilities per Directive 11, you MUST prepend your conversational explanation FIRST, before the exact text).
     """
     # Guardrail: Truncate and strip query to prevent massive injections
     query = str(query)[:150].strip()
@@ -103,34 +104,35 @@ async def search_internship_history(query: str) -> str:
 
     if needs_first or needs_last:
         try:
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
-            DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
+            data_files = get_data_file_paths()
+            all_ids = []
+            
+            for data_file in data_files:
+                if os.path.exists(data_file):
+                    with open(data_file, "r", encoding="utf-8") as f:
+                        temp_text = f.read()
 
-            if os.path.exists(DATA_FILE):
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    temp_text = f.read()
+                    file_ids = [
+                        int(m)
+                        for m in re.findall(
+                            r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", temp_text
+                        )
+                    ]
+                    all_ids.extend(file_ids)
 
-                all_ids = [
-                    int(m)
-                    for m in re.findall(
-                        r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", temp_text
+            if all_ids:
+                if needs_first:
+                    min_id = str(min(all_ids))
+                    target_problems.add(min_id)
+                    print(
+                        f"🎯 [DEBUG] Ordinal 'First' detected. Lowest ID is {min_id}"
                     )
-                ]
-
-                if all_ids:
-                    if needs_first:
-                        min_id = str(min(all_ids))
-                        target_problems.add(min_id)
-                        print(
-                            f"🎯 [DEBUG] Ordinal 'First' detected. Lowest ID is {min_id}"
-                        )
-                    if needs_last:
-                        max_id = str(max(all_ids))
-                        target_problems.add(max_id)
-                        print(
-                            f"🎯 [DEBUG] Ordinal 'Last' detected. Highest ID is {max_id}"
-                        )
+                if needs_last:
+                    max_id = str(max(all_ids))
+                    target_problems.add(max_id)
+                    print(
+                        f"🎯 [DEBUG] Ordinal 'Last' detected. Highest ID is {max_id}"
+                    )
         except Exception as e:
             print(f"⚠️ [WARNING] Ordinal interceptor failed: {e}")
 
@@ -140,34 +142,32 @@ async def search_internship_history(query: str) -> str:
     if target_problems:
         print(f"🚀 [DEBUG] Engaging Raw Interceptor for IDs: {target_problems}")
         try:
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
-            DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
+            data_files = get_data_file_paths()
+            for data_file in data_files:
+                if os.path.exists(data_file):
+                    with open(data_file, "r", encoding="utf-8") as f:
+                        full_file_text = f.read()
 
-            if os.path.exists(DATA_FILE):
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    full_file_text = f.read()
-
-                all_header_matches = list(
-                    re.finditer(
-                        r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
+                    all_header_matches = list(
+                        re.finditer(
+                            r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
+                        )
                     )
-                )
 
-                for i, match in enumerate(all_header_matches):
-                    prob_num = match.group(1)
-                    if prob_num in target_problems:
-                        start_idx = match.start()
-                        end_idx = (
-                            all_header_matches[i + 1].start()
-                            if i + 1 < len(all_header_matches)
-                            else len(full_file_text)
-                        )
-                        block = full_file_text[start_idx:end_idx].strip()
+                    for i, match in enumerate(all_header_matches):
+                        prob_num = match.group(1)
+                        if prob_num in target_problems:
+                            start_idx = match.start()
+                            end_idx = (
+                                all_header_matches[i + 1].start()
+                                if i + 1 < len(all_header_matches)
+                                else len(full_file_text)
+                            )
+                            block = full_file_text[start_idx:end_idx].strip()
 
-                        direct_problem_blocks.append(
-                            f"=== ABSOLUTE SOURCE OF TRUTH: PROBLEM {prob_num} ===\n{block}\n==============================================\n"
-                        )
+                            direct_problem_blocks.append(
+                                f"=== ABSOLUTE SOURCE OF TRUTH: PROBLEM {prob_num} ===\n{block}\n==============================================\n"
+                            )
         except Exception as e:
             print(f"🚨 [ERROR] Raw Interceptor execution failed: {e}")
 
@@ -330,50 +330,49 @@ async def search_internship_history(query: str) -> str:
     escalated_text = ""
     if discovered_problems:
         print(
-            f"🔍 [DEBUG] Top 3 Docs contained Problems {discovered_problems}. Auto-Escalating..."
+            f"🔍 [DEBUG] Top Docs contained Problems {discovered_problems}. Auto-Escalating..."
         )
         try:
-            BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-            ROOT_DIR = os.path.abspath(os.path.join(BASE_DIR, "..", "..", ".."))
-            DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
+            data_files = get_data_file_paths()
+            escalated_blocks = []
+            
+            for data_file in data_files:
+                if os.path.exists(data_file):
+                    with open(data_file, "r", encoding="utf-8") as f:
+                        full_file_text = f.read()
 
-            if os.path.exists(DATA_FILE):
-                with open(DATA_FILE, "r", encoding="utf-8") as f:
-                    full_file_text = f.read()
-
-                matches = list(
-                    re.finditer(
-                        r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
-                    )
-                )
-                escalated_blocks = []
-
-                for i, match in enumerate(matches):
-                    prob_num = match.group(1)
-                    if prob_num in discovered_problems:
-                        start_idx = match.start()
-                        end_idx = (
-                            matches[i + 1].start()
-                            if i + 1 < len(matches)
-                            else len(full_file_text)
+                    matches = list(
+                        re.finditer(
+                            r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
                         )
-                        block = full_file_text[start_idx:end_idx].strip()
+                    )
 
-                        if len(block) > 8000:
-                            block = (
-                                block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
+                    for i, match in enumerate(matches):
+                        prob_num = match.group(1)
+                        if prob_num in discovered_problems:
+                            start_idx = match.start()
+                            end_idx = (
+                                matches[i + 1].start()
+                                if i + 1 < len(matches)
+                                else len(full_file_text)
+                            )
+                            block = full_file_text[start_idx:end_idx].strip()
+
+                            if len(block) > 8000:
+                                block = (
+                                    block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
+                                )
+
+                            # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
+                            escalated_blocks.append(
+                                f"=== AUTO-ESCALATED CONTEXT: PROBLEM {prob_num} ===\n"
+                                f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID, or a highly specific technical error, you MUST synthesize the entire text below this line including code and paths. "
+                                f"Act as a Librarian (listing ONLY IDs) if the query is vague/ambiguous and matches 2 or more completely unrelated problems (e.g., 'file upload bug' matching 3 different IDs). You are STRICTLY FORBIDDEN from summarizing code blocks—output them exactly.)\n\n"
+                                f"{block}\n==============================================\n"
                             )
 
-                        # [PHASE 7.2 FIX] The Strict Librarian Directive - Modified for Feature Bugs
-                        escalated_blocks.append(
-                            f"=== AUTO-ESCALATED CONTEXT: PROBLEM {prob_num} ===\n"
-                            f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID, or a highly specific technical error, you MUST synthesize the entire text below this line including code and paths. "
-                            f"Act as a Librarian (listing ONLY IDs) if the query is vague/ambiguous and matches 2 or more completely unrelated problems (e.g., 'file upload bug' matching 3 different IDs). You are STRICTLY FORBIDDEN from summarizing code blocks—output them exactly.)\n\n"
-                            f"{block}\n==============================================\n"
-                        )
-
-                if escalated_blocks:
-                    escalated_text = "\n\n".join(escalated_blocks)
+            if escalated_blocks:
+                escalated_text = "\n\n".join(escalated_blocks)
         except Exception as e:
             print(f"⚠️ [WARNING] Auto-Escalation failed: {e}")
 

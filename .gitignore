@@ -39,3 +39,6 @@ test_conn.py
 # Agents
 .agents/
 scratch/
+
+# Miscellaneous
+miscellaneous/

@@ -100,17 +100,30 @@ print(f"✅ Connected to local ChromaDB & DocStore at: {BASE_DIR}")
 
 import re
 
-def get_data_file_path() -> str:
-    """Resolves and returns the path to NEXTIER_Internship_Bugs.md."""
+DATA_SOURCES = [
+    "NEXTIER_Internship_Bugs.md"
+]
+
+def get_data_file_paths() -> list[str]:
+    """Resolves and returns the paths to all active data sources."""
     base_dir = os.path.abspath(os.path.dirname(__file__))
-    possible_paths = [
-        os.path.join(base_dir, "..", "..", "data", "NEXTIER_Internship_Bugs.md"),
-        os.path.join(base_dir, "..", "data", "NEXTIER_Internship_Bugs.md")
-    ]
-    for p in possible_paths:
-        if os.path.exists(p):
-            return p
-    raise FileNotFoundError("Could not find NEXTIER_Internship_Bugs.md file.")
+    data_paths = []
+    
+    for filename in DATA_SOURCES:
+        possible_paths = [
+            os.path.join(base_dir, "..", "..", "data", filename),
+            os.path.join(base_dir, "..", "data", filename)
+        ]
+        found = False
+        for p in possible_paths:
+            if os.path.exists(p):
+                data_paths.append(p)
+                found = True
+                break
+        if not found:
+            print(f"⚠️ [WARNING] Could not find {filename} file.")
+            
+    return data_paths
 
 
 def parse_problem_id(message: str) -> str | None:
@@ -126,36 +139,37 @@ def parse_problem_id(message: str) -> str | None:
 def extract_problem_block(problem_id: str) -> str | None:
     """Extracts a problem block from the bugs markdown file directly."""
     try:
-        data_file = get_data_file_path()
-        with open(data_file, "r", encoding="utf-8") as f:
-            full_file_text = f.read()
+        data_files = get_data_file_paths()
+        for data_file in data_files:
+            with open(data_file, "r", encoding="utf-8") as f:
+                full_file_text = f.read()
 
-        all_header_matches = list(
-            re.finditer(
-                r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
-            )
-        )
-
-        for i, match in enumerate(all_header_matches):
-            prob_num = match.group(1)
-            if prob_num == problem_id:
-                start_idx = match.start()
-                end_idx = (
-                    all_header_matches[i + 1].start()
-                    if i + 1 < len(all_header_matches)
-                    else len(full_file_text)
+            all_header_matches = list(
+                re.finditer(
+                    r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
                 )
-                block = full_file_text[start_idx:end_idx].strip()
-                
-                # Normalize header to '**# Problem X**'
-                if not block.startswith(f"**# Problem {problem_id}**"):
-                    first_line_end = block.find("\n")
-                    if first_line_end != -1:
-                        block = f"**# Problem {problem_id}**" + block[first_line_end:]
-                    else:
-                        block = f"**# Problem {problem_id}**"
-                
-                return f"{block}\n\n<END OF PROBLEM>"
+            )
+
+            for i, match in enumerate(all_header_matches):
+                prob_num = match.group(1)
+                if prob_num == problem_id:
+                    start_idx = match.start()
+                    end_idx = (
+                        all_header_matches[i + 1].start()
+                        if i + 1 < len(all_header_matches)
+                        else len(full_file_text)
+                    )
+                    block = full_file_text[start_idx:end_idx].strip()
+                    
+                    # Normalize header to '**# Problem X**'
+                    if not block.startswith(f"**# Problem {problem_id}**"):
+                        first_line_end = block.find("\n")
+                        if first_line_end != -1:
+                            block = f"**# Problem {problem_id}**" + block[first_line_end:]
+                        else:
+                            block = f"**# Problem {problem_id}**"
+                    
+                    return f"{block}\n\n<END OF PROBLEM>"
     except Exception as e:
         print(f"🚨 [ERROR] extract_problem_block failed: {e}")
     return None

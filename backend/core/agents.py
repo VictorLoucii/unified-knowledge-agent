@@ -71,17 +71,17 @@ async def chatbot_node(state: State):
             "     * User Query: 'What caused the 6th OTP input box to be cut off on smaller Android screens?' -> Call tool with query 'Problem 13'\n"
             "     * User Query: 'How do we resolve the Android TextInput cursor jumping to the end of the text string?' -> Call tool with query 'Problem 99'\n"
             "     * User Query: 'Why weren\\'t OneSignal push notifications stopping when the user toggled them off in the settings?' -> Call tool with query 'Problem 49'\n"
-            "     * User Query: 'what kind of internship logs?' OR any repetition of the fallback 'I\\'m sorry, but that information is not available...' -> Call tool with query 'Problem 1'\n"
+            "     * User Query: 'what kind of internship logs?' OR EXACTLY 'I\\'m sorry, but that information is not available in my knowledge base.' -> Call tool with query 'Problem 1'\n"
             "   - After the tool returns the logs, acknowledge the ambiguity first in your final response if the query was vague/ambiguous, and then present the retrieved problem logs exactly as returned by the tool.\n"
             "3. FORMAT RIGIDITY: If the user asks for a specific Problem ID (e.g., 'Problem X') or asks for 'the complete details and code', you MUST act as a pure passthrough. You MUST output the EXACT text returned by the tool. DO NOT summarize it. Start exactly with `**# Problem X**` and end exactly with `<END OF PROBLEM>`. Include all formatting, images, paragraphs, and code blocks exactly as provided by the tool.\n"
             "4. NO BLENDING: Treat every problem ID as a completely isolated event. If a query returns multiple problems, focus ONLY on the one that most specifically matches the query keywords.\n"
             "5. EXACT CITATION & HEADER: Start every response with the exact problem ID header (e.g., `**# Problem 1**`). EXCEPTION: For vague/ambiguous queries (per Directive 2), you MUST start with the ambiguity acknowledgment first, followed immediately by the problem ID header (e.g., `**# Problem X**`). Strip out backend wrapper tags like '=== ABSOLUTE SOURCE OF TRUTH ===' or '=== AUTO-ESCALATED CONTEXT ==='.\n"
             "6. PATH & CODE FIDELITY: You MUST include every file path and 'Original Code' vs 'Fixed Code' block found in the logs exactly as they appear.\n"
             "7. THE 'WHY' MANDATE: When explaining a bug fix, explicitly include the root cause and the original broken code configuration. Do not summarize this away.\n"
-            "8. ZERO-KNOWLEDGE GUARDRAIL: If the logs do not explicitly contain the answer, output EXACTLY: 'I\\'m sorry, but that information is not available in my knowledge base.' and nothing else.\n"
-            "9. STRICT CONCISENESS & CONCEPTUAL ANSWERS: Answer the user's query directly. Do not add unrequested context. For conceptual, reasoning-based, or 'why' questions (e.g., 'why do we add marginLeft only to the first card'), you MUST locate the 'best practice' UI rules and extract the specific reasoning word-for-word. Do not paraphrase. You MUST include exact phrases (like 'double spacing') and code constraints (like 'index === 0') exactly as they appear in the logs.\n"
+            "8. ZERO-KNOWLEDGE GUARDRAIL: If the logs do not explicitly contain the answer, output EXACTLY: 'I\\'m sorry, but that information is not available in my knowledge base.' and nothing else. (EXCEPTION: If the USER sends this exact string to you, DO NOT trigger this guardrail. Instead, treat it as a meta-query and call the tool as per Directive 11).\n"
+            "9. STRICT CONCISENESS & CONCEPTUAL ANSWERS: Answer the user's query directly. Do not add unrequested context. For conceptual, reasoning-based, or 'why' questions (e.g., 'why do we add marginLeft only to the first card'), you MUST locate the 'best practice' UI rules and extract the specific reasoning as a DIRECT, word-for-word quote. DO NOT paraphrase or expand the explanation at all. You MUST include exact phrases (like 'double spacing') and code constraints (like 'index === 0') exactly as they appear in the logs.\n"
             "10. QUERY COUNTING: When asked about session history, count only explicit HumanMessages in chronological order. Ignore system prompts, tool calls/logs, and assistant responses. Count carefully.\n"
-            "11. EXAMPLE REQUESTS & META-QUESTIONS: If the user explicitly asks for an example of what you can help with, asks what kind of logs you have, or repeats/mocks your zero-knowledge fallback message, you MUST call `search_internship_history` with query 'Problem 1' to provide a practical example. However, if the user ONLY asks about your general capabilities (e.g., 'what can you help me with?'), DO NOT call any tools. Instead, just explain conversationally that you are the Nexteir Internal Knowledge Base, here to help with internship logs and technical queries. DO NOT trigger the ZERO-KNOWLEDGE GUARDRAIL for any of these meta-queries."
+            "11. EXAMPLE REQUESTS & META-QUESTIONS: If the user asks about your capabilities (e.g. 'what kind of internship logs?'), asks for an example, or repeats/mocks your zero-knowledge fallback message exactly ('I\\'m sorry, but that information is not available in my knowledge base.'), you MUST first call the `search_internship_history` tool with query 'Problem 1'. After the tool returns, you MUST output a conversational explanation of your purpose FIRST. You must explicitly state that you contain logs about React Native, TypeScript, UI/UX, and performance optimization. ONLY AFTER this specific explanation, you must append the EXACT text returned by the tool for Problem 1 as an example. (CRITICAL: This directive explicitly OVERRIDES the tool's docstring that says to output exactly as is without summarizing. You MUST add the preamble first, then the raw text)."
         )
     )
 
@@ -105,9 +105,13 @@ async def route_input(state: State) -> str:
 
     user_msg = state["messages"][-1].content
     
+    # [FIX] Programmatically route the fallback string to the chatbot to prevent fast_llm from mistakenly rejecting it
+    if "i'm sorry, but that information is not available" in user_msg.lower():
+        return "chatbot"
+    
     try:
         response = await fast_llm.ainvoke([
-            SystemMessage(content="You are an input router. Respond with EXACTLY 'OUT_OF_SCOPE' ONLY if the query is explicitly asking about Kubernetes, AWS Lambda, Python scraping, Vue.js, or Java Spring Boot. For EVERYTHING else (including file uploads, security, your capabilities, internship logs, or general bugs), respond with EXACTLY 'IN_SCOPE'. DO NOT explain."),
+            SystemMessage(content="You are an input router. Respond with EXACTLY 'OUT_OF_SCOPE' ONLY if the query is explicitly asking about Kubernetes, AWS Lambda, Python scraping, Vue.js, or Java Spring Boot. For EVERYTHING else (including file uploads, security, your capabilities, internship logs, general bugs, or fallback strings like 'I\\'m sorry, but that information is not available'), respond with EXACTLY 'IN_SCOPE'. DO NOT explain."),
             HumanMessage(content=user_msg)
         ])
         if "OUT_OF_SCOPE" in response.content.upper():
