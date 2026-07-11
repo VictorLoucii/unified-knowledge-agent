@@ -100,29 +100,33 @@ print(f"✅ Connected to local ChromaDB & DocStore at: {BASE_DIR}")
 
 import re
 
-DATA_SOURCES = [
-    "NEXTIER_Internship_Bugs.md"
-]
-
 def get_data_file_paths() -> list[str]:
     """Resolves and returns the paths to all active data sources."""
     base_dir = os.path.abspath(os.path.dirname(__file__))
-    data_paths = []
+    # Try finding data in standard project structures
+    possible_data_dirs = [
+        os.path.join(base_dir, "..", "..", "data"),
+        os.path.join(base_dir, "..", "data")
+    ]
     
-    for filename in DATA_SOURCES:
-        possible_paths = [
-            os.path.join(base_dir, "..", "..", "data", filename),
-            os.path.join(base_dir, "..", "data", filename)
-        ]
-        found = False
-        for p in possible_paths:
-            if os.path.exists(p):
-                data_paths.append(p)
-                found = True
-                break
-        if not found:
-            print(f"⚠️ [WARNING] Could not find {filename} file.")
+    target_data_dir = None
+    for p in possible_data_dirs:
+        if os.path.exists(p) and os.path.isdir(p):
+            target_data_dir = p
+            break
             
+    if not target_data_dir:
+        print("⚠️ [WARNING] Could not find the 'data' directory.")
+        return []
+
+    data_paths = []
+    for filename in os.listdir(target_data_dir):
+        if filename.endswith(".md") or filename.endswith(".docx"):
+            data_paths.append(os.path.join(target_data_dir, filename))
+            
+    if not data_paths:
+        print(f"⚠️ [WARNING] No .md or .docx files found in {target_data_dir}.")
+        
     return data_paths
 
 

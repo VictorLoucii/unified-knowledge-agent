@@ -2,6 +2,7 @@
 import os
 import json
 import re
+import subprocess
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from backend.core.config import retriever, store, parent_splitter, get_data_file_paths
 
@@ -40,8 +41,35 @@ def initialize_rag():
         print(f"🚨 ERROR: {e}")
         return
 
-    files_to_ingest = []
+    processed_data_files = set()
     for data_file in data_files:
+        if data_file.endswith(".docx"):
+            md_file = data_file[:-5] + ".md"
+            print(f"🔄 Converting {os.path.basename(data_file)} to Markdown via Pandoc...")
+            try:
+                # Run pandoc to convert docx to md
+                subprocess.run(
+                    ["pandoc", data_file, "-o", md_file, "-t", "markdown"],
+                    capture_output=True,
+                    text=True,
+                    check=True
+                )
+                
+                if os.path.exists(md_file) and os.path.getsize(md_file) > 0:
+                    print(f"✅ Conversion successful. Deleting original {os.path.basename(data_file)}...")
+                    os.remove(data_file)
+                    processed_data_files.add(md_file)
+                else:
+                    print(f"⚠️ [WARNING] Conversion failed or produced empty file for {data_file}. Skipping.")
+            except subprocess.CalledProcessError as e:
+                print(f"⚠️ [WARNING] Pandoc failed for {data_file}:\n{e.stderr}\nSkipping.")
+            except Exception as e:
+                print(f"⚠️ [WARNING] Unexpected error converting {data_file}: {e}\nSkipping.")
+        else:
+            processed_data_files.add(data_file)
+
+    files_to_ingest = []
+    for data_file in processed_data_files:
         basename = os.path.basename(data_file)
         if basename not in manifest.get("ingested_files", []):
             files_to_ingest.append((data_file, basename))
