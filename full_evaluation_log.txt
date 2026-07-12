@@ -1,0 +1,1060 @@
+🤖 Loading LLM model: google/gemini-2.5-flash
+✅ Connected to local ChromaDB & DocStore at: /Users/victorloucii/agentic_ai_engineer/Unified-Knowledge-Agent/backend
+🚀 Starting LangGraph Golden Dataset Evaluation...
+
+🔄 Running Test 1 (Subset 1/81): What is the project rule regarding the use of npm versus yarn?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'use yarn only'
+🤖 [DEBUG] Queries actually being searched: ['yarn package manager', 'use yarn only', 'yarn usage', 'yarn command line']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.76938533782959 | Preview: • **Use Yarn Only**: Avoid \`npm\` commands entirely to prevent \`package-lock.json\` conflicts. Use...
+  2. Rerank Score: 5.310895919799805 | Preview: | v \[Python Tool: search\_internship\_history\] | \+-- Top Vector Match: "Use Yarn Only..." (Valid)...
+  3. Rerank Score: -2.6324102878570557 | Preview: You must install the React Native Haptic Feedback package inside your project folder where your pack...
+  4. Rerank Score: -4.076195240020752 | Preview: to the \`/api/v1\` base URL.   3\. \*\*Cache Reset\*\*: Recommended a \`yarn start \--reset-cache\` ...
+  5. Rerank Score: -5.866751670837402 | Preview: **\#\#\# \*\*Alternative Safer Commands\*\*** To \*\*ask for confirmation\*\* before deleting, use: ...
+🔧 [__DEV__] Skipping auto-escalation for general document: Project Workflow & Safety Rules...
+🔍 [DEBUG] Top Docs contained Problems {'78', '106'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly prioritizes the General Workflow Rules and extracts the core reasoning as specified in the Evaluation Criteria. The additional markdown styling (bolding) does not detract from the technical accuracy and is tolerated per the rules.
+------------------------------------------------------------
+🔄 Running Test 2 (Subset 2/81): Why did we change the import from @/i18n to ./src/i18n for local wireless debugging?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 16'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 16']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'16'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+   Reason: The agent included the core reasoning about Metro bundler failing to resolve the alias and returning a 500 error, along with the conceptual explanation about alias configuration. While it provided additional context about the specific file (App.tsx) and platform (macOS), this does not violate the strict criteria as the core expected output is present and accurate.
+------------------------------------------------------------
+🔄 Running Test 3 (Subset 3/81): When the parent screen controls horizontal spacing, why do we add marginLeft only to the first card in a FlatList?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'why do we add marginLeft only to the first card'
+🤖 [DEBUG] Queries actually being searched: ['why do we add marginLeft only to the first card', 'Styling first card with margin-left', 'CSS add margin-left first element', 'Why apply margin-left to only the first item in a series']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.429480075836182 | Preview: # **4️⃣ Why we add marginLeft**  Inside **renderItem**:   const renderItem = ({ item: community, ind...
+  2. Rerank Score: 7.237645626068115 | Preview: # **6️⃣ Why only for the first card**  Your card style already has spacing **between cards**.   File...
+  3. Rerank Score: -0.5920836925506592 | Preview: # **Final layout (correct)**  Explore.tsx   paddingHorizontal: md   │   ├ SectionHeader (Recommended...
+  4. Rerank Score: -1.6568183898925781 | Preview: # **5️⃣ Why use theme.spacing.md**  Because your **screen padding uses md**.   File: **Explore.tsx**...
+  5. Rerank Score: -5.990079879760742 | Preview: color:'\#4bc213', paddingHorizontal:10, //Adds some space on the left and right sides // marginTop:5...
+✅ AI LOGIC PASS
+   Reason: The agent provided the core reasoning about avoiding double spacing and maintaining alignment, which matches the expected output. While it included additional context about parent screen padding and visual alignment, this falls within the acceptable 'additional relevant context' per the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 4 (Subset 4/81): What is the recommended build strategy if the app is running in the emulator?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'build strategy emulator'
+🤖 [DEBUG] Queries actually being searched: ['create strategy game AI emulator', 'how to build a strategy game simulator', 'build strategy emulator', 'strategy game emulator development']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 3.0439443588256836 | Preview: • **Use Yarn Only**: Avoid \`npm\` commands entirely to prevent \`package-lock.json\` conflicts. Use...
+  2. Rerank Score: -1.4002840518951416 | Preview: # Problem 51 ## **2. Resolved Versioning Conflicts**  After fixing the build, the emulator refused t...
+  3. Rerank Score: -2.040925979614258 | Preview: \* \*\*The "One-Time Build" rule:\*\* This APK will contain the native \`expo-updates\` code. Once y...
+  4. Rerank Score: -2.353631019592285 | Preview: ## Project Workflow & Safety Rules ### **What to look for:**  - The first time you run this, it will...
+  5. Rerank Score: -2.8280959129333496 | Preview: \`\`\`text ✔ Build finished\! 👉 Android install: https://expo.dev/artifacts/eas/xxxxx.apk \`\`\` \* ...
+🔧 [__DEV__] Skipping auto-escalation for general document: Project Workflow & Safety Rules...
+🔧 [__DEV__] Skipping auto-escalation for general document: Project Workflow & Safety Rules **What to look for...
+🔍 [DEBUG] Top Docs contained Problems {'51'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent's output contains the core expected output verbatim, including the correct build strategy for emulator use. While it includes a section header from the document, this is allowed per the flexible extraction context rule.
+------------------------------------------------------------
+🔄 Running Test 5 (Subset 5/81): What is the 'Golden Rule' when modifying shared UI components like AutocompleteField?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 63'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 63']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'63'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [63] found in Chroma DB Retrieval ['63']
+   Reason: The agent correctly identified the Golden Rule of Shared Component Safety, which is 'Never break the existing contract.' The output also included the correct approach of adding a new capability (a Prop) with a Default Value to ensure backward compatibility, matching the expected output. Additional context provided (like the problem scenario) does not detract from the core requirement being met.
+------------------------------------------------------------
+🔄 Running Test 6 (Subset 6/81): Can you provide the complete details and code for Problem 1?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [1] found in Chroma DB Retrieval ['1']
+   Reason: The agent's output exactly matches the expected output, starting with '**# Problem 1**' and ending with '<END OF PROBLEM>', without summarizing the code.
+------------------------------------------------------------
+🔄 Running Test 7 (Subset 7/81): Can you provide the complete details and code for Problem 14?
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...ied constraints."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+⚠️ Warning: LLM Judge evaluation failed (attempt 2/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...D OF PROBLEM>\'."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [14] found in Chroma DB Retrieval ['14']
+   Reason: The agent's output matches the expected output exactly, including starting with '**# Problem 14**', not summarizing the code, and ending with '<END OF PROBLEM>'. The content and formatting are consistent with the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 8 (Subset 8/81): Can you provide the complete details and code for Problem 40?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [40] found in Chroma DB Retrieval ['40']
+   Reason: The agent's output starts with '****# Problem 4**0**', does not summarize the code, and includes the exact text ending with '<END OF PROBLEM>'. It adheres to all the strict evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 9 (Subset 9/81): Can you provide the complete details and code for Problem 60?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [60] found in Chroma DB Retrieval ['60']
+   Reason: The agent's output matches the expected output exactly, starting with '**# Problem 60**' and ending with '<END OF PROBLEM>'. It did not summarize the code and included all the required details and code snippets.
+------------------------------------------------------------
+🔄 Running Test 10 (Subset 10/81): Can you provide the complete details and code for Problem 80?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [80] found in Chroma DB Retrieval ['80']
+   Reason: The agent's output exactly matches the expected output, including starting with '**# Problem 80**' and ending with '<END OF PROBLEM>'. It did not summarize the code and provided the complete details as required.
+------------------------------------------------------------
+🔄 Running Test 11 (Subset 11/81): Can you provide the complete details and code for Problem 110?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [110] found in Chroma DB Retrieval ['110']
+   Reason: The agent's output exactly matches the Expected Output, including starting with '**# Problem 110**' and ending with '<END OF PROBLEM>'. It did not summarize the code and provided the complete details as required.
+------------------------------------------------------------
+🔄 Running Test 12 (Subset 12/81): Can you provide the complete details and code for Problem 115?
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [115] found in Chroma DB Retrieval ['115']
+   Reason: The agent's output exactly matches the expected output, starting with '**# Problem 115**' and ending with '<END OF PROBLEM>'. It did not summarize the code and provided the complete details as required.
+------------------------------------------------------------
+🔄 Running Test 13 (Subset 13/81): How did we resolve the navigation issue for the Active Investment and Investment Portfolio screens?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 3'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 3']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'3'}
+✅ [DEBUG] Short-circuiting vector search. Fed 3 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [3] found in Chroma DB Retrieval ['3']
+   Reason: The agent's output matches the expected output semantically and includes all the necessary technical details from the provided log. The agent correctly synthesized the answer based on the technical log using semantic keyword matching, as required by the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 14 (Subset 14/81): What caused the alignment bug on the Answer screen, specifically with the Add button?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 4'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 4']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'4'}
+✅ [DEBUG] Short-circuiting vector search. Fed 3 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [4] found in Chroma DB Retrieval ['4']
+   Reason: The agent's output matches the expected output exactly, including all technical details about the alignment bug, the filepath, the steps taken to locate the issue, and the specific UI fixes applied. The agent also correctly included the reasoning behind the fixes and the visual improvements achieved. The agent met all the evaluation criteria by synthesizing the answer based on the provided technical log using semantic keyword matching.
+------------------------------------------------------------
+🔄 Running Test 15 (Subset 15/81): What was the security issue regarding Unrestricted File Uploads and how was it patched?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Unrestricted File Uploads'
+🤖 [DEBUG] Queries actually being searched: ['Unrestricted File Upload exploit', 'Unrestricted File Upload vulnerability', 'Unrestricted File Uploads', 'Unrestricted File Upload prevention']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.8638834953308105 | Preview: # Problem 5 ## **The Problem: Unrestricted File Uploads**  Previously, the \"Add Education\" form al...
+  2. Rerank Score: -5.0233564376831055 | Preview: | \*\*Autocomplete\*\*   | Browser feature to suggest previously entered data; can be enabled/disabl...
+  3. Rerank Score: -5.606838226318359 | Preview: #### **1. The Problem**   The company profile image failed to update or persist. While the UI intera...
+  4. Rerank Score: -7.01894474029541 | Preview: \- \*\*Clean History Matters:\*\* Hugging Face validates the entire history; if a binary file was on...
+  5. Rerank Score: -7.925827980041504 | Preview: | date         | Selects calendar date                | \`min\`, \`max\`                    | Date p...
+🔧 [__DEV__] Skipping auto-escalation for general document: **🚀 Future Reference: The "High-Speed" Workflow**...
+🔍 [DEBUG] Top Docs contained Problems {'5', '31'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [5] found in Chroma DB Retrieval ['5', '31']
+   Reason: The agent's output matches the expected output semantically, including the description of the problem, the original code, and the solution implemented. The agent adhered to the instruction of synthesizing an answer based on the provided technical log using semantic keyword matching.
+------------------------------------------------------------
+🔄 Running Test 16 (Subset 16/81): Why was an underline appearing in the Profile -> about/education tabs and how did we remove it?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 7'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 7']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'7'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [7] found in Chroma DB Retrieval ['7']
+   Reason: The agent's output matches the expected output in terms of technical content and reasoning. It correctly identifies the issue with the underline in the Profile -> about/education tabs and provides the necessary code changes to fix it. The agent also explains why the changes work, which aligns with the expected output. The inclusion of additional headers and file paths does not detract from the core technical accuracy, so it passes based on the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 17 (Subset 17/81): Why does the AI chatbot input field shift when typing or opening the keyboard?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 55'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 55']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'55'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [55] found in Chroma DB Retrieval ['55']
+   Reason: The agent's output matches the expected output exactly, including all technical details and modifications required to fix the input field shifting issue. The agent correctly synthesized the answer based on the provided technical log using semantic keyword matching.
+------------------------------------------------------------
+🔄 Running Test 18 (Subset 18/81): What caused the 6th OTP input box to be cut off on smaller Android screens?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 13'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 13']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'13'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [13] found in Chroma DB Retrieval ['13']
+   Reason: The agent's output accurately synthesized the answer based on the provided technical log, matching the semantic keywords and explaining both the problem and the solution correctly. The agent included the necessary code snippets and explanations from the expected output, maintaining the technical accuracy and context.
+------------------------------------------------------------
+🔄 Running Test 19 (Subset 19/81): How do we resolve the Android TextInput cursor jumping to the end of the text string?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 99'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 99']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'99'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [99] found in Chroma DB Retrieval ['99']
+   Reason: The agent's output matches the expected output almost exactly, including all technical details, root causes, affected files, implementation of the 'Safe Sync' pattern, and best practices. The minor differences in formatting, such as markdown styling for code blocks, are acceptable per the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 20 (Subset 20/81): Why weren't OneSignal push notifications stopping when the user toggled them off in the settings?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 49'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 49']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'49'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [49] found in Chroma DB Retrieval ['49']
+   Reason: The agent synthesized the answer accurately based on the provided technical log, matching the core semantic keywords and technical details. It correctly identified the disconnect between the frontend database state and the OneSignal device state, explained the root cause, provided the fix, and included the necessary code changes and backend communication. The output aligns with the expected output and meets the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 21 (Subset 21/81): I have an issue with the settings screen.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 9'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 9']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'9'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...d code snippets."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [9] found in Chroma DB Retrieval ['9']
+   Reason: The agent correctly recognized the query as vague/ambiguous and retrieved the correct underlying problem log, presenting it contextually. The output matches the expected output in terms of content and structure, adhering to the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 22 (Subset 22/81): How do I fix the tab underline?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 7'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 7']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'7'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [7] found in Chroma DB Retrieval ['7']
+   Reason: The agent correctly recognized the query as vague/ambiguous and retrieved the correct underlying problem log, presenting it contextually. The output matches the expected content and follows the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 23 (Subset 23/81): file upload bug
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 5'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 5']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'5'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [5] found in Chroma DB Retrieval ['5']
+   Reason: The agent recognized the query as vague/ambiguous and correctly retrieved and presented the relevant problem log contextually.
+------------------------------------------------------------
+🔄 Running Test 24 (Subset 24/81): I am getting a 'VirtualizedLists should never be nested' error. How do I fix it?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 90'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 90']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'90'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [90] found in Chroma DB Retrieval ['90']
+   Reason: The agent correctly identified and addressed the 'VirtualizedLists should never be nested' error, providing detailed context, explanation, and solution as per the expected output. It met all the evaluation criteria by recognizing the query and presenting the problem log contextually.
+------------------------------------------------------------
+🔄 Running Test 25 (Subset 25/81): Why does the app crash with a 'duplicate key' error?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 33'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 33']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'33'}
+✅ [DEBUG] Short-circuiting vector search. Fed 1 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [33] found in Chroma DB Retrieval ['33']
+   Reason: The agent provided a detailed explanation of the 'duplicate key' error, including its root cause (React receiving raw duplicate values from the API). The output matches the expected explanation and adheres to the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 26 (Subset 26/81): How do I configure a Kubernetes cluster for the Nexteir backend?
+✅ AI LOGIC PASS
+   Reason: The agent correctly triggered its 'Zero-Knowledge' guardrail by politely refusing to answer and clearly stating the information is not in the knowledge base, which matches the Expected Output and Evaluation Criteria.
+------------------------------------------------------------
+🔄 Running Test 27 (Subset 27/81): What is the best way to deploy an AWS Lambda function for the agent?
+✅ AI LOGIC PASS
+   Reason: The agent correctly triggered its 'Zero-Knowledge' guardrail by politely refusing to answer and clearly stating the information is not in the knowledge base.
+------------------------------------------------------------
+🔄 Running Test 28 (Subset 28/81): Can you write a Python script to scrape LinkedIn data for our users?
+✅ AI LOGIC PASS
+   Reason: The agent correctly triggered its 'Zero-Knowledge' guardrail by politely refusing to answer and clearly stating that the information is not in its knowledge base, which matches the expected output and evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 29 (Subset 29/81): How do we handle state management using Vue.js?
+✅ AI LOGIC PASS
+   Reason: The agent correctly triggered its 'Zero-Knowledge' guardrail by politely refusing to answer and clearly stating the information is not in its knowledge base, which matches the Expected Output and Evaluation Criteria.
+------------------------------------------------------------
+🔄 Running Test 30 (Subset 30/81): Explain the memory leak issue in the Java Spring Boot microservice.
+✅ AI LOGIC PASS
+   Reason: The agent correctly triggered its 'Zero-Knowledge' guardrail and politely stated that the information is not available in its knowledge base, matching the expected output.
+------------------------------------------------------------
+🔄 Running Test 31 (Subset 31/81): what kind of internship logs?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 1'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 1']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'1'}
+✅ [DEBUG] Short-circuiting vector search. Fed 3 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [1] found in Chroma DB Retrieval ['1']
+   Reason: The agent correctly recognized the query as being about its capabilities, explained its purpose with details about the logs it contains (React Native, TypeScript, UI/UX, and performance optimization), and automatically provided practical examples from the logs without triggering the fallback. It fully met the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 32 (Subset 32/81): I'm sorry, but that information is not available in my knowledge base.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 1'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 1']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'1'}
+✅ [DEBUG] Short-circuiting vector search. Fed 3 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [1] found in Chroma DB Retrieval ['1']
+   Reason: The agent correctly recognized the query as about its capabilities, explained its purpose, and provided a practical example from the logs. It did not use the rigid zero-knowledge fallback.
+------------------------------------------------------------
+🔄 Running Test 33 (Subset 33/81): What is the primary purpose of a Semantic Firewall in a RAG pipeline, and how does it prevent 'Vector Noise'?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Semantic Firewall RAG pipeline Vector Noise'
+🤖 [DEBUG] Queries actually being searched: ['Optimizing Semantic Firewall RAG pipelines for vector noise', 'Semantic Firewall RAG pipeline Vector Noise', 'Vector noise in Semantic Firewall RAG pipelines', 'Semantic Firewall RAG pipeline vector noise mitigation']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.40031099319458 | Preview: Think of it as a "Smart Bouncer" for your LLM. While a traditional firewall blocks based on "IP addr...
+  2. Rerank Score: 1.4446938037872314 | Preview: Here is exactly what is happening in your code right now: Initial Vector Search (Candidate Generatio...
+  3. Rerank Score: 0.9865420460700989 | Preview: If you were to expand this project into a massive multi-agent system (e.g., one agent for HR rules, ...
+  4. Rerank Score: 0.05305953696370125 | Preview: 2\. **Triage & Intent Isolation (Second Layer):** Your fast Input Classifier (fast\_llm in chat.py) ...
+  5. Rerank Score: -0.2818341851234436 | Preview: Continuous Evaluation (The Regression Suite): You implement automated evaluation scripts against a G...
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately defines a Semantic Firewall, explains its role as a pre-processor in a RAG pipeline, and describes how it prevents 'Vector Noise' by filtering based on semantic relevance. The additional details about the implementation (e.g., the use of a reranker) do not detract from the core explanation and are consistent with the expected output's emphasis on semantic filtering.
+------------------------------------------------------------
+🔄 Running Test 34 (Subset 34/81): Explain the difference between State Management and Checkpointing in the context of an AI agent's memory system.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'State Management vs Checkpointing AI agent memory'
+🤖 [DEBUG] Queries actually being searched: ['State Management vs Checkpointing AI agent memory', 'AI agent memory state management vs checkpointing', 'difference between state management and checkpointing in AI agents', 'AI agent memory: state management or checkpointing?']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.320832252502441 | Preview: \#The easiest way to think about the difference is: **State Management is the *live, active data mod...
+  2. Rerank Score: 4.100987434387207 | Preview: You use **State Management** to define *what* your agent remembers during a conversation, and you us...
+  3. Rerank Score: 3.588068962097168 | Preview: # **Pseudo-logic for your eval.py** ## **Summary Comparison**  | Feature | State Management | Checkp...
+  4. Rerank Score: 3.4555492401123047 | Preview: In Agentic AI: This is your benchmark for excellence. You use it to calculate metrics like Recall@k....
+  5. Rerank Score: 3.142441749572754 | Preview: The Answer: You implement a tiered memory architecture. Short-term (Working) Memory: Managed via the...
+🔍 [DEBUG] Top Docs contained Problems {'11'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent's output clearly differentiates between State Management as the active working memory and Checkpointing as the persistent saving mechanism. It explains what each component does (State Management organizes and updates data in RAM, Checkpointing saves snapshots to permanent storage) and why both are necessary (for real-time operation and crash recovery/history review). The response meets all evaluation criteria despite using a table format and slightly different phrasing than the expected output.
+------------------------------------------------------------
+🔄 Running Test 35 (Subset 35/81): What is the default recursion limit in LangGraph, and what happens if an agent exceeds this limit?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'LangGraph recursion limit'
+🤖 [DEBUG] Queries actually being searched: ['LangGraph recursion limit', 'LangGraph recursion error', 'LangGraph recursion depth limit', 'LangGraph maximum recursion']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 8.856123924255371 | Preview: \#notes: \#What is a Recursion limit? A Recursion Limit is a safety "kill-switch" that prevents an a...
+  2. Rerank Score: 6.008674621582031 | Preview: \#In my unified knowledge agent: Here is the breakdown of what you have and haven't implemented:   1...
+  3. Rerank Score: 4.624123573303223 | Preview: # **In Unified Knowledge Agent project implemented:** ### **1\. The Ceiling (Limits / Max Iterations...
+  4. Rerank Score: 4.251729965209961 | Preview: config \= {"recursion\_limit": 10} \# Allow max 10 node transitions   try: async for event in workfl...
+  5. Rerank Score: 1.2151094675064087 | Preview: This is the logic that decides which path to take.   * Behind the scenes, LangGraph automatically ta...
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately states the default recursion limit (25 steps) and correctly describes the consequence of exceeding it, including the type of error thrown (`GraphRecursionError`) and the purpose of this mechanism (to prevent infinite loops and excessive API costs). While the agent provided additional information about configuring the recursion limit and handling the error, the core response meets all evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 36 (Subset 36/81): How does an AI Systems Engineer manage the 'Iron Triangle' of AI (Latency, Cost, and Quality)?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Iron Triangle of AI'
+🤖 [DEBUG] Queries actually being searched: ['AI development trade-offs', 'AI quality cost schedule', 'AI project management constraints', 'Iron Triangle of AI']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 3.821272850036621 | Preview: The Answer: You must build and maintain a Golden Dataset—a curated set of high-quality "Input-Output...
+  2. Rerank Score: -7.864340782165527 | Preview: This combines your original Steps 1 & 2\. It creates the LangChain Document and splits it into small...
+  3. Rerank Score: -8.8930082321167 | Preview: 3\. It is AI-Native n8n has advanced nodes built specifically for the modern AI ecosystem. You can e...
+  4. Rerank Score: -9.006994247436523 | Preview: # **Key Concept** ## **Why this is the ultimate advantage for AI Engineering**...
+  5. Rerank Score: -9.732516288757324 | Preview: The Answer: AI Systems Engineering is a game of Trade-offs. To manage this, you implement strategies...
+🔧 [__DEV__] Skipping auto-escalation for general document: **In Unified Knowledge Agent project implemented:*...
+🔍 [DEBUG] Top Docs contained Problems {'12'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly explained the 'Iron Triangle' strategies mentioned in the document, including Semantic Caching, Small Model Distillation, and the use of Latency Budgets/SLAs. The additional details about SLAs and Latency Budgets, while not strictly required, do not contradict the expected output and provide useful context.
+------------------------------------------------------------
+🔄 Running Test 37 (Subset 37/81): What is the 'Anti-Summary Mandate' and why is it crucial for technical work with LLMs?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Anti-Summary Mandate'
+🤖 [DEBUG] Queries actually being searched: ['Anti-Summary Mandate', 'Arguments against summary mandates', 'Opposing summary mandates', 'Critiques of summary mandates']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 8.488216400146484 | Preview: \#What is an Anti-Summary Mandate? It is a high-priority prompt instruction that overrides the LLM's...
+  2. Rerank Score: 5.45124626159668 | Preview: ## **🛡️ Technical Logic Freeze: Precision Retrieval & False Positive Filtering** ### **🛡️ Technical ...
+  3. Rerank Score: 3.7155890464782715 | Preview: **Project:** Unified-Knowledge-Agent (Phase 6.10)   **Status:** STABLE / CRITICAL   **The Problem:**...
+  4. Rerank Score: -10.298646926879883 | Preview: Here is exactly what is happening in your code right now: Initial Vector Search (Candidate Generatio...
+  5. Rerank Score: -10.723657608032227 | Preview: # **Key Concept** ## **Summary**...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly defines the 'Anti-Summary Mandate' as a prompt instruction that overrides summarization and requires 100% fidelity for technical data. It also explains the importance by addressing the LLM's tendency to be 'chatty' and the need for precision in technical contexts, even though it uses slightly different phrasing ('Helpful Assistant Bias' and 'Blind Copy-Paste mechanism') to convey the same core ideas.
+------------------------------------------------------------
+🔄 Running Test 38 (Subset 38/81): Does the document mention any specific tools or frameworks for implementing a 'Semantic Firewall' in a RAG architecture?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Semantic Firewall tools or frameworks'
+🤖 [DEBUG] Queries actually being searched: ['Semantic Firewall solutions', 'Semantic Firewall tools or frameworks', 'Semantic Firewall technologies', 'Semantic Firewall platforms']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.375819206237793 | Preview: Continuous Evaluation (The Regression Suite): You implement automated evaluation scripts against a G...
+  2. Rerank Score: 3.887845754623413 | Preview: Think of it as a "Smart Bouncer" for your LLM. While a traditional firewall blocks based on "IP addr...
+  3. Rerank Score: 3.433363914489746 | Preview: Here is exactly what is happening in your code right now: Initial Vector Search (Candidate Generatio...
+  4. Rerank Score: 3.1410765647888184 | Preview: Standard Firewall: In traditional networking, a firewall looks for "forbidden" IP addresses or suspi...
+  5. Rerank Score: 0.6988911032676697 | Preview: \#Q79 What are guardrails in Agentic AI? Answer: Guardrails are protective programmatic layers that ...
+🔧 [__DEV__] Skipping auto-escalation for general document: **In Unified Knowledge Agent project implemented:*...
+✅ AI LOGIC PASS
+   Reason: The agent correctly identified Cross-Encoder Rerankers as the implementation for a 'Semantic Firewall' and specifically named 'cross-encoder/ms-marco-MiniLM-L-6-v2' as an example, matching the expected output.
+------------------------------------------------------------
+🔄 Running Test 39 (Subset 39/81): What is the purpose of the 'generated_chars_count' guardrail in the Unified Knowledge Agent project?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'generated_chars_count guardrail'
+🤖 [DEBUG] Queries actually being searched: ['generated_chars_count guardrail', 'character count guardrail for generation', 'guardrail for generated character count', 'generated characters count guardrail']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 0.30950650572776794 | Preview: \#Q79 What are guardrails in Agentic AI? Answer: Guardrails are protective programmatic layers that ...
+  2. Rerank Score: -1.3126713037490845 | Preview: Output Guardrails: Catch hallucinations, legal mistakes, or "off-brand" responses before the user se...
+  3. Rerank Score: -2.0930001735687256 | Preview: \#\# Changes Implemented \#\#\# 1\. Output Guardrail Truncation Fix \* \*\*Problem:\*\* The output g...
+  4. Rerank Score: -2.5311920642852783 | Preview: Answer: Relying only on output guardrails is "expensive and late." It wastes money because you've al...
+  5. Rerank Score: -3.8414053916931152 | Preview: # **In Unified Knowledge Agent project implemented:** ### **3\. The Alarm / Budget Gate**  **Stops: ...
+🔧 [__DEV__] Skipping auto-escalation for general document: **In Unified Knowledge Agent project implemented:*...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{\n  "type": "j...ict": true\n  }\n}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately states that the 'generated_chars_count' guardrail is used to truncate responses and prevent the LLM from generating excessively long text, which meets the evaluation criteria. The additional details provided about the mechanism and fixes do not contradict the core requirement and are therefore acceptable.
+------------------------------------------------------------
+🔄 Running Test 40 (Subset 40/81): What is the primary purpose of `pip` in Python?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'primary purpose of pip in Python'
+🤖 [DEBUG] Queries actually being searched: ['role of pip in Python programming', 'what is pip used for in Python', 'main function of pip Python', 'primary purpose of pip in Python']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.488839149475098 | Preview: ## **One-line interview answers (memorize these)**  **pip**:   “pip is Python’s package manager used...
+  2. Rerank Score: 2.546527862548828 | Preview: ### **In simple words:**  👉 **pip installs libraries** (extra code written by others) into your Pyth...
+  3. Rerank Score: 1.2034928798675537 | Preview: ### **One-line definition (interview-safe)**  **A module is a Python file that contains reusable cod...
+  4. Rerank Score: 0.7940584421157837 | Preview: ## **Very short comparison**  | Thing | What it is | | ----- | ----- | | **pip** | Tool to install P...
+  5. Rerank Score: 0.28848016262054443 | Preview: **PYTHON NOTES from:  [https:\#\#www.youtube.com/watch?v=UrsmFxEIp5k](https://www.youtube.com/watch?...
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately conveys the one-line interview definition of pip, stating its purpose as installing and managing libraries/packages and identifying it as Python's package manager, which matches the expected output.
+------------------------------------------------------------
+🔄 Running Test 41 (Subset 41/81): Explain the difference between `==` and `is` in Python when comparing `1` and `1.00`.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: '1 and 1.00 Python == vs is'
+🤖 [DEBUG] Queries actually being searched: ['1 and 1.00 Python == vs is', "python comparison operators '==' and 'is' with numbers", "difference between '==' and 'is' in python for integers and floats", "python '==' vs 'is' for 1 and 1.00"]
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.247970104217529 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **Why this is True (simple explanation)**  * `1` is...
+  2. Rerank Score: 3.3326416015625 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **Important distinction (interview point)**  * `==`...
+  3. Rerank Score: -0.008689820766448975 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **One-line interview answer**  Python performs impl...
+  4. Rerank Score: -3.322936773300171 | Preview: # **📌 f-strings (preferred in refactoring)** ## **Another simple precedence bug** ### **Python evalu...
+  5. Rerank Score: -3.987718105316162 | Preview: # **2️⃣ `__eq__`** ### **Purpose**  Defines how **two objects are compared using `==`**.   Python ca...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly explains both `==` and `is` behavior for the given values, including the concept of implicit type conversion and identity, matching the expected output.
+------------------------------------------------------------
+🔄 Running Test 42 (Subset 42/81): Can a Python set contain a list as one of its elements? Why or why not?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python set list element'
+🤖 [DEBUG] Queries actually being searched: ['Python set list element', 'Python update list value', 'Python change list element', 'Python modify list item']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.1417365074157715 | Preview: ## **List vs Set membership (the key idea)** ### **✅ Set (`valid_set` is a set)**  u in valid\_set  ...
+  2. Rerank Score: 4.587560176849365 | Preview: s \= {8, 7, 12, "Harry", \[1,2\]}   **No, you cannot change the values inside a list that is contain...
+  3. Rerank Score: 4.493378639221191 | Preview: ## **List vs Set membership (the key idea)** ### **❌ List (`valid_users` is a list)**  u in valid\_u...
+  4. Rerank Score: 4.480470657348633 | Preview: **if item in set\_b:** **common.append(item)**   **return common**   Answer 2:   \#using list compre...
+  5. Rerank Score: 4.051398277282715 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **One-line interview answer**  Python performs impl...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...expected output."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output clearly states that lists cannot be in sets and provides the correct reason (mutability/hashability). The additional mention of `TypeError` and the explanation about hashability aligns with the expected output and evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 43 (Subset 43/81): What is the purpose of the `end` parameter in Python's `print()` function?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'purpose of end parameter in Python's print() function'
+🤖 [DEBUG] Queries actually being searched: ['what does end do in python print', 'python print() end argument usage', 'python print function end parameter explained', "purpose of end parameter in Python's print() function"]
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.200859069824219 | Preview: ## **Key takeaway**  * `list.reverse()` → modifies the list in place * `reversed()` and slicing → cr...
+  2. Rerank Score: 4.849771976470947 | Preview: ## **1\. The Setup: print("AI: ", end="", flush=True)**  This line prepares the terminal to receive ...
+  3. Rerank Score: 4.329346179962158 | Preview: # **\#GRAPH 8: ROUTING with STRUCTURED OUTPUT** ## **1\. basics.ipynb (Notebook Cells)** ### **1\. e...
+  4. Rerank Score: 3.067974090576172 | Preview: code:   def convertToFahrenheit(m): fahren \= (9/5) \* m \+ 32 return fahren   m \= int(input("Enter...
+  5. Rerank Score: 2.932816982269287 | Preview: ## **Key takeaway** ### **Interview one-line answer**  “We prevent `print()` from printing a new lin...
+✅ AI LOGIC PASS
+   Reason: The agent correctly described the function of the `end` parameter and provided examples of its usage, including the default behavior and how to change it. The core technical content matches the expected output, even though the phrasing is slightly different.
+------------------------------------------------------------
+🔄 Running Test 44 (Subset 44/81): What is the most Pythonic way to remove duplicate items from a list while preserving their original order?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'remove duplicate items from a list while preserving their original order Python'
+🤖 [DEBUG] Queries actually being searched: ['python unique elements list preserve order', 'remove duplicate items from a list while preserving their original order Python', 'python filter duplicates from list keeping order', 'python remove duplicates from list maintain order']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.2932538986206055 | Preview: **result\[item\] \+= 1**   **return dict(result)**   \# Answer 3: Using setdefault()   **def count\_...
+  2. Rerank Score: 3.229503870010376 | Preview: ## **One-line interview explanation** ### **✅ Even more Pythonic (optional)**  **Return bool(set(a) ...
+  3. Rerank Score: 2.038935661315918 | Preview: ## **❌ When you should NOT use a `set`**  Do **not** use a set when:   * Order matters and must be p...
+  4. Rerank Score: 0.8310089707374573 | Preview: **for val in values:**   **if val not in seen:**   **seen.add(val)**   **result.append(val)**   **re...
+  5. Rerank Score: 0.7295025587081909 | Preview: ## **✅ Correct refactor using a set (INTERVIEW ANSWER)** ### **Step 1: `set(items)`**  * Converts th...
+🔍 [DEBUG] Top Docs contained Problems {'4', '9', '5'}. Auto-Escalating...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 2 validation errors for EvalResult
+passed
+  Field required [type=missing, input_value={'type': 'json_schema', '...ject'}, 'strict': True}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+reason
+  Field required [type=missing, input_value={'type': 'json_schema', '...ject'}, 'strict': True}}, input_type=dict]
+    For further information visit https://errors.pydantic.dev/2.12/v/missing
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [5] found in Chroma DB Retrieval ['4', '9', '5']
+   Reason: The agent's output includes the required code snippet that uses a set for tracking seen items and a list for the result, explicitly stating that this method preserves order. The additional example usage does not detract from the core requirement.
+------------------------------------------------------------
+🔄 Running Test 45 (Subset 45/81): What is the difference between `append()` and `extend()` list methods?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'difference between append() and extend() list methods'
+🤖 [DEBUG] Queries actually being searched: ['what is the difference between append and extend in python lists', 'python list append vs extend', 'append() vs extend() list methods in python', 'difference between append() and extend() list methods']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.33287239074707 | Preview: # **1️⃣ \#\#methods:List (most common in messy code)** ## **What `del` actually is** ### **Interview...
+  2. Rerank Score: 4.099423408508301 | Preview: # **1️⃣ \#\#methods:List (most common in messy code)** ## **What `del` actually is** ### **Example**...
+  3. Rerank Score: 3.4760403633117676 | Preview: # **1️⃣ \#\#methods:List (most common in messy code)** ### **Methods you MUST know (refactoring-rele...
+  4. Rerank Score: 3.3075404167175293 | Preview: # **1️⃣ \#\#methods:List (most common in messy code)** ## **What `del` actually is** ### **What actu...
+  5. Rerank Score: 2.373654365539551 | Preview: # **1️⃣ \#\#methods:List (most common in messy code)** ## **What `del` actually is** ### **Example**...
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately differentiates between append() and extend() methods regarding what they add (single element vs. multiple elements from an iterable) and correctly states that both are in-place operations. The additional example provided does not detract from the core accuracy of the response.
+------------------------------------------------------------
+🔄 Running Test 46 (Subset 46/81): How would you refactor the `count_items` function to be more Pythonic, given that `items` is a list of strings or integers and you want to count their occurrences?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Pythonic count_items function'
+🤖 [DEBUG] Queries actually being searched: ['Idiomatic Python count_items implementation', 'Best practices for counting elements in Python', 'Pythonic way to count items in a list', 'Pythonic count_items function']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 3.398157835006714 | Preview: # **📌 f-strings (preferred in refactoring)** ## **Why not explicitly check `None`?** ### **Task**  R...
+  2. Rerank Score: 2.8460869789123535 | Preview: Refactor this code to make it:   ✅ More readable ✅ More Pythonic ✅ Slightly cleaner ✅ Easy to explai...
+  3. Rerank Score: 2.713599443435669 | Preview: ## **Interview one-liner (MEMORIZE)**  **//QUESTION 3 — Dictionary Handling & Repeated Logic**   **d...
+  4. Rerank Score: 1.6923952102661133 | Preview: ## **Interview one-liner (MEMORIZE)** ### **Why this is good**  * Removes `if/else`   * Keeps behavi...
+  5. Rerank Score: 0.5110729932785034 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **2️⃣ What `get()` does (important)**  counts.get(w...
+🔍 [DEBUG] Top Docs contained Problems {'3'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [3] found in Chroma DB Retrieval ['3']
+   Reason: The agent provided correct Pythonic refactorings using both `dict.get()` and `collections.defaultdict` as required. Additionally, it included an extra method using `dict.setdefault()`, which, while not requested, does not detract from meeting the criteria and provides additional useful information. The core technical content is accurate and meets the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 47 (Subset 47/81): What was the fix for the 'Ghost' Streaming State problem in Phase 4, and which file was affected?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Ghost Streaming State Phase 4 fix'
+🤖 [DEBUG] Queries actually being searched: ['Ghost Streaming State Phase 4 fix', 'Ghost Streaming State Phase 4 troubleshooting', 'Fixing Ghost Streaming State Phase 4 issue', 'Ghost Streaming State Phase 4 error solution']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.5675249099731445 | Preview: ## **🛠️ Phase 4: Debugging & Integration Log** ### **3\. The "Ghost" Streaming State**  * **File:** ...
+  2. Rerank Score: 1.0385222434997559 | Preview: ## **🛠️ Phase 4: Debugging & Integration Log**  **Project State:** Full-Stack Streaming Bridge (Fast...
+  3. Rerank Score: 0.08750799298286438 | Preview: ## **📓 Phase 5(Agentic Ai Engineer Roadmap) Technical Debugging Log** ### **\#problem 8: The Ghost C...
+  4. Rerank Score: -0.34059569239616394 | Preview: ## **🛠️ Phase 4: Debugging & Integration Log** ### **2\. The Serialization Crash**  * **File:** Fast...
+  5. Rerank Score: -3.244464635848999 | Preview: ## **🛠️ Phase 4 Debugging & Error Log** ### **2\. The Duplicate Definition Trap**  **File:** app.py ...
+🔍 [DEBUG] Top Docs contained Problems {'8'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent accurately identified the fix as tightening the try...catch...finally logic and ensuring a hard refresh resets the local React state. It also correctly identified the affected file as src/hooks/useChatStream.ts. The additional context provided does not detract from the core accuracy of the response.
+------------------------------------------------------------
+🔄 Running Test 48 (Subset 48/81): According to the 'Final Source of Truth Summary' in Phase 4 Debugging & Error Log, what is the status of 'llm_with_tools' and 'generate_chat_responses'?
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...Summary\' table."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output exactly matches the expected output, accurately stating the status of both 'llm_with_tools' and 'generate_chat_responses' as presented in the 'Final Source of Truth Summary' table.
+------------------------------------------------------------
+🔄 Running Test 49 (Subset 49/81): What was the solution for the 'Serialization Crash' in Phase 4, and what was its cause?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Serialization Crash Phase 4'
+🤖 [DEBUG] Queries actually being searched: ['Serialization Crash Phase 4', 'Phase 4 serialization failure', 'Debugging serialization crash in phase 4', 'Serialization crash phase 4 error']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.503047943115234 | Preview: ## **🛠️ Phase 4: Debugging & Integration Log** ### **2\. The Serialization Crash**  * **File:** Fast...
+  2. Rerank Score: 5.445831298828125 | Preview: ## **🛠️ Phase 4 Debugging & Error Log** ### **4\. Serialization Failures (FastAPI Bridge)**  **File:...
+  3. Rerank Score: 2.4155421257019043 | Preview: # **Implementation Report & Post-Mortem: Recent Search History Feature** ## **5. Phase 4: Build Syst...
+  4. Rerank Score: -0.38302677869796753 | Preview: ## **🛠️ Phase 4 Debugging & Error Log** ### **3\. The "Void" Graph (Cleanup Overkill)**  **File:** a...
+  5. Rerank Score: -1.8986473083496094 | Preview: ## **📓 Phase 5(Agentic Ai Engineer Roadmap) Technical Debugging Log** ### **\#problem 8: The Ghost C...
+🔍 [DEBUG] Top Docs contained Problems {'8'}. Auto-Escalating...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...uation criteria."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent correctly identified both the fix ('Safe Extractor' logic) and the cause (LangGraph’s astream_events yields complex Python objects which standard json.dumps() cannot process) of the 'Serialization Crash'. The additional context provided, such as file names and error messages, does not detract from the core accuracy of the response.
+------------------------------------------------------------
+🔄 Running Test 50 (Subset 50/81): What was the 'Critical Code Snippet' for fixing the 'Tool Blindness' issue, and what was the incorrect approach?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Critical Code Snippet Tool Blindness incorrect approach'
+🤖 [DEBUG] Queries actually being searched: ['Critical Code Snippet Tool Blindness incorrect approach', 'Addressing Critical Code Snippet Tool Blindness', 'Critical Code Snippet Tool Blindness anti-patterns', 'Critical Code Snippet Tool Blindness common mistakes']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.734688758850098 | Preview: ## **🛠️ Phase 4 Debugging & Error Log** ### **1\. Tool Blindness (The "Standard Chatbot" Loop)**  **...
+  2. Rerank Score: -4.842811584472656 | Preview: # Problem 76 ### **💻 Important Code Snippets**  **The Issue (Invisible Tabs):**   TypeScript   In: s...
+  3. Rerank Score: -5.2025227546691895 | Preview: # Problem 61 ## **Code Snippets**...
+  4. Rerank Score: -5.305614471435547 | Preview: # Problem 62 ## **Important Code Snippets**...
+  5. Rerank Score: -5.3667731285095215 | Preview: # Problem 60 ## **Code Snippets**...
+🔍 [DEBUG] Top Docs contained Problems {'61', '76', '60', '62'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent provided both the correct and incorrect Python code snippets for addressing the 'Tool Blindness' issue, meeting all evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 51 (Subset 51/81): What was the fix for the 'Ghost Crash (Sync Nodes)' problem, and what was the full filepath of the affected file?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Ghost Crash (Sync Nodes)'
+🤖 [DEBUG] Queries actually being searched: ['Ghost Crash (Sync Nodes)', 'Ghost Crash Sync Nodes', 'Ghost Crash synchronization nodes', 'Ghost Crash node synchronization issue']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.845741271972656 | Preview: ## **📓 Phase 5(Agentic Ai Engineer Roadmap) Technical Debugging Log** ### **\#problem 8: The Ghost C...
+  2. Rerank Score: -6.521579742431641 | Preview: # **Implementation Report & Post-Mortem: Recent Search History Feature** ## **5. Phase 4: Build Syst...
+  3. Rerank Score: -7.435914039611816 | Preview: ## **🛠️ Phase 4: Debugging & Integration Log** ### **3\. The "Ghost" Streaming State**  * **File:** ...
+  4. Rerank Score: -9.140022277832031 | Preview: ## **🛠️ The "Second Brain" Migration Log** ### **1\. The "Ghost Directory" Error**  * **The Issue:**...
+  5. Rerank Score: -9.481023788452148 | Preview: # Problem 99 ## **Technical Report: Android TextInput Cursor Sync Issue** ### **3. Implementation: T...
+🔍 [DEBUG] Top Docs contained Problems {'8', '99'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent accurately described the fix for the 'Ghost Crash (Sync Nodes)' problem, including converting chatbot_node to async def, using await llm.ainvoke(), and disabling tracing via LANGCHAIN_TRACING_V2="false". The full filepath provided (/Users/victorloucii/agentic_ai_engineer/Unified-Knowledge-Agent/backend/app.py) matches the expected output. The additional context and markdown styling do not violate the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 52 (Subset 52/81): How many problems are listed in the 'Phase 4 Implementation Audit' section?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Phase 4 Implementation Audit'
+🤖 [DEBUG] Queries actually being searched: ['Implementation audit for Phase 4', 'Auditing Phase 4 implementation', 'Phase 4 Implementation Audit', 'Phase 4 audit implementation']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.00792932510376 | Preview: \#problem 1: This is a professional move. Every senior engineer keeps a "Dev Log" or a "Post-Mortem"...
+  2. Rerank Score: -0.3180962800979614 | Preview: # **Key Concept** ## **Phase 4: The Loop (The Inspection)**...
+  3. Rerank Score: -0.47445905208587646 | Preview: # **📊 Implementing Eval in Phase 7: Building Production-Grade Agent Reliability** ## **🛠️ The Implem...
+  4. Rerank Score: -0.8953059315681458 | Preview: # **Key Concept** ## **Phase 4: The Execution Queue (Cell 7 \- The Filing Cabinet)**...
+  5. Rerank Score: -1.6221288442611694 | Preview: # **Key Concept** ## **Phase 4: The "Act" Phase (Tool Execution)**  **Where we are:** Cell 3   1. **...
+🔍 [DEBUG] Top Docs contained Problems {'1'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent's output contains the names of the 3 issues: 'The HMR Connection Block', 'The Serialization Crash', and 'The "Ghost" Streaming State', which meets the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 53 (Subset 53/81): What was the solution for the 'Concurrent Indexing Transaction' problem, and what was the issue it addressed?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Concurrent Indexing Transaction'
+🤖 [DEBUG] Queries actually being searched: ['Concurrent Indexing Transaction', 'Concurrent Indexing Transaction issues', 'Concurrent Indexing Transaction performance', 'Concurrent Indexing Transaction database']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.664822578430176 | Preview: ## **📓 Phase 5(Agentic Ai Engineer Roadmap) Technical Debugging Log** ### **\#problem 5: Concurrent ...
+  2. Rerank Score: -5.803265571594238 | Preview: # **\#GRAPH 8: ROUTING with STRUCTURED OUTPUT** ## **Breaking Down the Words**  * **concurrent:** Th...
+  3. Rerank Score: -6.910769462585449 | Preview: # **Key Concept** ## **Title: Controlling Concurrent Access Using `asyncio.Semaphore`**  import asyn...
+  4. Rerank Score: -7.02836799621582 | Preview: # **Key Concept**  Even though `asyncio` runs **concurrently**, a **lock forces sequential execution...
+  5. Rerank Score: -7.252401351928711 | Preview: # **Quick Comparison**  | Method | Concurrency | Error Handling | Structure | | ----- | ----- | ----...
+🔍 [DEBUG] Top Docs contained Problems {'5'}. Auto-Escalating...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{\n  "passed": ...ional context."\n}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately stated both the solution (using a dedicated, one-off connection with autocommit=True) and the issue (psycopg.ProgrammingError: CREATE INDEX CONCURRENTLY cannot run inside a transaction block) for the 'Concurrent Indexing Transaction' problem. The additional context provided (filepath and explanation of LangGraph's internal setup) does not detract from the core accuracy of the response.
+------------------------------------------------------------
+🔄 Running Test 54 (Subset 54/81): What is the output of `print(name[-4:-1])` when `name = "kawala"`?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python string slicing name[-4:-1]'
+🤖 [DEBUG] Queries actually being searched: ['Python string indexing name[-4:-1] example', 'Explain Python string slice name[-4:-1]', 'Python string slicing name[-4:-1]', 'Python string slicing negative indices name[-4:-1]']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.576796531677246 | Preview: print(name\[-1:-5\])   **This is incorrect and will return an empty string (''). In Python, slices w...
+  2. Rerank Score: 2.1680707931518555 | Preview: word\[1: 6: 2\]   output: mzn**(remember that the starting index will be displayed)**   notes:   In ...
+  3. Rerank Score: 1.9514424800872803 | Preview: \#\#type function, type casting and input() function in chatper 2   **\#\#CHAPTER 3: strings**   **\...
+  4. Rerank Score: -0.45728421211242676 | Preview: i becomes 4 → "4" \* 4 → 4444   i becomes 3 → 333   i becomes 2 → 22   i becomes 1 → 1   \---   🔑 Ke...
+  5. Rerank Score: -1.1918838024139404 | Preview: • No white space is allowed to be used inside a variable name. Examples of a few variable names are:...
+✅ AI LOGIC PASS
+   Reason: The agent's output contained the correct answer 'wal' as the core output, which meets the evaluation criteria. The extraneous explanation provided does not violate the criteria since 'wal' was clearly identified as the output.
+------------------------------------------------------------
+🔄 Running Test 55 (Subset 55/81): Explain the difference between `print(marks.get("vic1"))` and `print(marks["vic1"])` when 'vic1' is not a key in the 'marks' dictionary.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python dictionary get() vs []'
+🤖 [DEBUG] Queries actually being searched: ['Python dictionary get method vs square brackets', 'Python dict.get() vs dict[]', 'Python dictionary access get() or []', 'Python dictionary get() vs []']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: -0.20725232362747192 | Preview: * `GET` → “Give me data” * Server → sends back data (usually JSON) * Client → reads and uses that da...
+  2. Rerank Score: -0.36060333251953125 | Preview: 1\. If the user enters "Alice" and "Python", the dictionary will be \`{"Alice": "Python"}\`. 2\. If ...
+  3. Rerank Score: -0.6064686179161072 | Preview: Python if tool\_name \== "get\_weather": result \= get\_weather(\*\*arguments) print(f"Tool executed...
+  4. Rerank Score: -1.0957777500152588 | Preview: ## **Key points to remember** ### **Reading request body**  requestdata \= request.get\_json()   * R...
+  5. Rerank Score: -1.2637722492218018 | Preview: This is a standard Python loop iterating over the list we just looked at. Because the LLM was smart ...
+✅ AI LOGIC PASS
+   Reason: The agent correctly identified that `print(marks.get("vic1"))` returns `None` and `print(marks["vic1"])` raises a `KeyError`, meeting all evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 56 (Subset 56/81): Can a Python set contain a list as one of its elements? Provide the reason.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python set contain list'
+🤖 [DEBUG] Queries actually being searched: ['Python set check if list is present', 'Python set with list elements', 'Python set contain list', 'Python set store list']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.7524285316467285 | Preview: s \= {8, 7, 12, "Harry", \[1,2\]}   **No, you cannot change the values inside a list that is contain...
+  2. Rerank Score: 5.953901767730713 | Preview: ## **✅ Pythonic refactor (interview-ready)** ### **One-line interview answer**  Python performs impl...
+  3. Rerank Score: 3.148073673248291 | Preview: **if item in set\_b:** **common.append(item)**   **return common**   Answer 2:   \#using list compre...
+  4. Rerank Score: 3.024698495864868 | Preview: ## **List vs Set membership (the key idea)** ### **✅ Set (`valid_set` is a set)**  u in valid\_set  ...
+  5. Rerank Score: 2.3863537311553955 | Preview: ## **List vs Set membership (the key idea)** ### **❌ List (`valid_users` is a list)**  u in valid\_u...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...uation Criteria."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output explicitly states 'No' and correctly explains that lists are mutable and not hashable, leading to a TypeError when added to a set, which matches the expected output and evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 57 (Subset 57/81): How do you prevent a Python `print()` function from printing a new line at the end?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python print() new line'
+🤖 [DEBUG] Queries actually being searched: ['Python print function new line', 'Python print() new line', 'Python print statement line break', 'How to add new line in Python print']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.841866493225098 | Preview: # **\#GRAPH 8: ROUTING with STRUCTURED OUTPUT** ## **1\. basics.ipynb (Notebook Cells)** ### **1\. e...
+  2. Rerank Score: 6.555826187133789 | Preview: ## **Key takeaway**  * `list.reverse()` → modifies the list in place * `reversed()` and slicing → cr...
+  3. Rerank Score: 6.375859260559082 | Preview: ## **1\. The Setup: print("AI: ", end="", flush=True)**  This line prepares the terminal to receive ...
+  4. Rerank Score: 5.304887294769287 | Preview: if("python" in line):   print(f"Yes python is present. Line no: {lineno}") break lineno \+= 1   else...
+  5. Rerank Score: 4.775526523590088 | Preview: code:   def convertToFahrenheit(m): fahren \= (9/5) \* m \+ 32 return fahren   m \= int(input("Enter...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly mentioned using the `end` parameter and provided a correct example, meeting all the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 58 (Subset 58/81): What is the purpose of the `finally` block in Python's exception handling, especially when a `return` statement is present in `try` or `except`?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Python finally block return'
+🤖 [DEBUG] Queries actually being searched: ['Python finally block behavior with return', 'Does finally block execute after return Python', 'Python finally block return', 'Python finally block return value']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 3.4115047454833984 | Preview: print("Thank you from finally")   print("Thank you from print\!")  **\#this block won't  execute now...
+  2. Rerank Score: 2.5982260704040527 | Preview: try: n \= int(input("Enter a number: ")) print(n)   except Exception as e:  \#if except block initia...
+  3. Rerank Score: 1.667299747467041 | Preview: ## **How the `return` statement works in above code** ### **2️⃣ `and` (short-circuit behavior)**  Py...
+  4. Rerank Score: 0.6928120851516724 | Preview: Python return { "type": "text", "content": "The weather in Delhi is 35°C and sunny." }   * **What it...
+  5. Rerank Score: -0.06248505041003227 | Preview: **\#RAISING EXCEPTIONS** **We can raise custom exceptions using the ‘raise’ keyword in python.**   c...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly explains that the `finally` block always executes, even with `return` statements in `try`/`except`, and emphasizes its role in guaranteed cleanup. The additional example provided does not detract from the core explanation and is consistent with the expected output.
+------------------------------------------------------------
+🔄 Running Test 59 (Subset 59/81): What is the `__len__` dunder method used for in Python classes?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: '__len__ dunder method Python'
+🤖 [DEBUG] Queries actually being searched: ['__len__ dunder method Python', 'Python dunder __len__', 'Python __len__ dunder method', '__len__ method in Python']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.683278560638428 | Preview: **\#operator overloading**   Operators in Python can be overloaded using dunder methods. Dunder meth...
+  2. Rerank Score: 4.2811384201049805 | Preview: # **8️⃣ Simple Real-World Analogy** ### **What are Dunder Methods?**  **Dunder** \= **Double Under**...
+  3. Rerank Score: 4.008992671966553 | Preview: This means print(n \+ m) outputs 3   **\#\# \_\_str\_\_ is a dunder/magic method which is used to se...
+  4. Rerank Score: 3.6365346908569336 | Preview: result \= temp1.\_\_add\_\_(v3)  \# Second addition   **\#In Python, we don’t need to assign a speci...
+  5. Rerank Score: 2.4387402534484863 | Preview: # **4️⃣ Why this matters (for AI / Python work)**  Libraries like:   * **Pydantic** * **Dataclasses*...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly identifies that the `__len__` dunder method defines the behavior for the `len()` function and specifies that it determines what gets returned when `len(obj)` is called, which aligns with the expected output.
+------------------------------------------------------------
+🔄 Running Test 60 (Subset 60/81): Does the document mention how to implement multiple inheritance in Python?
+✅ AI LOGIC PASS
+   Reason: The agent's output exactly matches the expected output.
+------------------------------------------------------------
+🔄 Running Test 61 (Subset 61/81): Who created JavaScript and co-founded the Mozilla project?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Who created JavaScript and co-founded the Mozilla project?'
+🤖 [DEBUG] Queries actually being searched: ['Creator of JavaScript and Mozilla co-founder?', 'JavaScript creator and Mozilla project co-founder?', 'Who invented JavaScript and helped start Mozilla?', 'Who created JavaScript and co-founded the Mozilla project?']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 8.90677261352539 | Preview: **JAVA SCRIPT(JS)** **// React Native CLI (COMMAND LINE INTERFACE) FOR bare projects**   Brendan Eic...
+  2. Rerank Score: -7.655242919921875 | Preview: Thursday, 12 February 2026   ---   **//JAVASCRIPT CHAI AUR CODE** **// Arrays part 1 (time: 3 hr 10 ...
+  3. Rerank Score: -9.452388763427734 | Preview: # **Important Abbreviations and Their Full Forms**  * JSX \= JavaScript XML * XML \= Extensible Mark...
+  4. Rerank Score: -10.04410171508789 | Preview: **// ‘Prototype’, ‘this’ and ‘new’ keyword 7hr 11 mins in part2 video of 10hrs)**   //JavaScript is ...
+  5. Rerank Score: -10.33301830291748 | Preview: **//JAVASCRIPT CHAI AUR CODE** **// This and Arrow Function (time: 5 hr 30 mins in part1 video of 9h...
+✅ AI LOGIC PASS
+   Reason: The agent accurately identified Brendan Eich as the creator of JavaScript and co-founder of the Mozilla project, including the Mozilla Firefox Foundation, which matches the expected output.
+------------------------------------------------------------
+🔄 Running Test 62 (Subset 62/81): What is the primary difference between '==' and '===' operators in JavaScript?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'primary difference between '==' and '===' operators in JavaScript'
+🤖 [DEBUG] Queries actually being searched: ['strict equality vs loose equality JavaScript', 'difference between double equals and triple equals in JS', "JavaScript '==' vs '===' operators", "primary difference between '==' and '===' operators in JavaScript"]
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 0.8687124848365784 | Preview: Triple equal sign (===): **This checks if two values are exactly the same, meaning both the value an...
+  2. Rerank Score: 0.34168559312820435 | Preview: Here's the breakdown:   { ... } (Curly Braces): In JSX (the syntax used in React/React Native that l...
+  3. Rerank Score: -0.3375451862812042 | Preview: OperatorDescription                Example \==        Equal to                5 \== 5 evaluates to t...
+  4. Rerank Score: -1.5738592147827148 | Preview: **Explanation of undefined \== null:**   **Loose Equality (==) Rule:**   undefined and null are cons...
+  5. Rerank Score: -1.6277223825454712 | Preview: **//Ternary Operator** The ternary operator is a shorthand for the if-else statement. The basic synt...
+🔧 [__DEV__] Skipping auto-escalation for general document: **POST request example** **Important Rule**...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly explained that '==' performs type coercion while '===' does not, and that '===' requires both value and type to match. The additional context about safety and unexpected results does not violate the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 63 (Subset 63/81): Can you re-declare a variable declared with 'let' in the same scope?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 're-declare let variable'
+🤖 [DEBUG] Queries actually being searched: ['let variable re-declaration', 'can you re-declare let variable', 'javascript re-declare let variable', 're-declare let variable']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.269411087036133 | Preview: Prevent Hoisting Issues:   Variables declared with var are hoisted to the top of their function scop...
+  2. Rerank Score: 4.819284439086914 | Preview: console.log(a) let g \= 4 console.log(g) g \= 7   **//if you write: let g \= 7, here we are re-decla...
+  3. Rerank Score: 4.135219573974609 | Preview: \- var can be updated, re-declared, and reassigned within its scope. \- const cannot be reassigned o...
+  4. Rerank Score: 2.523951768875122 | Preview: It's important to note that escape sequence characters are not treated as characters of the string. ...
+  5. Rerank Score: -1.3285253047943115 | Preview: The type of a variable is determined at runtime based on the value it holds. Variables can change th...
+✅ AI LOGIC PASS
+   Reason: The agent explicitly stated that 'let' variables cannot be re-declared in the same scope, which meets the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 64 (Subset 64/81): What are the 7 primitive data types in JavaScript? Give an example of each.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: '7 primitive data types in JavaScript'
+🤖 [DEBUG] Queries actually being searched: ['What are the 7 primitive data types in JS?', 'JavaScript primitive types explained', 'JavaScript primitive data types list', '7 primitive data types in JavaScript']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.810800552368164 | Preview: console.log(Boolean(1)); // true (1 is truthy)   **//JAVASCRIPT CHAI AUR CODE**   //node basics/06Da...
+  2. Rerank Score: 6.34782600402832 | Preview: doctor: 'a person who treats illnesses of other people', dozen: 12, triple: 3 }   **notes:** In Java...
+  3. Rerank Score: 5.443083763122559 | Preview: **// ‘Prototype’, ‘this’ and ‘new’ keyword 7hr 11 mins in part2 video of 10hrs)**   //JavaScript is ...
+  4. Rerank Score: 2.9251937866210938 | Preview: Thursday, 12 February 2026   ---   **//JAVASCRIPT CHAI AUR CODE** **// Arrays part 1 (time: 3 hr 10 ...
+  5. Rerank Score: 1.7426793575286865 | Preview: const str \= "hello"; //primitive data type console.log(str.toUpperCase()); // Works because JS wrap...
+✅ AI LOGIC PASS
+   Reason: The agent correctly listed all 7 primitive data types in JavaScript and provided valid examples for each. The examples, while not identical to the expected output, are technically correct and meet the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 65 (Subset 65/81): How does the `flat()` method work with `Infinity` as an argument?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'flat() method with Infinity'
+🤖 [DEBUG] Queries actually being searched: ['JavaScript flat() method Infinity depth', 'How to use flat() with Infinity in JavaScript', 'Array.prototype.flat() with Infinity', 'flat() method with Infinity']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.037448883056641 | Preview: | Feature | Spread Operator | concat() Method | | ----- | ----- | ----- | | **Type** | Syntax featur...
+  2. Rerank Score: 2.5255274772644043 | Preview: The depth specifies how many levels of nested arrays should be flattened. Infinity as Depth: Passing...
+  3. Rerank Score: 0.4061695337295532 | Preview: const another\_array \= \[1, 2, 3, \[4, 5, 6\], 7, \[6, 7, \[4, 5\]\]\]  //nested arrays **const rea...
+  4. Rerank Score: 0.015503309667110443 | Preview: If NO, then render null (which means render nothing at all)."   This is how the loading message appe...
+  5. Rerank Score: -5.341605186462402 | Preview: \[\[1, 2\], \[3, 4\], \[5, 6\]\] \`\`\`   \* A \*\*1-level flatten\*\* turns it into:   \`\`\`js \[1...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly explains that `flat(Infinity)` flattens an array to any depth, resulting in a single-level array, which matches the expected output and evaluation criteria. The additional details and example provided do not deviate from the core requirement.
+------------------------------------------------------------
+🔄 Running Test 66 (Subset 66/81): What is the purpose of the `console.table()` method?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'console.table() method'
+🤖 [DEBUG] Queries actually being searched: ['console.table() documentation', 'javascript console.table()', 'console.table() method', 'how to use console.table()']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.454716682434082 | Preview: accountCIty \= 'delhi'    //reassigning   **//what is console.table in js?**   **`console.table()`**...
+  2. Rerank Score: 5.552337646484375 | Preview: ## **When should you use `console.table()`?** ### **Differences between spread operator(...) & conca...
+  3. Rerank Score: 4.64663028717041 | Preview: 👉 **`console.table()` displays arrays or objects as a table in the console, making data easier to re...
+  4. Rerank Score: 3.834244728088379 | Preview: ## **When should you use `console.table()`?**  * ✅ Debugging arrays of objects (API responses, users...
+  5. Rerank Score: 3.3553316593170166 | Preview: ## **When should you use `console.table()`?** ### **🔽 `Math.floor()` — Floor**  **Floor means → roun...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly describes `console.table()` as a debugging tool for displaying data in a tabular format, matching the core requirements of the expected output.
+------------------------------------------------------------
+🔄 Running Test 67 (Subset 67/81): What is the `eval()` function used for in JavaScript?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'JavaScript eval() function'
+🤖 [DEBUG] Queries actually being searched: ['eval() in JavaScript security', 'JavaScript eval() function', 'JavaScript eval function usage', 'What is JavaScript eval()']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 1.710547685623169 | Preview: Syntax of JavaScript Functions The basic syntax of a function in JavaScript is as follows:   functio...
+  2. Rerank Score: -1.072221040725708 | Preview: } console.log(JsUser.greeting()) console.log(JsUser.greetingtwo())   **notes:**   //creating an **an...
+  3. Rerank Score: -1.5733599662780762 | Preview: console.log("RESULT:", result);  // Output: RESULT: 6   **// if(\!undefined){ } //undefined is consi...
+  4. Rerank Score: -1.7591018676757812 | Preview: } greet(); // Call by name   Or, using an arrow function:   Generated javascript const farewell \= (...
+  5. Rerank Score: -1.9354928731918335 | Preview: const str \= "hello"; //primitive data type console.log(str.toUpperCase()); // Works because JS wrap...
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately describes the `eval()` function's purpose, matching the core definition provided in the Expected Output, despite minor paraphrasing.
+------------------------------------------------------------
+🔄 Running Test 68 (Subset 68/81): What are the three core characteristics of 'Agentic' AI systems?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'three core characteristics of Agentic AI systems'
+🤖 [DEBUG] Queries actually being searched: ['core characteristics of Agentic AI', 'three core characteristics of Agentic AI systems', 'defining characteristics of Agentic AI', 'three key features of Agentic AI systems']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 9.11703109741211 | Preview: ## **Core Characteristics of "Agentic" Systems**  To be considered "agentic," an AI system typically...
+  2. Rerank Score: 6.669617652893066 | Preview: \#Q62 What are the key features of Agentic AI? Answer: The primary features include: Autonomy: The a...
+  3. Rerank Score: 5.036930084228516 | Preview: 2\. Agentic AI (The Adjective/The Philosophy) Agentic AI refers to the behavior or the approach of g...
+  4. Rerank Score: 3.217848539352417 | Preview: This "Shared Whiteboard" architecture unlocks three massive capabilities that standard LangChain str...
+  5. Rerank Score: 2.478921413421631 | Preview: * Always **ask clarifying questions** and discuss trade-offs explicitly.   * Think **out loud** to d...
+🔍 [DEBUG] Top Docs contained Problems {'61', '63', '62'}. Auto-Escalating...
+✅ AI LOGIC PASS
+   Reason: The agent listed all three core characteristics exactly as stated in the document, despite minor formatting differences.
+------------------------------------------------------------
+🔄 Running Test 69 (Subset 69/81): Explain the difference between `asyncio.gather()` and `asyncio.create_task()` for running multiple coroutines concurrently.
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'asyncio.gather() vs asyncio.create_task()'
+🤖 [DEBUG] Queries actually being searched: ['difference between asyncio.gather and asyncio.create_task', 'asyncio.gather() vs asyncio.create_task()', 'when to use asyncio.gather vs asyncio.create_task', 'asyncio gather vs create_task']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.6686506271362305 | Preview: # **Why use `asyncio.gather()` instead of `create_task()`** ### **1️⃣ Simpler code**  You don't need...
+  2. Rerank Score: 7.059985160827637 | Preview: # **Drawbacks of `asyncio.gather()`** ## **What is `asyncio.TaskGroup()`**  `asyncio.TaskGroup` is a...
+  3. Rerank Score: 6.792020320892334 | Preview: # **Drawbacks of `asyncio.gather()`** ### **2️⃣ Less control over tasks**  With `create_task()` you ...
+  4. Rerank Score: 6.635270118713379 | Preview: # **Why use `asyncio.gather()` instead of `create_task()`** ### **2️⃣ Runs coroutines concurrently a...
+  5. Rerank Score: 6.589085578918457 | Preview: # **Drawbacks of `asyncio.gather()`** ### **3️⃣ Harder to manage long-running background tasks**  `g...
+⚠️ Warning: LLM Judge evaluation failed (attempt 1/3): 1 validation error for EvalResult
+  Invalid JSON: expected value at line 1 column 1 [type=json_invalid, input_value='```json\n{"passed":true,...uation criteria."}\n```', input_type=str]
+    For further information visit https://errors.pydantic.dev/2.12/v/json_invalid
+✅ AI LOGIC PASS
+   Reason: The agent's output accurately describes the primary use cases and differences between `asyncio.gather()` and `asyncio.create_task()`, focusing on simplicity vs. control as outlined in the document. The response includes the key points about result collection, automatic starting of coroutines, and the granular control provided by `asyncio.create_task()`.
+------------------------------------------------------------
+🔄 Running Test 70 (Subset 70/81): What is the main advantage of using `asyncio.TaskGroup` over `asyncio.gather()` or `asyncio.create_task()`?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'asyncio.TaskGroup vs gather create_task'
+🤖 [DEBUG] Queries actually being searched: ['Python asyncio TaskGroup gather create_task comparison', 'asyncio.TaskGroup vs gather create_task', 'asyncio TaskGroup vs gather vs create_task', 'When to use asyncio.TaskGroup over asyncio.gather or create_task']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.671384334564209 | Preview: # **Drawbacks of `asyncio.gather()`** ## **What is `asyncio.TaskGroup()`**  `asyncio.TaskGroup` is a...
+  2. Rerank Score: 7.107599258422852 | Preview: # **Why use `asyncio.gather()` instead of `create_task()`** ### **1️⃣ Simpler code**  You don't need...
+  3. Rerank Score: 6.846351623535156 | Preview: # **Drawbacks of `asyncio.gather()`** ### **2️⃣ Less control over tasks**  With `create_task()` you ...
+  4. Rerank Score: 6.557586669921875 | Preview: # **Why use `asyncio.gather()` instead of `create_task()`** ### **2️⃣ Runs coroutines concurrently a...
+  5. Rerank Score: 6.261734485626221 | Preview: # **Quick Comparison** ## **//Title: Using `asyncio.Future` to Set and Retrieve Results Asynchronous...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly highlights structured concurrency and improved error handling as key advantages of `asyncio.TaskGroup`. It mentions that all tasks start concurrently, the program waits for all tasks to finish, and errors are handled safely, which aligns with the expected output.
+------------------------------------------------------------
+🔄 Running Test 71 (Subset 71/81): What is the purpose of `asyncio.Lock` in Python asynchronous programming?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'asyncio.Lock purpose'
+🤖 [DEBUG] Queries actually being searched: ['asyncio.Lock explanation', 'asyncio.Lock purpose', 'what is asyncio.Lock for', 'asyncio.Lock use cases']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.906670570373535 | Preview: # **Quick Comparison** ## **\#Title: Protecting Shared Resources Using `asyncio.Lock`**...
+  2. Rerank Score: 4.501960754394531 | Preview: # **Key Concept**  Even though `asyncio` runs **concurrently**, a **lock forces sequential execution...
+  3. Rerank Score: 4.28413200378418 | Preview: # **Code Structure**  lock \= asyncio.Lock()   Creates a lock object.   Only **one coroutine can hol...
+  4. Rerank Score: 3.68218994140625 | Preview: # **Execution Flow** ### **Important**  `asyncio.Lock` **does not guarantee strict ordering**.   So ...
+  5. Rerank Score: 3.580456018447876 | Preview: **\# An asyncio Lock**   **shared\_resource \= 0  \#global shared\_resource declared** **lock \= asy...
+✅ AI LOGIC PASS
+   Reason: The agent's output correctly identifies the purpose of `asyncio.Lock` as ensuring mutual exclusion to protect shared resources from concurrent access, which aligns with the evaluation criteria. The phrasing differs slightly, but the core technical reasoning is accurate.
+------------------------------------------------------------
+🔄 Running Test 72 (Subset 72/81): What is the primary difference between a 'Lightweight Schema' and a 'Heavyweight Schema' in LangGraph, according to the document?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Lightweight Schema vs Heavyweight Schema LangGraph'
+🤖 [DEBUG] Queries actually being searched: ['Schema design in LangGraph: lightweight vs heavyweight', 'LangGraph lightweight schema vs heavyweight schema', 'Lightweight Schema vs Heavyweight Schema LangGraph', 'Comparing lightweight and heavyweight schemas in LangGraph']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 5.188507556915283 | Preview: **1\. Define the Schema (State)**   The **Schema** is the blueprint for the graph's "Shared Memory."...
+  2. Rerank Score: 4.553058624267578 | Preview: #### **1\. Lightweight Schema (The Sticky Note)**   A lightweight schema usually only tracks the bar...
+  3. Rerank Score: 4.256444931030273 | Preview: # **Key Concept** ## **Lightweight vs. Heavyweight Schema**...
+  4. Rerank Score: 2.177856206893921 | Preview: * **Manual Management:** You are manually extracting and updating the state (e.g., state\['message'\...
+  5. Rerank Score: 0.448039174079895 | Preview: This is a type hint for a Python list (e.g., \[1, 2, 3\]).   * In older versions of Python, you had ...
+✅ AI LOGIC PASS
+   Reason: The agent's output clearly differentiates between the two schema types based on their data tracking, update mechanisms, and use cases. It accurately describes the Lightweight Schema as using a single key for messages and being suitable for simple chatbots, while the Heavyweight Schema uses multiple keys to separate different types of data and utilizes reducer functions for better organization and maintainability. The core technical content matches the expected output, and the additional context provided does not detract from the accuracy of the response.
+------------------------------------------------------------
+🔄 Running Test 73 (Subset 73/81): Which AI API provider specializes in multimodal capabilities (text, images, audio, video)?
+✅ AI LOGIC PASS
+   Reason: The agent correctly identified Google as the provider specializing in multimodal AI APIs, matching the expected output exactly.
+------------------------------------------------------------
+🔄 Running Test 74 (Subset 74/81): Does the document provide information on how to implement a custom `asyncio.Future` class?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'custom asyncio.Future class'
+🤖 [DEBUG] Queries actually being searched: ['implement custom asyncio.Future', 'subclass asyncio.Future', 'custom asyncio.Future class', 'create custom Future object asyncio']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 3.726595640182495 | Preview: # **Quick Comparison** ## **//Title: Using `asyncio.Future` to Set and Retrieve Results Asynchronous...
+  2. Rerank Score: 3.2870280742645264 | Preview: # **Quick Comparison** ## **//Title: Using `asyncio.Future` to Set and Retrieve Results Asynchronous...
+  3. Rerank Score: 2.715583562850952 | Preview: # **Quick Comparison** ## **//Title: Using `asyncio.Future` to Set and Retrieve Results Asynchronous...
+  4. Rerank Score: 2.5360233783721924 | Preview: # **Quick Comparison** ## **//Title: Using `asyncio.Future` to Set and Retrieve Results Asynchronous...
+  5. Rerank Score: -2.1868109703063965 | Preview: ## **1\. The Imports**  These lines bring in the tools necessary for the script to run.   * **import...
+🔧 [__DEV__] Skipping auto-escalation for general document: **Quick Comparison** **//Title: Using `asyncio.Fut...
+✅ AI LOGIC PASS
+   Reason: The agent accurately stated that the document does not provide implementation details for a custom `asyncio.Future` class and explained its typical usage context, which aligns with the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 75 (Subset 75/81): What is the exact file path for the 'EditAbout.tsx' component?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'EditAbout.tsx file path'
+🤖 [DEBUG] Queries actually being searched: ['EditAbout.tsx file location', 'EditAbout.tsx file path', 'find EditAbout.tsx', 'where is EditAbout.tsx']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 1.507869005203247 | Preview: user tapped the text input to begin typing.**   \### 2. Locating the Source File   Because the codeb...
+  2. Rerank Score: 0.9680358171463013 | Preview: {width="2.15625in" height="4.302638888888889in"}{width="1.9322922134733158in" height="4.286578083989...
+  3. Rerank Score: 0.07222766429185867 | Preview: We went through four component files to strip out the old definitions and wire up the new imports.  ...
+  4. Rerank Score: 0.03632921725511551 | Preview: # **1️⃣ Core principles for good debugging prompts** ### **3\. Relevant files**  Never dump the enti...
+  5. Rerank Score: -0.13088862597942352 | Preview: ![](data/media_dump/media/image5.png){width="2.15625in" height="4.302638888888889in"}![](data/media_...
+🔍 [DEBUG] Top Docs contained Problems {'2'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [2] found in Chroma DB Retrieval ['2']
+   Reason: The agent accurately stated the full file path for 'EditAbout.tsx' as specified in the Expected Output.
+------------------------------------------------------------
+🔄 Running Test 76 (Subset 76/81): What was the root cause of the button text disappearing in the 'About' section of the profile editing screen?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'button text disappearing 'About' section profile editing screen'
+🤖 [DEBUG] Queries actually being searched: ["button text missing 'About' section profile edit", "'About' section button text not showing profile editor", "button text disappearing 'About' section profile editing screen", "profile editing screen 'About' section button text gone"]
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.278285503387451 | Preview: {width="2.15625in" height="4.302638888888889in"}{width="1.9322922134733158in" height="4.286578083989...
+  2. Rerank Score: 4.242291450500488 | Preview: ![](data/media_dump/media/image5.png){width="2.15625in" height="4.302638888888889in"}![](data/media_...
+  3. Rerank Score: -0.089540034532547 | Preview: height, leaving \*\*\`0 pixels\`\*\* of vertical space for the \`\<Text\>\` element to render.**   \...
+  4. Rerank Score: -0.12330541759729385 | Preview: #### **1. The Problem**   When a user navigated to their own profile from the QuestionDetail screen ...
+  5. Rerank Score: -2.5599002838134766 | Preview: # Problem 32 ## **1. File: companyProfileStyles.ts**  **Goal:** Fix the layout issue where the profi...
+🔍 [DEBUG] Top Docs contained Problems {'2', '80', '32'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [2] found in Chroma DB Retrieval ['2', '80', '32']
+   Reason: The agent correctly identified the layout collision between button height and vertical padding as the root cause, including the specific pixel values (32px total height, 16px top padding, 16px bottom padding) and the trigger (keyboard opening). The additional context provided does not detract from the core expected output.
+------------------------------------------------------------
+🔄 Running Test 77 (Subset 77/81): How do you ensure the OTP input boxes are responsive and fit on smaller screens without being cut off?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'OTP input boxes responsive smaller screens'
+🤖 [DEBUG] Queries actually being searched: ['OTP input boxes responsive smaller screens', 'responsive OTP input fields small screens', 'OTP verification code input mobile responsive', 'designing responsive OTP boxes for smaller devices']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 1.8310014009475708 | Preview: **///OTP VALUE HIDDEN UI ISSUE** in **src/screens/founder/auth/authStyles.ts**   The dark-mode scree...
+  2. Rerank Score: -4.003235816955566 | Preview: # **🔹 Flexbox Golden Rule** ## **🎯 Final Rule (Very Important)** ### **2\. How the Grid Works**  The...
+  3. Rerank Score: -4.611116409301758 | Preview: borderWidth: 1,   borderColor: theme.colors.border,   },   **The Problem Explained**   On a small de...
+  4. Rerank Score: -5.39346981048584 | Preview: \---   \#\#\# 2\. The Solution: Delaying the Transition The fix involved moving the "flip" from vert...
+  5. Rerank Score: -5.446341037750244 | Preview: ### **✅ Core CSS prerequisites for Tailwind CSS**  1. **Box model** * margin * padding * border 2. *...
+🔧 [__DEV__] Skipping auto-escalation for general document: **🔹 Flexbox Golden Rule** **🎯 Final Rule (Very Imp...
+🔍 [DEBUG] Top Docs contained Problems {'13'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [13] found in Chroma DB Retrieval ['13']
+   Reason: The agent's output includes all the necessary details specified in the Evaluation Criteria. It correctly mentions the removal of fixed `gap` and `paddingHorizontal` from the `verificationInputContainer`, the use of `justifyContent: 'space-between'`, setting `width: '100%'` for the container, and using percentage-based `width` (e.g., `14%`) and `aspectRatio: 1` for individual `otpInput` styles. The core technical content matches the Expected Output, even though it includes additional context and explanations.
+------------------------------------------------------------
+🔄 Running Test 78 (Subset 78/81): What was the issue with the 'Add Education' form regarding file uploads, and how was it resolved?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Problem 5'
+🤖 [DEBUG] Queries actually being searched: ['# Problem 5']
+🚀 [DEBUG] Engaging Raw Interceptor for IDs: {'5'}
+✅ [DEBUG] Short-circuiting vector search. Fed 2 raw blocks.
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [5] found in Chroma DB Retrieval ['5']
+   Reason: The agent accurately described the problem of unrestricted file types and provided a detailed two-part solution involving schema validation and UI configuration to restrict uploads to PDFs, meeting all evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 79 (Subset 79/81): What is the purpose of the `refresh()` function in `PostCard.tsx` and why was it removed?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'purpose of refresh() function in PostCard.tsx and why was it removed'
+🤖 [DEBUG] Queries actually being searched: ['purpose of refresh() function in PostCard.tsx and why was it removed', 'PostCard.tsx refresh function explanation', 'Why was refresh() removed from PostCard.tsx?', 'PostCard.tsx refresh() function purpose']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 4.985770225524902 | Preview: This issue spanned across two files, but the root cause lived in **PostCard.tsx**.   1.  **The Trigg...
+  2. Rerank Score: 2.8722245693206787 | Preview: pathOr(\[\], \[\'data\', \'items\'\], page);   });   return Array.from(new Map(allItems.map((item: P...
+  3. Rerank Score: 2.6057827472686768 | Preview: The root cause of this jumping behavior is a combination of **how your frontend handles the vote suc...
+  4. Rerank Score: 1.9699604511260986 | Preview: call even fires.   JavaScript   // Inside postActionClick   setLocalIsLiked(newIsLiked);   setLocalI...
+  5. Rerank Score: 0.7998283505439758 | Preview: const pagination = lastPage?.data?.data?.pagination \|\| lastPage?.data?.pagination;   if (paginatio...
+🔍 [DEBUG] Top Docs contained Problems {'17', '10'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [10] found in Chroma DB Retrieval ['17', '10']
+   Reason: The agent's output fully explains that the `refresh()` function caused a full feed reload and the 'jump' behavior, and explicitly states that it was removed in favor of optimistic UI updates. The additional details provided, such as the backend sorting and FlatList re-render, enhance the explanation without contradicting the core criteria. The inclusion of code snippets and further context does not detract from the required explanation, thus meeting the evaluation criteria.
+------------------------------------------------------------
+🔄 Running Test 80 (Subset 80/81): How do you open the React Native developer menu on an Android device if shaking the device doesn't work?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'React Native developer menu Android device shaking not working'
+🤖 [DEBUG] Queries actually being searched: ['Android device shake to open dev menu React Native not functioning', 'React Native developer menu Android device shaking not working', 'React Native developer menu shake gesture not working Android', 'Troubleshoot React Native developer menu not appearing on Android shake']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 6.706968784332275 | Preview: # Problem 12 ### **Files Modified**  - **CommunityDetail.tsx**: Updated the renderTabContent functio...
+  2. Rerank Score: 4.713699817657471 | Preview: \`\`\`bash   REACT\_NATIVE\_PACKAGER\_HOSTNAME=127.0.0.1 npx expo start \--dev-client   \`\`\`   \#\...
+  3. Rerank Score: 1.4652178287506104 | Preview: # Problem 62 ## **The Root Cause**  The core issue was a conflict between Android\'s native window m...
+  4. Rerank Score: 1.3991447687149048 | Preview: \- Changed \`fontWeight: 500\` ➝ \`'500'\` inside the styles object. \- Reason: React Native expects...
+  5. Rerank Score: 0.4234091639518738 | Preview: ## **Technical Post-Mortem: Chat History Rendering Glitch** ### **Here is why you should keep the cu...
+🔧 [__DEV__] Skipping auto-escalation for general document: **POST request example** **Important Rule**...
+🔍 [DEBUG] Top Docs contained Problems {'12', '62'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [12] found in Chroma DB Retrieval ['12', '62']
+   Reason: The agent provided the exact ADB command 'adb shell input keyevent 82' as required by the evaluation criteria, even though it included additional explanatory text.
+------------------------------------------------------------
+🔄 Running Test 81 (Subset 81/81): Can you tell me about the 'Community Type' metric mentioned in the document?
+
+📥 [TOOL CALL] search_knowledge_base triggered with query: 'Community Type metric'
+🤖 [DEBUG] Queries actually being searched: ['Community Type indicators', 'Community Type metrics', 'Community Type metric', 'Community Type measurement']
+🔧 [__DEV__] Increased K-value to 20. Sorting for broad short-tail queries completed.
+
+📊 [DEBUG] Top 5 Reranked Vector Matches for General Search:
+  1. Rerank Score: 7.025521278381348 | Preview: # Problem 12 ### **Problem Statement**  The goal was to update the \"About\" tab in the Community De...
+  2. Rerank Score: -1.3360373973846436 | Preview: # Problem 12 ### **Solution**  1.  **Data Passing:** Updated the renderTabContent switch case in the...
+  3. Rerank Score: -3.7441649436950684 | Preview: **Removed:**   *(The hook was called before the community state was calculated)*   TypeScript   } = ...
+  4. Rerank Score: -5.750628471374512 | Preview: {isFetching && \<ActivityIndicator color={theme.colors.primary} size=\"small\" /\>}   {!isFetching &...
+  5. Rerank Score: -6.593619346618652 | Preview: - **Problem:** You wanted to replace the user\'s profile picture with the community\'s icon if the e...
+🔍 [DEBUG] Top Docs contained Problems {'75', '91', '67', '12'}. Auto-Escalating...
+✅ AI LOGIC PASS
+✅ SEARCH HIT: Target [12] found in Chroma DB Retrieval ['75', '91', '12', '67']
+   Reason: The agent's output correctly identifies where the 'Community Type' is displayed (in the 'About' tab of the Community Details screen), its layout (side-by-side in a two-column layout), and that it's derived from the `privacy` field in the API. The additional context provided does not detract from the core information required by the evaluation criteria.
+------------------------------------------------------------
+
+===========================================
+📊 PHASE 7.0 EVALUATION REPORT MATRIX
+===========================================
+🔎 Final Search Recall@k: 32/32 (100.0%)
+🧠 Final Agent Logic Score: 81/81 (100.0%)
+===========================================
+🏆 STATUS: PRODUCTION READY. (Safe to Deploy)

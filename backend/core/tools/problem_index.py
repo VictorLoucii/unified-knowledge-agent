@@ -14,7 +14,7 @@ def get_problem_index(start: int = 1, end: int = 25) -> str:
 
     DO NOT USE THIS TOOL FOR ORDINAL REQUESTS. If the user asks for the 'first problem',
     'last problem', 'oldest', or 'latest', you MUST REJECT this tool and use
-    search_internship_history instead.
+    search_knowledge_base instead.
     """
     print(f"\n📥 [TOOL CALL] get_problem_index triggered for range {start} to {end}")
 

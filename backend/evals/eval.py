@@ -71,6 +71,8 @@ judge_prompt = ChatPromptTemplate.from_messages([
     2. FLEXIBLE ON EXTRACTION CONTEXT: The agent is instructed to copy-paste entire blocks. If the Actual Output contains the core Expected Output, but also includes surrounding headers, file names, or related sentences from the exact same document section, DO NOT fail it. 
     3. TOLERATE MARKDOWN STYLING: The agent is instructed to format code. If it adds markdown backticks around file paths, variables, or adds bolding that isn't in the Expected Output, DO NOT fail it for formatting differences, as long as the technical text content is accurate.
     4. FLEXIBLE ON PARAPHRASING FOR CONCEPTUAL ANSWERS: If the query asks for reasoning (e.g., 'why do we...'), do not fail the agent for paraphrasing the expected output or missing specific phrasing, provided the core technical reasoning is present and accurate.
+    
+    IMPORTANT: YOUR OUTPUT MUST BE RAW JSON ONLY. DO NOT WRAP YOUR RESPONSE IN ```json MARKDOWN BACKTICKS. DO NOT OUTPUT ANY OTHER TEXT.
     """),
     ("user", """
     ### Query Sent to Agent:
@@ -93,12 +95,22 @@ evaluator_chain = judge_prompt | structured_judge
 
 # --- 4. Main Evaluation Loop ---
 def run_evals():
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--indices', type=str, help='Comma-separated list of test indices (1-based) to run')
+    args = parser.parse_args()
+
     dataset_path = os.path.join(os.path.dirname(__file__), "qa_dataset.json")
     
     print("🚀 Starting LangGraph Golden Dataset Evaluation...\n")
     
     with open(dataset_path, "r", encoding="utf-8") as f:
         dataset = json.load(f)
+
+    if args.indices:
+        indices = [int(i.strip()) for i in args.indices.split(',')]
+        dataset = [dataset[i-1] for i in indices]
+        print(f"🎯 Running specific subset of tests: {indices}")
         
     passed_llm_count = 0
     total_llm = len(dataset)
@@ -106,8 +118,10 @@ def run_evals():
     recall_hits = 0
     total_recall_targets = 0
     
-    for i, test in enumerate(dataset, 1):
-        print(f"🔄 Running Test {i}/{total_llm}: {test['query']}")
+    for i, test in enumerate(dataset):
+        # Determine actual test index (1-based) for display
+        actual_test_idx = indices[i] if args.indices else i + 1
+        print(f"🔄 Running Test {actual_test_idx} (Subset {i+1}/{total_llm}): {test['query']}")
         
         # 1. Get Agent Output & Metadata
         agent_output, retrieved_ids = get_agent_response_and_metadata(test["query"])

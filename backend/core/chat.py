@@ -72,7 +72,7 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             # Persist state directly in PostgreSQL history
             tool_msg = ToolMessage(
                 content=f"<!-- RETRIEVED_PROBLEM_IDS: [{problem_id}] -->",
-                name="search_internship_history",
+                name="search_knowledge_base",
                 tool_call_id="bypass_tool_call_id"
             )
             ai_msg = AIMessage(content=block)

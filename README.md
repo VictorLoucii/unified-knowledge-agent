@@ -39,12 +39,17 @@ The agent utilizes `on_agent_interrupt` to pause before executing heavy tools, r
 
 This system is built for deterministic reliability, performance optimization, and rigorous security:
 
-### 1. High-Performance Retrieval Engine (100% Recall)
+### 1. Automated Data Ingestion Pipeline
+* **Drop-in Multi-File Support:** Simply drop `.md` or `.docx` files directly into the `data/` directory. The ingestion pipeline (`backend/core/ingest.py`) will automatically discover and process them upon startup.
+* **Auto-Conversion & Destructive `.docx` Handling:** Any `.docx` files are automatically converted into `.md` format via Pandoc, scrubbed of formatting artifacts, and then **permanently deleted**. Do not expect to find original `.docx` files after a successful ingestion.
+* **Manifest Tracking:** Successfully ingested documents are tracked in `.manifest.json` to prevent duplicate processing.
+
+### 2. High-Performance Retrieval Engine (100% Recall)
 * **Metadata Header Preservation:** Pre-splits markdown documents and prepends header contexts (e.g. `# Problem ID`) back to the chunk `page_content` prior to ingestion. This resolves ChromaDB's native metadata-stripping blind spot.
 * **Corpus Growth Stress-Testing:** Includes a validation suite (`eval_corpus_growth.py`) that slices the document base to evaluate recall stability against growing datasets, verifying retrieval resilience.
 * **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
 
-### 2. Unified LLM Architecture & Cost Control
+### 3. Unified LLM Architecture & Cost Control
 * **Unified Model Driver (Gemini 2.5 Flash):** Uses `google/gemini-2.5-flash` as the primary, fallback, and triage classifier model. This provides strict tool-calling hygiene (preventing pre-execution text leakage that breaks the HITL UI), ultra-low latency, and maximum token efficiency.
 * **High-Speed Input Classifier:** Triage routing runs on a non-streaming, fast setup of Gemini 2.5 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency.
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
@@ -53,13 +58,13 @@ This system is built for deterministic reliability, performance optimization, an
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
 * **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
 
-### 3. Production Security & Guardrails
+### 4. Production Security & Guardrails
 * **Fast Input Firewall:** An instant API gateway guardrail enforcing a **1,000-character input ceiling** and blocking jailbreaks, system prompt exposure attempts, and credential leaks.
 * **Data Loss Prevention (DLP) Masking:** A sliding 120-character regex buffer window that automatically redacts API keys and database secrets before they stream to the client interface.
 * **Dynamic Response Capping:** Prevents response truncations by scaling content length restrictions dynamically: $\text{Max Allowed Chars} = \max(2000, \text{Last Tool Output Length} + 1500)$.
 
-### 4. Robust Automated Testing
-* **LLM-as-a-Judge Evaluation Suite:** Automatically grades generated answers against a 30+ case Golden Dataset (`qa_dataset.json`) assessing correctness and alignment.
+### 5. Robust Automated Testing
+* **LLM-as-a-Judge Evaluation Suite:** Automatically grades generated answers against an 80+ case Golden Dataset (`qa_dataset.json`) assessing correctness and alignment.
 * **Resilient Parsing Retries:** Features automatic retry loops with backoff delays to safeguard against transient OpenRouter/LLM JSON parsing errors.
 
 ---
@@ -100,7 +105,8 @@ This system is built for deterministic reliability, performance optimization, an
 │   ├── evals/             
 │   │   ├── eval.py        # Automated LLM-as-a-Judge evaluation (with retry support)
 │   │   ├── eval_corpus_growth.py # Recall vs. Corpus Growth evaluation tool
-│   │   └── qa_dataset.json # Golden Dataset (30+ cases)
+│   │   ├── generate_eval_dataset.py # Auto-generates test cases from markdown files via OpenRouter
+│   │   └── qa_dataset.json # Golden Dataset (80+ cases)
 │   ├── memory.py          # Persistence logic
 │   ├── scratch/           # Experimental & testing scripts
 │   │   └── test_semantic_cache.py # Semantic cache integration test

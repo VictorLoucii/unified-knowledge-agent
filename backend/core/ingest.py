@@ -1,4 +1,18 @@
-# backend/core/ingest.py
+"""
+backend/core/ingest.py
+
+This module manages the ingestion of markdown documents into the Chroma vector database and local Document Store.
+It implements the `MultiVectorRetriever` architecture:
+1. **Parent Documents**: Large text chunks are stored in a local key-value store (`store`).
+2. **Child Chunks**: Smaller, denser summaries or text segments are embedded and stored in Chroma DB.
+3. **The Interaction**: When a user queries, the dense child chunks are retrieved via vector search. 
+   Chroma returns the associated `doc_id`. The retriever then looks up that `doc_id` in the local `store`
+   to fetch and return the massive Parent Document. This provides the LLM with full context while maintaining high search accuracy.
+
+**Data Ingestion & Format Handling:**
+- The ingestor dynamically scans the `data/` directory for `.md` and `.docx` files.
+- **CRITICAL DESTRUCTIVE BEHAVIOR**: Any `.docx` file dropped into the `data/` directory will be automatically converted to Markdown via Pandoc. Once conversion is successful, the original `.docx` file is **permanently deleted**. Do not expect to find original `.docx` files in production.
+"""
 import os
 import json
 import re

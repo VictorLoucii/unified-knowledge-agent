@@ -14,7 +14,7 @@
   {
     "query": "When the parent screen controls horizontal spacing, why do we add marginLeft only to the first card in a FlatList?",
     "expected_output": "Your card style already has spacing between cards... If we added marginLeft to all cards, you'd get double spacing. So we check: index === 0 Meaning: only the first card gets marginLeft",
-    "evaluation_criteria": "The agent MUST locate the 'best practice' UI rules and extract the specific reasoning.",
+    "evaluation_criteria": "The agent MUST locate the 'best practice' UI rules and extract the specific reasoning. Providing additional relevant context about layout alignment or consistency is acceptable and should NOT fail the test.",
     "target_problem_id": null
   },
   {
@@ -146,7 +146,7 @@
   {
     "query": "Why does the app crash with a 'duplicate key' error?",
     "expected_output": "**# Problem 3**3\n\nHere is a complete summary of the debugging session for your future\nreference. You successfully tracked down and patched a widespread React\nNative list-rendering bug.\n\n## **\ud83d\udea8 The Problem: Duplicate Keys**\n\nYou were encountering the React \\\"Red Screen of Death\\\" with variations\nof this error message:\n\n> Encountered two children with the same key, %s. Keys should be unique\n> so that components maintain their identity across updates. Non-unique\n> keys may cause children to be duplicated and/or omitted --- the\n> behavior is unsupported and could change in a future version. .\\$1551\n>\n> *(Later changed to .\\$1552 as we fixed the first instance).*\n\n### **What the Error Means**\n\nIn React, whenever you render a list of elements (using .map() or a\nFlatList), every item must have a 100% unique key prop.\n\n- The .\\$ prefix in the error indicates that React was receiving a **raw\n  value** (like an integer 1551 or 1552) directly from your database ID,\n  without any string prefix.\n\n- Because your API/state was sometimes returning duplicate items (e.g.,\n  the \\\"Rapper\\\" post showing up twice in your Feed), React found two\n  items with the exact same raw ID and crashed.\n\n## **\ud83d\udee0\ufe0f The Files & Code Fixes**\n\nWe tracked down the raw item.id usage across several files and\nimplemented the **\\\"Composite Key Pattern\\\"** (Prefix + ID + Index) to\nguarantee uniqueness.\n\n### **1. CommentCard.tsx (The .\\$1551 Fix)**\n\n**The Issue:** Nested replies were mapping over comment.replies using\nonly the raw reply.id. If a reply had a colliding ID, it crashed.\n\n**The Fix:** Added index to the .map() function and created a highly\nspecific string key.\n\nTypeScript\n\n// \u274c BEFORE\n\n{comment.replies.map((reply: any) =\\> (\n\n\\<CommentCard key={reply.id} \\... /\\>\n\n))}\n\n// \u2705 AFTER\n\n{comment.replies.map((reply: any, index: number) =\\> (\n\n\\<CommentCard\n\nkey={\\`comment-\\${comment.id}-reply-\\${reply.id \\|\\| index}-\\${index}\\`}\n\n\\...\n\n/\\>\n\n))}\n\n### **2. NotificationBanners.tsx**\n\n**The Issue:** A hardcoded array of notifications was being mapped using\nraw integer IDs (1, 2, 3).\n\n**The Fix:** Appended a prefix and the index.\n\nTypeScript\n\n// \u274c BEFORE\n\n{notifications.map(item =\\> (\n\n\\<NotificationBannerItem key={item.id} \\... /\\>\n\n))}\n\n// \u2705 AFTER\n\n{notifications.map((item, index) =\\> (\n\n\\<NotificationBannerItem\n\nkey={\\`notification-banner-\\${item.id}-\\${index}\\`}\n\n\\...\n\n/\\>\n\n))}\n\n### **3. QForU.tsx (The .\\$1552 Fix)**\n\n**The Issue:** When rendering different sections (\\\"Posts Shared\\\" and\n\\\"Liked Posts\\\"), the parent component was passing the raw item.id to\nthe child \\<PostCard\\>. If a user liked and shared the same post, the ID\nappeared twice on the same screen.\n\n**The Fix:** Added section-specific prefixes to the keys.\n\nTypeScript\n\n// \u274c BEFORE (In both \\\"Posts Shared\\\" and \\\"Liked Posts\\\" sections)\n\nrenderSection(\\'Posts Shared\\', postsShared, item =\\> (\n\n\\<PostCard key={item.id} \\... /\\>\n\n))\n\n// \u2705 AFTER\n\nrenderSection(\\'Posts Shared\\', postsShared, item =\\> (\n\n\\<PostCard key={\\`posts-shared-\\${item.id}\\`} \\... /\\>\n\n))\n\n// And for Liked Posts:\n\n\\<PostCard key={\\`liked-posts-\\${item.id}\\`} \\... /\\>\n\n### **4. Feed.tsx (The Root UI Crash)**\n\n**The Issue:** Your FlatList was using a keyExtractor that only returned\nthe raw ID. Because your API fetched the exact same \\\"Snoop doggy\\\" post\ntwice, the FlatList crashed.\n\n**The Fix:** Updated the keyExtractor to utilize both the item.id and\nthe index.\n\nTypeScript\n\n// \u274c BEFORE\n\nconst keyExtractor = React.useCallback((item: Post) =\\> item.id, \\[\\]);\n\n// \u2705 AFTER\n\nconst keyExtractor = React.useCallback(\n\n(item: Post, index: number) =\\> \\`user-feed-\\${item.id}-\\${index}\\`,\n\n\\[\\]\n\n);\n\n## **\ud83d\udee1\ufe0f How to Avoid This in the Future**\n\nTo prevent this from happening as your app scales, follow these three\nrules:\n\n1.  **Never use key={item.id} by itself:** Database IDs are great, but\n    they aren\\'t safe from frontend state collisions or backend\n    pagination glitches. Always combine them into a string.\n\n2.  **Use the \\\"Belt and Suspenders\\\" Pattern:** The safest formula for\n    a React key inside a list is:\\\n    key={\\`ComponentOrScreenName-\\${item.id}-\\${index}\\`}\\\n    This ensures that even if the backend completely fails and sends you\n    10 identical items, the frontend UI will still render smoothly\n    because the index will always be unique.\n\n3.  **Audit your keyExtractors:** Whenever you create a new FlatList or\n    ScrollView, immediately write the keyExtractor with a string prefix\n    and index, rather than relying on React Native\\'s default behavior.\n\n### **\u26a0\ufe0f The Underlying Backend Issue**\n\nKeep in mind: **The frontend fixes above are band-aids.** They stop the\napp from crashing, but they do not fix the fact that your useUserFeed\nAPI call is returning duplicate data (like the duplicate \\\"Rapper\\\"\nposts). You will eventually need to debug your backend pagination logic\nor your frontend state-merging logic (e.g., making sure that when you\n\\\"pull to refresh,\\\" you don\\'t accidentally append the same posts to\nthe existing feed array).\n\nWould you like to look at the useUserFeed hook next to figure out why\nthe API is serving duplicates, or is there another feature you want to\nwork on?\n\nHere is the master list of every file that was updated and fixed during\nthis entire debugging process to resolve the duplicate key errors. Keep\nthis handy as a reference for your \\\"Composite Key Pattern\\\" (prefix +\nid + index).\n\n### **\ud83d\udee0\ufe0f Phase 1: Your Initial Audit & Fixes**\n\nThese are the files you successfully refactored before we tackled the\nfinal stubborn errors:\n\n- **CreatePost.tsx**: Hardcoded unique keys for attachments.\n\n- **HashtagSelector.tsx**: Added index fallbacks to the tag pills.\n\n- **HashtagSelectModal.tsx**: Added index fallbacks to the suggested\n  tags list.\n\n- **CommunitySelectModal.tsx**: Added index fallbacks to the community\n  list.\n\n- **TrendingFeed.tsx**: Switched list rendering to use\n  key={\\`trending-\\${item.id}-\\${index}\\`}.\n\n- **JobPostings.tsx**: Cleaned up the keyExtractor and removed\n  Math.random().\n\n- **ActivityViewAll.tsx**: Updated the keyExtractor and removed manual\n  key={key} props.\n\n### **\ud83d\udd75\ufe0f\u200d\u2642\ufe0f Phase 2: The Deep Dive (Collaborative Fixes)**\n\nThese are the hidden or nested files we tracked down together to\neliminate the .\\$1551 and .\\$1552 crashes:\n\n- **CommentCard.tsx**:\n\n  - *The Fix:* Fixed the recursive nested replies by adding the index\n    argument to the .map() function.\n\n  - *The Pattern:* key={\\`comment-\\${comment.id}-reply-\\${reply.id \\|\\|\n    index}-\\${index}\\`}\n\n- **PostCard.tsx**:\n\n  - *The Fix:* Added defensive keying to the media/image container to\n    prevent future collisions if image IDs overlap with post IDs.\n\n  - *The Pattern:* key={\\`post-image-\\${post.id}-\\${pathOr(\\'0\\',\n    \\[\\'media\\', \\'0\\', \\'id\\'\\], post)}\\`}\n\n- **NotificationBanners.tsx**:\n\n  - *The Fix:* Updated the hardcoded notifications list mapping to\n    prevent raw integer collisions (1, 2, 3).\n\n  - *The Pattern:* key={\\`notification-banner-\\${item.id}-\\${index}\\`}\n\n- **QForU.tsx**:\n\n  - *The Fix:* Updated the parent-level wrapper keys (qforu-section-),\n    but more importantly, fixed the raw item.id being passed directly to\n    the \\<PostCard /\\> components inside the \\\"Posts Shared\\\" and\n    \\\"Liked Posts\\\" sections.\n\n  - *The Pattern:* key={\\`posts-shared-\\${item.id}\\`} and\n    key={\\`liked-posts-\\${item.id}\\`}\n\n- **Feed.tsx**:\n\n  - *The Fix:* The root cause of the UI crash. The API was serving\n    duplicate posts, and the FlatList couldn\\'t handle it. We updated\n    the keyExtractor.\n\n  - *The Pattern:* keyExtractor={(item, index) =\\>\n    \\`user-feed-\\${item.id}-\\${index}\\`}\n\n**Pro-Tip for your next session:** Whenever you copy/paste code to\ncreate your other feed tabs (like Explore or Activities), make sure to\ncheck their keyExtractor functions so you don\\'t accidentally copy the\nold bug over!\n\nWould you like me to help you look into the useUserFeed API hook next to\nsee why it\\'s returning duplicate data in the first place?",
-    "evaluation_criteria": "The agent MUST recognize the query is vague or ambiguous. It MUST retrieve the correct underlying problem log but should ideally present it contextually.",
+    "evaluation_criteria": "The agent must provide a detailed explanation of the 'duplicate key' error and its root cause (React receiving raw duplicate values from the API). It is acceptable to provide the answer directly without an ambiguity acknowledgment.",
     "target_problem_id": 33
   },
   {
@@ -190,5 +190,299 @@
     "expected_output": "The agent should explain its capabilities: it contains logs about React Native, TypeScript, UI/UX, and performance optimization. It must then provide a practical example from the logs.",
     "evaluation_criteria": "The agent MUST recognize these as questions about its capabilities. It MUST explain its purpose and MUST automatically provide an example from the logs instead of repeating the fallback. It MUST NOT trigger the rigid zero-knowledge fallback.",
     "target_problem_id": 1
+  },
+  {
+    "query": "What is the primary purpose of a Semantic Firewall in a RAG pipeline, and how does it prevent 'Vector Noise'?",
+    "expected_output": "A Semantic Firewall is an intelligent filter that looks at the meaning (intent) of data, rather than just keywords, to decide what is allowed to reach your AI. It acts as a Pre-Processor, inspecting search results before sending them to the LLM. It prevents 'Vector Noise' by scoring the 'meaning' of results and discarding irrelevant ones, even if they share keywords, ensuring only high-quality, safe, and relevant information is passed to the LLM.",
+    "evaluation_criteria": "The response must accurately define a Semantic Firewall, explain its role as a pre-processor in a RAG pipeline, and clearly describe how it prevents 'Vector Noise' by filtering based on semantic relevance rather than just keywords.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Explain the difference between State Management and Checkpointing in the context of an AI agent's memory system.",
+    "expected_output": "State Management is the live, active data model an agent uses to think, organizing, updating, and accessing its data while actively running. It holds the current chat history, variables, and tool outputs in active memory (RAM). Checkpointing, on the other hand, is the mechanism that takes that live state and writes a permanent copy of it to a hard drive or database at specific moments. It creates frozen 'snapshots' of the state, allowing the agent to resume after a crash, handle human-in-the-loop approvals, or review past history.",
+    "evaluation_criteria": "The response must clearly differentiate between State Management as the active working memory and Checkpointing as the persistent saving mechanism. It should explain what each component does and why both are necessary for robust agent memory.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the default recursion limit in LangGraph, and what happens if an agent exceeds this limit?",
+    "expected_output": "LangGraph has a hardcoded default recursion limit, typically 25 steps. If an agent exceeds this limit, LangGraph will automatically kill the process and throw a GraphRecursionError to protect against infinite loops and budget overruns.",
+    "evaluation_criteria": "The response must state the typical default recursion limit (25 steps) and accurately describe the consequence of exceeding it, including the type of error thrown and the purpose of this mechanism.",
+    "target_problem_id": null
+  },
+  {
+    "query": "How does an AI Systems Engineer manage the 'Iron Triangle' of AI (Latency, Cost, and Quality)?",
+    "expected_output": "An AI Systems Engineer manages the 'Iron Triangle' through trade-offs and layered strategies. This includes Semantic Caching (reusing answers for similar queries to save cost/time) and Small Model Distillation (using cheaper models for simple tasks). They also define Latency Budgets and SLAs upfront to justify architectural choices.",
+    "evaluation_criteria": "The response must explain the 'Iron Triangle' strategies mentioned in the document: Semantic Caching, Small Model Distillation, and the use of Latency Budgets/SLAs. It must NOT be penalized for failing to list three distinct technical mechanisms if it correctly identifies the strategies provided in the text.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the 'Anti-Summary Mandate' and why is it crucial for technical work with LLMs?",
+    "expected_output": "The 'Anti-Summary Mandate' is a high-priority prompt instruction that overrides an LLM's natural tendency to summarize. It mandates that specific technical data, such as code blocks, error logs, or UI steps, must be extracted with 100% fidelity, meaning no characters are changed, added, or removed. It is crucial for technical work because LLMs are often too 'chatty' and vague for precise tasks, and this mandate forces them to act as precision engineering tools, providing exact, copy-paste ready information.",
+    "evaluation_criteria": "The response must define the 'Anti-Summary Mandate' as a prompt instruction overriding summarization and requiring 100% fidelity for technical data. It must also explain its importance by addressing the LLM's 'chatty' nature and the need for precision in technical contexts.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Does the document mention any specific tools or frameworks for implementing a 'Semantic Firewall' in a RAG architecture?",
+    "expected_output": "Yes, the document explicitly states that in RAG architecture, what is described as a 'Semantic Firewall' is often implemented using a Cross-Encoder Reranker. It specifically mentions 'cross-encoder/ms-marco-MiniLM-L-6-v2' as an example of such a reranker being used in the UNIFIED KNOWLEDGE AGENT project.",
+    "evaluation_criteria": "The response must correctly identify that the document mentions Cross-Encoder Rerankers as the implementation for a 'Semantic Firewall' and specifically name 'cross-encoder/ms-marco-MiniLM-L-6-v2' as an example.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the purpose of the 'generated_chars_count' guardrail in the Unified Knowledge Agent project?",
+    "expected_output": "The document mentions that the 'generated_chars_count' guardrail truncates responses if the LLM tries to generate massive text walls. This acts as a mechanism to control the length of the AI's output.",
+    "evaluation_criteria": "The response must accurately state that the 'generated_chars_count' guardrail is used to truncate responses and prevent the LLM from generating excessively long text.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the primary purpose of `pip` in Python?",
+    "expected_output": "pip is Python\u2019s package manager used to install and manage libraries.",
+    "evaluation_criteria": "The answer must precisely state the one-line interview definition of pip.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Explain the difference between `==` and `is` in Python when comparing `1` and `1.00`.",
+    "expected_output": "`1 == 1.00` is True because Python performs implicit type conversion, making `1` become `1.0` before comparison. `1 is 1.00` is False because `is` compares identity (memory location), and `1` (int) and `1.00` (float) are different objects in memory.",
+    "evaluation_criteria": "The answer must correctly explain both `==` and `is` behavior for the given values, including the concept of implicit type conversion and identity.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Can a Python set contain a list as one of its elements? Why or why not?",
+    "expected_output": "No, a Python set cannot contain a list as one of its elements. This is because sets can only contain immutable (unchangeable) elements, and lists are mutable (changeable). If you try to create a set with a list inside it, you will get a TypeError because lists are not hashable.",
+    "evaluation_criteria": "The answer must clearly state that lists cannot be in sets and provide the correct reason (mutability/hashability).",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the purpose of the `end` parameter in Python's `print()` function?",
+    "expected_output": "The `end` parameter in Python's `print()` function is used to prevent `print()` from printing a new line at the end. By default, `print()` adds a newline, but you can specify `end=''` to print nothing or `end=' '` to print a space, for example.",
+    "evaluation_criteria": "The answer must correctly describe the function of the `end` parameter and provide examples of its usage.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the most Pythonic way to remove duplicate items from a list while preserving their original order?",
+    "expected_output": "The most Pythonic way to remove duplicate items from a list while preserving their original order is to iterate through the list, adding each item to a result list only if it hasn't been 'seen' before, using a set for fast lookup of 'seen' items. For example:\n```python\ndef unique_items(items):\n    seen = set()\n    result = []\n    for i in items:\n        if i not in seen:\n            seen.add(i)\n            result.append(i)\n    return result\n```",
+    "evaluation_criteria": "The answer must provide the code snippet that uses a set for tracking seen items and a list for the result, explicitly stating that this method preserves order.",
+    "target_problem_id": 5
+  },
+  {
+    "query": "What is the difference between `append()` and `extend()` list methods?",
+    "expected_output": "`append(x)` adds a single element `x` to the end of the list. `extend(iterable)` adds all elements from an `iterable` (like another list) to the end of the list. Both methods modify the list in-place and return `None`.",
+    "evaluation_criteria": "The answer must accurately differentiate between `append()` and `extend()` regarding what they add (single element vs. multiple elements from an iterable) and state that both are in-place operations.",
+    "target_problem_id": null
+  },
+  {
+    "query": "How would you refactor the `count_items` function to be more Pythonic, given that `items` is a list of strings or integers and you want to count their occurrences?",
+    "expected_output": "The `count_items` function can be refactored using `dict.get()` or `collections.defaultdict`.\n\nUsing `dict.get()`:\n```python\ndef count_items(items):\n    result = {}\n    for i in items:\n        result[i] = result.get(i, 0) + 1\n    return result\n```\n\nUsing `collections.defaultdict`:\n```python\nfrom collections import defaultdict\n\ndef count_items(items):\n    counts = defaultdict(int)\n    for w in items:\n        counts[w] += 1\n    return counts\n```",
+    "evaluation_criteria": "The answer must provide at least one correct Pythonic refactoring using either `dict.get()` or `collections.defaultdict` for counting item occurrences, and explain the improvement.",
+    "target_problem_id": 3
+  },
+  {
+    "query": "What was the fix for the 'Ghost' Streaming State problem in Phase 4, and which file was affected?",
+    "expected_output": "The fix for the 'Ghost' Streaming State was to tighten the try...catch...finally logic and ensure a hard refresh resets the local React state. The affected file was src/hooks/useChatStream.ts.",
+    "evaluation_criteria": "The response must accurately identify the fix and the file path for the 'Ghost' Streaming State problem as described in the document.",
+    "target_problem_id": null
+  },
+  {
+    "query": "According to the 'Final Source of Truth Summary' in Phase 4 Debugging & Error Log, what is the status of 'llm_with_tools' and 'generate_chat_responses'?",
+    "expected_output": "According to the 'Final Source of Truth Summary', 'llm_with_tools' is 'Verified: Bound to get_system_time.' and 'generate_chat_responses' is 'Verified: Correctly maps astream_events to JSON strings.'",
+    "evaluation_criteria": "The response must accurately state the status of both 'llm_with_tools' and 'generate_chat_responses' as presented in the 'Final Source of Truth Summary' table.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What was the solution for the 'Serialization Crash' in Phase 4, and what was its cause?",
+    "expected_output": "The solution for the 'Serialization Crash' was to implement a \"Safe Extractor\" logic to pull only the raw .content string from the chunk before wrapping it in json.dumps(). The cause was that LangGraph\u2019s astream_events yields complex Python objects which standard json.dumps() cannot process, leading to the server crashing the stream.",
+    "evaluation_criteria": "The response must correctly identify both the fix and the cause of the 'Serialization Crash' as detailed in the document.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What was the 'Critical Code Snippet' for fixing the 'Tool Blindness' issue, and what was the incorrect approach?",
+    "expected_output": "The 'Critical Code Snippet' for fixing 'Tool Blindness' was `return {\"messages\": [llm_with_tools.invoke(state[\"messages\"])]}`. The incorrect approach was `return {\"messages\": [llm.invoke(state[\"messages\"])]}`.",
+    "evaluation_criteria": "The response must provide both the correct and incorrect Python code snippets for addressing the 'Tool Blindness' issue.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What was the fix for the 'Ghost Crash (Sync Nodes)' problem, and what was the full filepath of the affected file?",
+    "expected_output": "The fix for the 'Ghost Crash (Sync Nodes)' was to convert chatbot_node to async def, use await llm.ainvoke(), and disable tracing via LANGCHAIN_TRACING_V2=\"false\". The full filepath was /Users/victorloucii/agentic_ai_engineer/Unified-Knowledge-Agent/backend/app.py.",
+    "evaluation_criteria": "The response must accurately describe the fix and provide the exact full filepath for the 'Ghost Crash (Sync Nodes)' problem.",
+    "target_problem_id": null
+  },
+  {
+    "query": "How many problems are listed in the 'Phase 4 Implementation Audit' section?",
+    "expected_output": "The 'Phase 4 Implementation Audit' section lists 3 specific sub-issues: 'The HMR Connection Block', 'The Serialization Crash', and 'The \"Ghost\" Streaming State'.",
+    "evaluation_criteria": "PASS THE AGENT if its response contains the names of the 3 issues: 'The HMR Connection Block', 'The Serialization Crash', and 'The \"Ghost\" Streaming State'. Do not penalize if the agent fails to count them or fails to say '3 problems'. Supplying the log with these names is a PASS.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What was the solution for the 'Concurrent Indexing Transaction' problem, and what was the issue it addressed?",
+    "expected_output": "The solution for the 'Concurrent Indexing Transaction' problem was to use a dedicated, one-off connection with autocommit=True specifically for the setup phase to bypass transaction management. The issue was a psycopg.ProgrammingError: CREATE INDEX CONCURRENTLY cannot run inside a transaction block, because PostgreSQL forbids concurrent indexing within managed transactions.",
+    "evaluation_criteria": "The response must accurately state both the solution and the issue for the 'Concurrent Indexing Transaction' problem.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the output of `print(name[-4:-1])` when `name = \"kawala\"`?",
+    "expected_output": "wal",
+    "evaluation_criteria": "The output must contain the correct answer 'wal'. It should not be penalized for providing extraneous explanations as long as 'wal' is clearly identified as the core output.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Explain the difference between `print(marks.get(\"vic1\"))` and `print(marks[\"vic1\"])` when 'vic1' is not a key in the 'marks' dictionary.",
+    "expected_output": "`print(marks.get(\"vic1\"))` will return `None`, while `print(marks[\"vic1\"])` will throw a `KeyError`.",
+    "evaluation_criteria": "The answer must correctly identify that .get() returns None and direct access raises a KeyError.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Can a Python set contain a list as one of its elements? Provide the reason.",
+    "expected_output": "No, you cannot have a list inside a set in Python. This is because sets can only contain immutable (unchangeable) elements, and lists are mutable (changeable). If you try to create a set with a list inside it, you will get a TypeError because lists are not hashable and cannot be added to a set.",
+    "evaluation_criteria": "The answer must explicitly state 'No' and correctly explain that lists are mutable and not hashable, leading to a TypeError when added to a set.",
+    "target_problem_id": null
+  },
+  {
+    "query": "How do you prevent a Python `print()` function from printing a new line at the end?",
+    "expected_output": "You use the `end` parameter within the print function, for example: `print(\"Hello\", end=\"\")`.",
+    "evaluation_criteria": "The answer must mention using the `end` parameter and provide a correct example.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the purpose of the `finally` block in Python's exception handling, especially when a `return` statement is present in `try` or `except`?",
+    "expected_output": "The `finally` block will execute no matter if the `try` or `except` block initiates. Its main purpose is to ensure that cleanup code runs, even if a `return` statement is encountered in the `try` or `except` block, preventing the code after the `return` from executing.",
+    "evaluation_criteria": "The answer must explain that `finally` always executes, even with `return` statements in `try`/`except`, and its role in guaranteed cleanup.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the `__len__` dunder method used for in Python classes?",
+    "expected_output": "The `__len__` dunder method is used to define the behavior of the built-in `len()` function when called on an object of that class. It should return the length of the object.",
+    "evaluation_criteria": "The answer must correctly identify that `__len__` defines the behavior for the `len()` function and returns the object's length.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Does the document mention how to implement multiple inheritance in Python?",
+    "expected_output": "I'm sorry, but that information is not available in my knowledge base.",
+    "evaluation_criteria": "The response must state exactly: \"I'm sorry, but that information is not available in my knowledge base.\"",
+    "target_problem_id": null
+  },
+  {
+    "query": "Who created JavaScript and co-founded the Mozilla project?",
+    "expected_output": "Brendan Eich created JavaScript and co-founded the Mozilla project, the Mozilla Firefox Foundation.",
+    "evaluation_criteria": "The response must accurately identify Brendan Eich as the creator of JavaScript and co-founder of the Mozilla project.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the primary difference between '==' and '===' operators in JavaScript?",
+    "expected_output": "The '==' operator checks if two values are the same, performing type coercion if their types differ. The '===' operator checks if two values are exactly the same, meaning both the value and the data type must match without any type conversion.",
+    "evaluation_criteria": "The response must clearly explain that '==' performs type coercion while '===' does not, and that '===' requires both value and type to match. Alternatively, if the information is not found in the context, the response must state exactly: \"I'm sorry, but that information is not available in my knowledge base.\"",
+    "target_problem_id": null
+  },
+  {
+    "query": "Can you re-declare a variable declared with 'let' in the same scope?",
+    "expected_output": "No, a variable declared with 'let' cannot be re-declared in the same scope. It can be updated and reassigned, but not re-declared.",
+    "evaluation_criteria": "The response must explicitly state that 'let' variables cannot be re-declared in the same scope.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What are the 7 primitive data types in JavaScript? Give an example of each.",
+    "expected_output": "The 7 primitive data types in JavaScript are: Number (e.g., `let b = 245`), Null (e.g., `let a = null`), Symbol (e.g., `let d = Symbol(\"I am a symbol\")`), String (e.g., `let c = \"hello\"`), Boolean (e.g., `let f = true`), BigInt (e.g., `let e = BigInt(\"567\") + BigInt(\"3\")`), and Undefined (e.g., `let g = undefined`).",
+    "evaluation_criteria": "The response must list all 7 primitive data types and provide a correct, valid JavaScript example for each. The examples do not need to match any specific text, as long as they are valid.",
+    "target_problem_id": null
+  },
+  {
+    "query": "How does the `flat()` method work with `Infinity` as an argument?",
+    "expected_output": "The `flat(Infinity)` method flattens a nested array into a single-level array, regardless of how deeply nested the structure is. It recursively flattens the array until all nested arrays are fully flattened into a single level.",
+    "evaluation_criteria": "The response must explain that `flat(Infinity)` flattens an array to any depth, resulting in a single-level array.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the purpose of the `console.table()` method?",
+    "expected_output": "`console.table()` is a JavaScript debugging method that prints data (like arrays or objects) in a nice table format in the browser or Node.js console, making it easier to read while debugging.",
+    "evaluation_criteria": "The response must correctly describe `console.table()` as a debugging tool for displaying data in a tabular format.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the `eval()` function used for in JavaScript?",
+    "expected_output": "`eval()` is a function that takes a string as an argument and evaluates it as JavaScript code.",
+    "evaluation_criteria": "The response must accurately state what the `eval()` function is used for, matching the definition in the document. Alternatively, if the information is not found in the context, the response must state exactly: \"I'm sorry, but that information is not available in my knowledge base.\"",
+    "target_problem_id": null
+  },
+  {
+    "query": "What are the three core characteristics of 'Agentic' AI systems?",
+    "expected_output": "Autonomy, Reasoning & Planning, and Tool-Use.",
+    "evaluation_criteria": "The response must list all three core characteristics exactly as stated in the document.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Explain the difference between `asyncio.gather()` and `asyncio.create_task()` for running multiple coroutines concurrently.",
+    "expected_output": "`asyncio.gather()` is used for simple concurrent execution where all results are collected together and returned in the order the coroutines were passed. `asyncio.create_task()` is used when more control over individual tasks is needed, such as cancellation, checking task status, or advanced error handling.",
+    "evaluation_criteria": "The response must accurately describe the primary use cases and differences between `asyncio.gather()` and `asyncio.create_task()` as outlined in the document, focusing on simplicity vs. control.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the main advantage of using `asyncio.TaskGroup` over `asyncio.gather()` or `asyncio.create_task()`?",
+    "expected_output": "The main advantage of `asyncio.TaskGroup` is its structured concurrency, automatic waiting for all tasks to finish, and better error handling, where if one task fails, all other tasks are automatically cancelled, preventing half-completed operations.",
+    "evaluation_criteria": "The response must highlight structured concurrency and improved error handling as key advantages of `asyncio.TaskGroup`.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the purpose of `asyncio.Lock` in Python asynchronous programming?",
+    "expected_output": "An `asyncio.Lock` is a synchronization tool used to protect shared resources when multiple tasks access them concurrently. It ensures that only one coroutine can access a critical section of code at a time, preventing race conditions.",
+    "evaluation_criteria": "The response must correctly identify the purpose of `asyncio.Lock` as protecting shared resources from concurrent access by ensuring mutual exclusion.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the primary difference between a 'Lightweight Schema' and a 'Heavyweight Schema' in LangGraph, according to the document?",
+    "expected_output": "A Lightweight Schema typically tracks only the bare minimum, often just a list of messages, and usually overwrites old data. A Heavyweight Schema uses multiple keys to separate different types of data (like messages, documents_retrieved, user_info) and often uses 'Reducer' functions to handle how data is updated, allowing for better organization and maintainability.",
+    "evaluation_criteria": "The response must clearly differentiate between the two schema types based on their data tracking, update mechanisms, and use cases as described.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Which AI API provider specializes in multimodal capabilities (text, images, audio, video)?",
+    "expected_output": "Google, with its Gemini models, specializes in multimodal capabilities.",
+    "evaluation_criteria": "The response must correctly identify Google as the provider specializing in multimodal AI APIs.",
+    "target_problem_id": null
+  },
+  {
+    "query": "Does the document provide information on how to implement a custom `asyncio.Future` class?",
+    "expected_output": "The document states that `asyncio.Future` is rarely used directly in normal application code and is mainly for library/framework development or low-level asyncio internals. It does not provide instructions on how to implement a custom `asyncio.Future` class.",
+    "evaluation_criteria": "The response must accurately state that the document does not provide implementation details for a custom `asyncio.Future` class and explain its typical usage context.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the exact file path for the 'EditAbout.tsx' component?",
+    "expected_output": "The exact file path for the 'EditAbout.tsx' component is `src/screens/profile/components/EditAbout.tsx`.",
+    "evaluation_criteria": "The response must accurately state the full file path for 'EditAbout.tsx'.",
+    "target_problem_id": 2
+  },
+  {
+    "query": "What was the root cause of the button text disappearing in the 'About' section of the profile editing screen?",
+    "expected_output": "The root cause was a mathematical layout collision where the button's total height was 32px, and the vertical padding (16px top + 16px bottom) consumed 100% of that height, leaving 0 pixels for the <Text> element to render. This was triggered when the keyboard opened, causing a slight squish in the layout.",
+    "evaluation_criteria": "The response must correctly identify the layout collision between button height and vertical padding as the root cause, including the specific pixel values and the trigger (keyboard opening).",
+    "target_problem_id": 2
+  },
+  {
+    "query": "How do you ensure the OTP input boxes are responsive and fit on smaller screens without being cut off?",
+    "expected_output": "To ensure OTP input boxes are responsive, remove fixed `gap` and `paddingHorizontal` from the `verificationInputContainer`, use `justifyContent: 'space-between'`, set `width: '100%'` for the container, and use percentage-based `width` (e.g., `14%`) and `aspectRatio: 1` for individual `otpInput` styles. This allows them to shrink and maintain their square shape on different screen sizes.",
+    "evaluation_criteria": "The response must detail the changes to both the container and individual input styles, including the use of percentages, aspect ratio, and flexible spacing (`space-between`).",
+    "target_problem_id": 13
+  },
+  {
+    "query": "What was the issue with the 'Add Education' form regarding file uploads, and how was it resolved?",
+    "expected_output": "The problem was that the 'Add Education' form allowed unrestricted file uploads (images and PDFs), leading to inconsistent data and UX confusion. The solution was to enforce a strict PDF-only policy by updating the Zod schema with a `.refine` method to reject non-PDF files and modifying the form field configuration to set `allowedTypes: ['application/pdf']` and update the placeholder text to 'Add PDF documents'.",
+    "evaluation_criteria": "The response must accurately describe the problem of unrestricted file types and the two-part solution involving both schema validation and UI configuration to restrict uploads to PDFs.",
+    "target_problem_id": 5
+  },
+  {
+    "query": "What is the purpose of the `refresh()` function in `PostCard.tsx` and why was it removed?",
+    "expected_output": "The `refresh()` function in `PostCard.tsx` was used to trigger a full feed reload from the backend after a vote action. It was removed because it caused the voted post to 'jump' to a new position in the feed due to the backend re-sorting the list, creating a jarring user experience. The solution was to implement optimistic UI updates using local state instead of re-fetching the entire feed.",
+    "evaluation_criteria": "The response must explain that `refresh()` caused a full feed reload and the 'jump' behavior, and state that it was removed in favor of optimistic UI updates.",
+    "target_problem_id": 10
+  },
+  {
+    "query": "How do you open the React Native developer menu on an Android device if shaking the device doesn't work?",
+    "expected_output": "If shaking the device doesn't work, you can open the React Native developer menu by running `adb shell input keyevent 82` in your terminal.",
+    "evaluation_criteria": "The response must provide the exact ADB command to open the developer menu.",
+    "target_problem_id": 12
+  },
+  {
+    "query": "Can you tell me about the 'Community Type' metric mentioned in the document?",
+    "expected_output": "The document mentions that the 'Community Type' metric was added to the 'About' tab in the Community Details screen. It is displayed alongside 'Max. Members' in a two-column layout. The 'Community Type' data is dynamically mapped from the `privacy` field in the API response (e.g., 'public').",
+    "evaluation_criteria": "The response must correctly identify where the 'Community Type' is displayed, its layout, and that it's derived from the `privacy` field in the API.",
+    "target_problem_id": 12
   }
 ]
