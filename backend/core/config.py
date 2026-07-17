@@ -16,9 +16,9 @@ load_dotenv()
 if not os.getenv("OPENROUTER_API_KEY"):
     raise ValueError("🚨 OPENROUTER_API_KEY not found! Check your .env file.")
 
-# Disable tracing temporarily since no LANGCHAIN_API_KEY is present
-os.environ["LANGCHAIN_TRACING_V2"] = "true"
-os.environ["LANGCHAIN_PROJECT"] = "Nexteir_Second_Brain_Prod"
+# Disabling LangSmith tracing in favor of Phoenix
+os.environ.pop("LANGCHAIN_TRACING_V2", None)
+os.environ.pop("LANGCHAIN_PROJECT", None)
 
 primary_llm = ChatOpenAI(
     model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
@@ -69,7 +69,7 @@ vectorstore = Chroma(
 )
 
 cache_vectorstore = Chroma(
-    collection_name="semantic_cache",
+    collection_name="semantic_cache_v2",
     persist_directory=persist_directory,
     embedding_function=embeddings,
     collection_metadata={"hnsw:space": "cosine"}

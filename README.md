@@ -10,7 +10,7 @@ pinned: true
 
 # 🧠 Unified Knowledge Agent: Internal Knowledge Base
 
-**The Mission:** To transform 600+ fragmented technical internship logs into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
+**The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
 **Current Status:** Production-Ready & Evaluated (100% Search Recall & Agent Logic Scores)
 
@@ -112,7 +112,8 @@ This system is built for deterministic reliability, performance optimization, an
 │   │   └── test_semantic_cache.py # Semantic cache integration test
 │   └── static/            # Static assets for the backend
 ├── data/                  
-│   ├── NEXTIER_Internship_Bugs.md   # Standardized source of truth
+│   ├── *.md / *.docx      # Dynamic multi-file knowledge bases ingested on startup
+│   ├── .manifest.json     # Tracks successfully ingested files
 │   └── media_dump/        # Parsed document assets and diagrams
 ├── frontend/         
 │   ├── src/               

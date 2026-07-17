@@ -4,6 +4,17 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import asyncio
 
+# OpenTelemetry & Phoenix Initialization
+from openinference.instrumentation.langchain import LangChainInstrumentor
+from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk import trace as trace_sdk
+from opentelemetry.sdk.trace.export import SimpleSpanProcessor
+
+endpoint = "http://localhost:6006/v1/traces"
+tracer_provider = trace_sdk.TracerProvider()
+tracer_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter(endpoint)))
+LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+
 from backend.core.ingest import initialize_rag
 from backend.core.chat import generate_chat_responses, resume_graph_stream
 from backend.core.config import store
@@ -49,8 +60,8 @@ async def lifespan(app: FastAPI):
 
     memory = AsyncPostgresSaver(async_pool)
 
-    #  We add the interrupt. This freezes the state right before 'tools' executes.
-    graph = workflow.compile(checkpointer=memory, interrupt_before=["tools"])
+    #  We remove the interrupt. This allows the search tool to run without waiting for user approval.
+    graph = workflow.compile(checkpointer=memory)
     print("🚀 Async Database Pool & LangGraph Engine Started")
 
     # 2. Run the heavy auto-ingestion in a background thread!

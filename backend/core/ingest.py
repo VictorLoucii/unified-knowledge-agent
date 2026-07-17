@@ -116,15 +116,15 @@ def initialize_rag():
         # Prepend headers to page_content and add source_file metadata
         for doc in md_header_splits:
             doc.metadata["source_file"] = basename
-            header_parts = []
+            header_parts = [f"Source Document: {basename}"]
             if "Header 1" in doc.metadata:
                 header_parts.append(f"# {doc.metadata['Header 1']}")
             if "Header 2" in doc.metadata:
                 header_parts.append(f"## {doc.metadata['Header 2']}")
             if "Header 3" in doc.metadata:
                 header_parts.append(f"### {doc.metadata['Header 3']}")
-            if header_parts:
-                doc.page_content = "\n".join(header_parts) + "\n\n" + doc.page_content
+            
+            doc.page_content = "\n".join(header_parts) + "\n\n" + doc.page_content
 
         # ==========================================
         # Pre-split these header sections so no single document

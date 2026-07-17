@@ -24,14 +24,14 @@ import asyncio
 memory = MemorySaver()
 graph = workflow.compile(checkpointer=memory)
 
-def get_agent_response_and_metadata(query: str) -> tuple[str, list[str]]:
+async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str]]:
     """Returns the agent's textual response alongside mathematically extracted Problem IDs."""
     try:
         inputs = {"messages": [HumanMessage(content=query)]}
         test_thread_id = str(uuid.uuid4())
         config = {"configurable": {"thread_id": test_thread_id}}
         
-        output_state = asyncio.run(graph.ainvoke(inputs, config=config))
+        output_state = await graph.ainvoke(inputs, config=config)
         final_message = output_state["messages"][-1].content
         
         # Intercept and extract the hidden metadata directly from the Tool calls
@@ -98,6 +98,7 @@ def run_evals():
     import argparse
     parser = argparse.ArgumentParser()
     parser.add_argument('--indices', type=str, help='Comma-separated list of test indices (1-based) to run')
+    parser.add_argument('--concurrency', type=int, default=10, help='Max concurrent evaluation tasks')
     args = parser.parse_args()
 
     dataset_path = os.path.join(os.path.dirname(__file__), "qa_dataset.json")
@@ -111,6 +112,8 @@ def run_evals():
         indices = [int(i.strip()) for i in args.indices.split(',')]
         dataset = [dataset[i-1] for i in indices]
         print(f"🎯 Running specific subset of tests: {indices}")
+    else:
+        indices = None
         
     passed_llm_count = 0
     total_llm = len(dataset)
@@ -118,62 +121,80 @@ def run_evals():
     recall_hits = 0
     total_recall_targets = 0
     
-    for i, test in enumerate(dataset):
-        # Determine actual test index (1-based) for display
-        actual_test_idx = indices[i] if args.indices else i + 1
-        print(f"🔄 Running Test {actual_test_idx} (Subset {i+1}/{total_llm}): {test['query']}")
+    async def evaluate_single_test(test, actual_test_idx, semaphore):
+        async with semaphore:
+            print(f"🔄 Running Test {actual_test_idx}...")
+            
+            # 1. Get Agent Output & Metadata
+            agent_output, retrieved_ids = await get_agent_response_and_metadata(test["query"])
+            
+            # 2. Check Recall@k (Mathematical Check, bypassing LLM bias)
+            target_id = test.get("target_problem_id")
+            is_hit = False
+            
+            if target_id is not None:
+                if str(target_id) in retrieved_ids:
+                    is_hit = True
+            
+            # 3. Grade with LLM Judge (with retries for transient JSON/validation errors)
+            verdict = None
+            max_eval_retries = 5
+            for attempt in range(max_eval_retries):
+                try:
+                    raw_verdict = await evaluator_chain.ainvoke({
+                        "query": test["query"],
+                        "expected_output": test["expected_output"],
+                        "evaluation_criteria": test["evaluation_criteria"],
+                        "agent_output": agent_output
+                    })
+                    verdict = raw_verdict
+                    break
+                except Exception as e:
+                    print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
+                    if attempt < max_eval_retries - 1:
+                        await asyncio.sleep(2)  # Wait a bit before retrying
+                    else:
+                        # Final fallback if all attempts fail
+                        verdict = EvalResult(
+                            passed=False,
+                            reason=f"LLM Judge failed to return valid JSON output after {max_eval_retries} attempts. Error: {str(e)}"
+                        )
+                        
+            return {
+                "actual_test_idx": actual_test_idx,
+                "passed": verdict.passed if verdict else False,
+                "reason": verdict.reason if verdict else "Failed",
+                "target_id": target_id,
+                "is_hit": is_hit,
+                "retrieved_ids": retrieved_ids
+            }
+
+    async def async_run_all():
+        semaphore = asyncio.Semaphore(args.concurrency)
+        tasks = []
+        for i, test in enumerate(dataset):
+            actual_test_idx = indices[i] if indices else i + 1
+            tasks.append(evaluate_single_test(test, actual_test_idx, semaphore))
+        return await asyncio.gather(*tasks)
         
-        # 1. Get Agent Output & Metadata
-        agent_output, retrieved_ids = get_agent_response_and_metadata(test["query"])
-        
-        # 2. Check Recall@k (Mathematical Check, bypassing LLM bias)
-        target_id = test.get("target_problem_id")
-        is_hit = False
-        
-        if target_id is not None:
-            total_recall_targets += 1
-            if str(target_id) in retrieved_ids:
-                is_hit = True
-                recall_hits += 1
-        
-        # 3. Grade with LLM Judge (with retries for transient JSON/validation errors)
-        verdict = None
-        max_eval_retries = 3
-        for attempt in range(max_eval_retries):
-            try:
-                verdict = evaluator_chain.invoke({
-                    "query": test["query"],
-                    "expected_output": test["expected_output"],
-                    "evaluation_criteria": test["evaluation_criteria"],
-                    "agent_output": agent_output
-                })
-                break
-            except Exception as e:
-                print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
-                if attempt < max_eval_retries - 1:
-                    import time
-                    time.sleep(2)  # Wait a bit before retrying
-                else:
-                    # Final fallback if all attempts fail
-                    verdict = EvalResult(
-                        passed=False,
-                        reason=f"LLM Judge failed to return valid JSON output after {max_eval_retries} attempts. Error: {str(e)}"
-                    )
-        
-        # 4. Print Pipeline Results
-        if verdict.passed:
-            print(f"✅ AI LOGIC PASS")
+    results = asyncio.run(async_run_all())
+    
+    for result in results:
+        if result["passed"]:
+            print(f"✅ AI LOGIC PASS (Test {result['actual_test_idx']})")
             passed_llm_count += 1
         else:
-            print(f"❌ AI LOGIC FAIL")
+            print(f"❌ AI LOGIC FAIL (Test {result['actual_test_idx']})")
             
-        if target_id is not None:
-            if is_hit:
-                print(f"✅ SEARCH HIT: Target [{target_id}] found in Chroma DB Retrieval {retrieved_ids}")
+        if result["target_id"] is not None:
+            total_recall_targets += 1
+            if result["is_hit"]:
+                print(f"✅ SEARCH HIT: Target [{result['target_id']}] found in Chroma DB Retrieval {result['retrieved_ids']}")
+                recall_hits += 1
             else:
-                print(f"❌ SEARCH MISS: Target [{target_id}] NOT found in Chroma DB Retrieval {retrieved_ids}")
+                print(f"❌ SEARCH MISS: Target [{result['target_id']}] NOT found in Chroma DB Retrieval {result['retrieved_ids']}")
 
-        print(f"   Reason: {verdict.reason}")
+        print(f"   Reason: {result['reason']}")
         print("-" * 60)
 
     # --- 5. Final Synthesis Matrix ---

@@ -42,3 +42,6 @@ scratch/
 
 # Miscellaneous
 miscellaneous/
+
+# Local logs
+latest_run_logs.txt

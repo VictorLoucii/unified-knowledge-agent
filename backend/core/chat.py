@@ -287,7 +287,8 @@ Rules:
             yield f"data: {json.dumps(interrupt_event)}\n\n"
         else:
             # Save successful response to cache if not truncated and not excluded
-            if generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message):
+            is_fallback = "I'm sorry, but that information is not available" in full_response
+            if generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message) and not is_fallback:
                 try:
                     cache_vectorstore.add_texts(
                         texts=[user_message],
@@ -408,7 +409,8 @@ async def resume_graph_stream(thread_id: str, graph):
                         user_message = msg.content
                         break
             # Save successful response to cache if not truncated and not excluded
-            if user_message and generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message):
+            is_fallback = "I'm sorry, but that information is not available" in full_response
+            if user_message and generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message) and not is_fallback:
                 try:
                     cache_vectorstore.add_texts(
                         texts=[user_message],

@@ -181,7 +181,13 @@
   },
   {
     "query": "what kind of internship logs?",
-    "expected_output": "The agent should explain its capabilities: it contains logs about React Native, TypeScript, UI/UX, and performance optimization. It must then provide a practical example from the logs.",
+    "expected_output": "The agent should explain its capabilities: it contains logs about AI/ML concepts, Python, React Native, HTML/JS/CSS, UI/UX guidelines, and Victor's detailed internship logs (20+ files). It must then provide a practical example from the logs.",
+    "evaluation_criteria": "The agent MUST recognize these as questions about its capabilities. It MUST explain its purpose and MUST automatically provide an example from the logs instead of repeating the fallback. It MUST NOT trigger the rigid zero-knowledge fallback.",
+    "target_problem_id": 1
+  },
+  {
+    "query": "what can you help me with?",
+    "expected_output": "The agent should explain its capabilities: it contains logs about AI/ML concepts, Python, React Native, HTML/JS/CSS, UI/UX guidelines, and Victor's detailed internship logs (20+ files). It must then provide a practical example from the logs.",
     "evaluation_criteria": "The agent MUST recognize these as questions about its capabilities. It MUST explain its purpose and MUST automatically provide an example from the logs instead of repeating the fallback. It MUST NOT trigger the rigid zero-knowledge fallback.",
     "target_problem_id": 1
   },
@@ -266,7 +272,7 @@
   {
     "query": "What is the difference between `append()` and `extend()` list methods?",
     "expected_output": "`append(x)` adds a single element `x` to the end of the list. `extend(iterable)` adds all elements from an `iterable` (like another list) to the end of the list. Both methods modify the list in-place and return `None`.",
-    "evaluation_criteria": "The answer must accurately differentiate between `append()` and `extend()` regarding what they add (single element vs. multiple elements from an iterable) and state that both are in-place operations.",
+    "evaluation_criteria": "The answer must accurately differentiate between `append()` and `extend()` regarding what they add (single element vs. multiple elements from an iterable).",
     "target_problem_id": null
   },
   {
@@ -484,5 +490,35 @@
     "expected_output": "The document mentions that the 'Community Type' metric was added to the 'About' tab in the Community Details screen. It is displayed alongside 'Max. Members' in a two-column layout. The 'Community Type' data is dynamically mapped from the `privacy` field in the API response (e.g., 'public').",
     "evaluation_criteria": "The response must correctly identify where the 'Community Type' is displayed, its layout, and that it's derived from the `privacy` field in the API.",
     "target_problem_id": 12
+  },
+  {
+    "query": "in which document did i mention about idempotency? also what is it?",
+    "expected_output": "Idempotency is the property where an operation can be performed multiple times without changing the result beyond the initial application. This was mentioned in the file 'AgenticAI_Interview_Questions_Theory.md'.",
+    "evaluation_criteria": "The response must define idempotency and explicitly mention the exact .md filename where it was found.",
+    "target_problem_id": null
+  },
+  {
+    "query": "give me an example of refactoring python code file, also mention the file name it's stated in",
+    "expected_output": "Here is an example of refactoring Python code by adding a guard clause to handle invalid cases early and avoid deep nesting. This is stated in Document: Refactor Python code.md",
+    "evaluation_criteria": "The response must provide a valid example of Python refactoring (e.g. guard clauses, f-strings, early return) from the knowledge base and explicitly mention the exact .md filename where it was found.",
+    "target_problem_id": null
+  },
+  {
+    "query": "what is an api and in which document is it defined in?",
+    "expected_output": "An API is a way for applications to communicate and exchange data. Document: AgenticAI_Interview_Questions_Theory.md, API RELATED.md",
+    "evaluation_criteria": "The response must define an API and explicitly state the document names where it is found.",
+    "target_problem_id": null
+  },
+  {
+    "query": "how am i using docker in my unified knowledge agent project?",
+    "expected_output": "You are using Docker Compose to manage a multi-container system. The Backend container (Dockerfile) packages Python, uv, LangGraph, ChromaDB, and FastAPI. The Frontend container (frontend/frontend.Dockerfile) packages Node.js and Next.js 14. The Orchestrator (docker-compose.yml) spins up both containers and connects them.",
+    "evaluation_criteria": "The response MUST explicitly mention Docker Compose, the Backend (FastAPI/LangGraph), and the Frontend (Next.js) containers as they are used in the project.",
+    "target_problem_id": null
+  },
+  {
+    "query": "explain me http methods in detail, also mention the file/doc it's defined in",
+    "expected_output": "HTTP methods describe the action to perform on a resource. For example, GET is used to retrieve data without changing the server, POST sends data securely to create or update resources, PUT replaces or updates existing data, and DELETE removes resources. Document: API RELATED.md",
+    "evaluation_criteria": "The response MUST explain the HTTP methods (GET, POST, etc.) and MUST explicitly cite 'API RELATED.md' as the source document.",
+    "target_problem_id": null
   }
 ]
