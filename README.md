@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Production-Ready & Evaluated (100% Search Recall & Agent Logic Scores)
+**Current Status:** Production-Ready & Evaluated (100.0% Search Recall@k & 96.6% AI Logic Score)
 
 ---
 
@@ -43,6 +43,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Drop-in Multi-File Support:** Simply drop `.md` or `.docx` files directly into the `data/` directory. The ingestion pipeline (`backend/core/ingest.py`) will automatically discover and process them upon startup.
 * **Auto-Conversion & Destructive `.docx` Handling:** Any `.docx` files are automatically converted into `.md` format via Pandoc, scrubbed of formatting artifacts, and then **permanently deleted**. Do not expect to find original `.docx` files after a successful ingestion.
 * **Manifest Tracking:** Successfully ingested documents are tracked in `.manifest.json` to prevent duplicate processing.
+* **Continuous Content Refinement:** Existing `.md` files are regularly updated with targeted keywords and contextual enhancements to continuously improve retrieval accuracy and AI Logic synthesis.
 
 ### 2. High-Performance Retrieval Engine (100% Recall)
 * **Metadata Header Preservation:** Pre-splits markdown documents and prepends header contexts (e.g. `# Problem ID`) back to the chunk `page_content` prior to ingestion. This resolves ChromaDB's native metadata-stripping blind spot.
@@ -59,6 +60,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
 
 ### 4. Production Security & Guardrails
+* **Zero-Cost Trace Observability (Arize Phoenix):** Integrated Arize Phoenix via Docker, completely replacing LangChain/LangSmith to provide powerful local tracing and debugging without external API dependencies or costs.
 * **Fast Input Firewall:** An instant API gateway guardrail enforcing a **1,000-character input ceiling** and blocking jailbreaks, system prompt exposure attempts, and credential leaks.
 * **Data Loss Prevention (DLP) Masking:** A sliding 120-character regex buffer window that automatically redacts API keys and database secrets before they stream to the client interface.
 * **Dynamic Response Capping:** Prevents response truncations by scaling content length restrictions dynamically: $\text{Max Allowed Chars} = \max(2000, \text{Last Tool Output Length} + 1500)$.
@@ -76,7 +78,7 @@ This system is built for deterministic reliability, performance optimization, an
 | **Orchestration** | **LangGraph** | Stateful state machine with HITL interrupts & persistence |
 | **Cloud State** | **Supabase (PostgreSQL)** | State survives container prunes; enables multi-device sync |
 | **Logic Layer** | **Python (FastAPI)** | Hardened "Raw Interceptors" & Regex Anchors |
-| **Observability** | **LangSmith** | Real-time X-ray of tool-routing, latency, and cost |
+| **Observability** | **Arize Phoenix (Docker)** | Zero-cost, local real-time X-ray of trace observability (replaced LangChain/LangSmith) |
 | **Data Ingestion** | **ChromaDB** | Vector storage using `all-MiniLM-L6-v2` local embeddings |
 | **Frontend** | **Next.js 14 / Tailwind** | Markdown-rendered UI with HITL "Action Required" status |
 
