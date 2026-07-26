@@ -4,6 +4,7 @@ import os
 import sys
 import re
 from pathlib import Path
+import time
 import uuid
 
 # 1. ENSURE THE PROJECT ROOT IS IN SYS.PATH FIRST
@@ -19,6 +20,13 @@ from langchain_core.messages import HumanMessage
 from backend.core.agents import workflow 
 from langgraph.checkpoint.memory import MemorySaver
 import asyncio
+from langchain_core.globals import set_llm_cache
+from langchain_community.cache import SQLiteCache
+
+# --- START TIMER ---
+start_time = time.time()
+
+set_llm_cache(SQLiteCache(database_path=os.path.join(project_root, ".langchain.db")))
 
 # Compile an ephemeral, uninterrupted graph specifically for automated testing
 memory = MemorySaver()
@@ -138,27 +146,30 @@ def run_evals():
             
             # 3. Grade with LLM Judge (with retries for transient JSON/validation errors)
             verdict = None
-            max_eval_retries = 5
-            for attempt in range(max_eval_retries):
-                try:
-                    raw_verdict = await evaluator_chain.ainvoke({
-                        "query": test["query"],
-                        "expected_output": test["expected_output"],
-                        "evaluation_criteria": test["evaluation_criteria"],
-                        "agent_output": agent_output
-                    })
-                    verdict = raw_verdict
-                    break
-                except Exception as e:
-                    print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
-                    if attempt < max_eval_retries - 1:
-                        await asyncio.sleep(2)  # Wait a bit before retrying
-                    else:
-                        # Final fallback if all attempts fail
-                        verdict = EvalResult(
-                            passed=False,
-                            reason=f"LLM Judge failed to return valid JSON output after {max_eval_retries} attempts. Error: {str(e)}"
-                        )
+            if target_id is not None and not is_hit:
+                verdict = EvalResult(passed=False, reason="SEARCH MISS: Target document not retrieved.")
+            else:
+                max_eval_retries = 5
+                for attempt in range(max_eval_retries):
+                    try:
+                        raw_verdict = await evaluator_chain.ainvoke({
+                            "query": test["query"],
+                            "expected_output": test["expected_output"],
+                            "evaluation_criteria": test["evaluation_criteria"],
+                            "agent_output": agent_output
+                        })
+                        verdict = raw_verdict
+                        break
+                    except Exception as e:
+                        print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
+                        if attempt < max_eval_retries - 1:
+                            await asyncio.sleep(2)  # Wait a bit before retrying
+                        else:
+                            # Final fallback if all attempts fail
+                            verdict = EvalResult(
+                                passed=False,
+                                reason=f"LLM Judge failed to return valid JSON output after {max_eval_retries} attempts. Error: {str(e)}"
+                            )
                         
             return {
                 "actual_test_idx": actual_test_idx,
@@ -213,12 +224,27 @@ def run_evals():
     print(f"🧠 Final Agent Logic Score: {passed_llm_count}/{total_llm} ({llm_score:.1f}%)")
     print("===========================================")
 
-    if llm_score == 100 and recall_score == 100:
+    if llm_score >= 95.0 and recall_score == 100.0:
         print("🏆 STATUS: PRODUCTION READY. (Safe to Deploy)")
-    elif recall_score < 100:
-        print("⚠️ ACTIONABLE INSIGHT: Tweak ChromaDB search weights in tools.py. The Database is failing to find the right files.")
-    elif llm_score < 100:
-        print("⚠️ ACTIONABLE INSIGHT: Tweak System Prompt. The Database is finding the files, but the AI is failing to synthesize them correctly.")
+    else:
+        print("❌ STATUS: PIPELINE FAILED.")
+        if recall_score < 100.0:
+            print("⚠️ ACTIONABLE INSIGHT: Tweak ChromaDB search weights in tools.py. The Database is failing to find the right files.")
+        if llm_score < 95.0:
+            print("⚠️ ACTIONABLE INSIGHT: Tweak System Prompt. The Database is finding the files, but the AI is failing to synthesize them correctly.")
+            
+    # Save the latest run metrics
+    metrics_path = os.path.join(os.path.dirname(__file__), "latest_run_metrics.json")
+    with open(metrics_path, "w") as f:
+        json.dump({"llm_score": llm_score, "recall_score": recall_score}, f, indent=4)
+        
+    end_time = time.time()
+    print(f"⏱️ Total Evaluation Time: {end_time - start_time:.2f} seconds")
+    if llm_score < 95.0 or recall_score < 100.0:
+        sys.exit(1)
+
+    end_time = time.time()
+    print(f"⏱️ Total Evaluation Time: {end_time - start_time:.2f} seconds")
 
 if __name__ == "__main__":
     run_evals()

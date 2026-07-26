@@ -20,6 +20,19 @@ if not os.getenv("OPENROUTER_API_KEY"):
 os.environ.pop("LANGCHAIN_TRACING_V2", None)
 os.environ.pop("LANGCHAIN_PROJECT", None)
 
+try:
+    from openinference.instrumentation.langchain import LangChainInstrumentor
+    from phoenix.otel import register
+    
+    # Configure Phoenix endpoint (points to your local docker container)
+    os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:4317"
+    
+    tracer_provider = register()
+    LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+    print("✅ Arize Phoenix tracing successfully initialized.")
+except Exception as e:
+    print(f"⚠️ [WARNING] Failed to initialize Phoenix tracing: {e}")
+
 primary_llm = ChatOpenAI(
     model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
@@ -134,7 +147,7 @@ def parse_problem_id(message: str) -> str | None:
     """Parses problem ID from user query if they are requesting a log passthrough."""
     if not message:
         return None
-    match = re.search(r"(?i)\bproblem\s*:?\s*(\d+)\b", message)
+    match = re.search(r"(?i)\bproblem\s*:?\s*([A-Za-z0-9_]+)\b", message)
     if match:
         return match.group(1)
     return None
@@ -150,7 +163,7 @@ def extract_problem_block(problem_id: str) -> str | None:
 
             all_header_matches = list(
                 re.finditer(
-                    r"(?im)^\s*(?:#|//)\s*problem\s*:?\s*(\d+)", full_file_text
+                    r"(?im)^\s*(?:#|//|\*)\s*problem\s*:?\s*([A-Za-z0-9_]+)", full_file_text
                 )
             )
 

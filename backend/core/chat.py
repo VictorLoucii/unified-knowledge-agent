@@ -61,42 +61,6 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
         yield "data: [DONE]\n\n"
         return
 
-    # 2. Check for Programmatic LLM Bypass Candidate
-    problem_id = parse_problem_id(user_message)
-    if problem_id:
-        block = extract_problem_block(problem_id)
-        if block:
-            # Save title before streaming starts
-            await save_thread_title(async_pool, thread_id, user_message)
-
-            # Persist state directly in PostgreSQL history
-            tool_msg = ToolMessage(
-                content=f"<!-- RETRIEVED_PROBLEM_IDS: [{problem_id}] -->",
-                name="search_knowledge_base",
-                tool_call_id="bypass_tool_call_id"
-            )
-            ai_msg = AIMessage(content=block)
-
-            config = {"configurable": {"thread_id": thread_id}}
-            await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), tool_msg, ai_msg]}, as_node="chatbot")
-
-            # Stream the response chunk by chunk to simulate natural real-time streaming
-            chunk_size = 120
-            for i in range(0, len(block), chunk_size):
-                chunk = block[i:i+chunk_size]
-                safe_output = mask_sensitive_data(chunk)
-                stream_event = {
-                    "event": "on_chat_model_stream",
-                    "name": "chatbot",
-                    "run_id": "bypass_stream",
-                    "data": {"chunk": {"content": safe_output}}
-                }
-                yield f"data: {json.dumps(stream_event)}\n\n"
-                await asyncio.sleep(0.01)
-
-            print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{block[:100].replace(chr(10), ' ')}...'")
-            yield "data: [DONE]\n\n"
-            return
 
     # 2.5. Check Semantic Cache
     if not is_excluded_from_cache(user_message):
@@ -147,7 +111,7 @@ Your job is to determine if a user query requires searching the technical knowle
 
 Rules:
 1. If the query is simple conversational chatter (e.g., "hello", "hi", "thanks", "how are you"), respond with a short, friendly, and helpful reply.
-2. If the query asks about what you can do or your general capabilities (e.g., "what can you help me with?", "what do you do?"), and does NOT explicitly ask for an example, provide a short 1-2 sentence summary: you are the Nexteir Internal Knowledge Base, here to help with internship logs and technical queries.
+2. If the query asks about what you can do or your general capabilities (e.g., "what can you help me with?", "what do you do?"), and does NOT explicitly ask for an example, provide a short 1-2 sentence summary: you are Victor's AI assistant, trained on over 20+ internal documentation files covering agentic theory, Python, React Native, UI/UX guidelines, and detailed internship logs.
 3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, explicitly asks for an example of what you can help with (e.g., "give me an example"), asks about the current chat session/history, asks what kind of logs you have, or repeats your fallback messages, you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
 """
 
@@ -253,6 +217,27 @@ Rules:
                         last_tool_output_length = get_content_length(tool_output)
                         max_allowed = max(2000, last_tool_output_length + 1500)
                 yield f"data: {json.dumps(safe_event)}\n\n"
+
+            elif kind == "on_chain_end" and event.get("name") == "fast_path_node":
+                output_data = event.get("data", {}).get("output", {})
+                if isinstance(output_data, dict) and "messages" in output_data:
+                    for msg in output_data["messages"]:
+                        if msg.__class__.__name__ == "AIMessage" and msg.content:
+                            content = msg.content
+                            chunk_size = 120
+                            for i in range(0, len(content), chunk_size):
+                                chunk = content[i:i+chunk_size]
+                                safe_output = mask_sensitive_data(chunk)
+                                stream_event = {
+                                    "event": "on_chat_model_stream",
+                                    "name": "fast_path_node",
+                                    "run_id": event.get("run_id", "fast_path_stream"),
+                                    "data": {"chunk": {"content": safe_output}}
+                                }
+                                yield f"data: {json.dumps(stream_event)}\n\n"
+                                await asyncio.sleep(0.01)
+                            full_response += mask_sensitive_data(content)
+
 
         # Flush remaining buffer
         if stream_buffer:
@@ -370,6 +355,27 @@ async def resume_graph_stream(thread_id: str, graph):
                         last_tool_output_length = get_content_length(tool_output)
                         max_allowed = max(2000, last_tool_output_length + 1500)
                 yield f"data: {json.dumps(safe_event)}\n\n"
+
+            elif kind == "on_chain_end" and event.get("name") == "fast_path_node":
+                output_data = event.get("data", {}).get("output", {})
+                if isinstance(output_data, dict) and "messages" in output_data:
+                    for msg in output_data["messages"]:
+                        if msg.__class__.__name__ == "AIMessage" and msg.content:
+                            content = msg.content
+                            chunk_size = 120
+                            for i in range(0, len(content), chunk_size):
+                                chunk = content[i:i+chunk_size]
+                                safe_output = mask_sensitive_data(chunk)
+                                stream_event = {
+                                    "event": "on_chat_model_stream",
+                                    "name": "fast_path_node",
+                                    "run_id": event.get("run_id", "fast_path_stream"),
+                                    "data": {"chunk": {"content": safe_output}}
+                                }
+                                yield f"data: {json.dumps(stream_event)}\n\n"
+                                await asyncio.sleep(0.01)
+                            full_response += mask_sensitive_data(content)
+
 
         # Flush remaining buffer
         if stream_buffer:

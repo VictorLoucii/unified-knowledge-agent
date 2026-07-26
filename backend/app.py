@@ -119,8 +119,18 @@ class ChatRequest(BaseModel):
 
 @app.post("/chat_stream")
 async def chat_stream(request: ChatRequest):
+    async def timed_generator():
+        import time, json
+        start = time.time()
+        async for chunk in generate_chat_responses(request.message, request.thread_id, graph, async_pool):
+            if chunk.strip() == "data: [DONE]":
+                latency = time.time() - start
+                timing_msg = f"\n\n*⚡ Query processed in {latency:.2f}s*"
+                yield f"data: {json.dumps({'event': 'on_chat_model_stream', 'name': 'latency', 'data': {'chunk': {'content': timing_msg}}})}\n\n"
+            yield chunk
+
     return StreamingResponse(
-        generate_chat_responses(request.message, request.thread_id, graph, async_pool),
+        timed_generator(),
         media_type="text/event-stream",
     )
 

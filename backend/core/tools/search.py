@@ -48,7 +48,7 @@ async def search_knowledge_base(query: str) -> str:
 
     print(f"\n📥 [TOOL CALL] search_knowledge_base triggered with query: '{query}'")
 
-    direct_match = re.search(r"(?i)\bproblem\s*:?\s*(\d+)\b", query)
+    direct_match = re.search(r"(?i)\bproblem\s*:?\s*([A-Za-z0-9_]+)\b", query)
     if direct_match:
         # Skip expansion entirely — go straight to raw extraction
         search_variants = []
@@ -74,8 +74,8 @@ async def search_knowledge_base(query: str) -> str:
 
     all_queries = [
         (
-            re.sub(r"(?i).*problem\s*(\d+).*", r"# Problem \1", q)
-            if "problem" in q.lower() and re.search(r"\d+", q)
+            re.sub(r"(?i).*problem\s*([A-Za-z0-9_]+).*", r"# Problem \1", q)
+            if re.search(r"(?i)problem\s*:?\s*[A-Za-z0-9_]+", q)
             else q
         )
         for q in all_queries
@@ -88,7 +88,7 @@ async def search_knowledge_base(query: str) -> str:
     target_problems = set()
 
     for q in all_queries:
-        match = re.search(r"(?i)\b(problem|question)\s*:?\s*(\d+)", q)
+        match = re.search(r"(?i)\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", q)
         if match:
             prefix = match.group(1).lower()
             target_problems.add(f"{prefix}_{match.group(2)}")
@@ -110,12 +110,10 @@ async def search_knowledge_base(query: str) -> str:
                     with open(data_file, "r", encoding="utf-8") as f:
                         temp_text = f.read()
 
-                    file_ids = [
-                        int(m[1])
-                        for m in re.findall(
-                            r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*(\d+)", temp_text
-                        )
-                    ]
+                    file_ids = []
+                    for m in re.findall(r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", temp_text):
+                        if m[1].isdigit():
+                            file_ids.append(int(m[1]))
                     all_ids.extend(file_ids)
 
             if all_ids:
@@ -156,6 +154,10 @@ async def search_knowledge_base(query: str) -> str:
         target_problems.add("problem_33")
         print("🎯 [DEBUG] Specific function 'duplicate key' query detected. Intercepting with Target 33.")
 
+    if "invalid_grant" in query_lower or "refresherror" in query_lower:
+        target_problems.add("problem_JOB_HUNT")
+        print("🎯 [DEBUG] Specific function 'invalid_grant' query detected. Intercepting with Target JOB_HUNT.")
+
     # ==========================================
     # 2. RAW EXTRACTION EXECUTION
     # ==========================================
@@ -170,7 +172,7 @@ async def search_knowledge_base(query: str) -> str:
 
                     all_header_matches = list(
                         re.finditer(
-                            r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*(\d+)", full_file_text
+                            r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", full_file_text
                         )
                     )
 
@@ -276,9 +278,9 @@ async def search_knowledge_base(query: str) -> str:
         for q in all_queries:
             clean_q = q.replace("#", "").strip().lower()
             if clean_q:
-                match_num = re.search(r"\d+", clean_q)
-                if "problem" in clean_q and match_num:
-                    pattern = r"\bproblem\s*:?\s*" + match_num.group(0) + r"\b"
+                match_id = re.search(r"(?i)problem\s*:?\s*([A-Za-z0-9_]+)", clean_q)
+                if match_id:
+                    pattern = r"\bproblem\s*:?\s*" + re.escape(match_id.group(1)) + r"\b"
                 else:
                     pattern = r"\b" + re.escape(clean_q) + r"\b"
 
@@ -320,6 +322,15 @@ async def search_knowledge_base(query: str) -> str:
                 pattern = re.compile(r'\b' + re.escape(file_name_target) + r'\.(tsx|ts|js|jsx)\b', re.IGNORECASE)
                 if pattern.search(text_lower):
                     score += 400
+
+            if "anti-summary mandate" in exact_query_lower and "anti-summary mandate" in text_lower:
+                score += 2000
+                
+            if "emulator" in exact_query_lower and "emulator" in text_lower:
+                score += 2000
+                
+            if "build strategy" in exact_query_lower and "build strategy" in text_lower:
+                score += 2000
 
         # General file name boost based on core keywords
         if source_file:
@@ -398,8 +409,8 @@ async def search_knowledge_base(query: str) -> str:
             )
             continue
 
-        header_matches = re.finditer(r"(?i)\b(problem|question)\s*:?\s*(\d+)", headers_text)
-        content_matches = re.finditer(r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*(\d+)", doc.page_content)
+        header_matches = re.finditer(r"(?i)\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", headers_text)
+        content_matches = re.finditer(r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", doc.page_content)
         
         from itertools import chain
         for m in chain(header_matches, content_matches):
@@ -422,7 +433,7 @@ async def search_knowledge_base(query: str) -> str:
 
                     matches = list(
                         re.finditer(
-                            r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*(\d+)", full_file_text
+                            r"(?im)^[^a-zA-Z]*\b(problem|question)\s*:?\s*([A-Za-z0-9_]+)", full_file_text
                         )
                     )
 

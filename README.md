@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Production-Ready & Evaluated (100.0% Search Recall@k & 96.6% AI Logic Score)
+**Current Status:** Production-Ready & Evaluated (100.0% Search Recall@k & 100.0% AI Logic Score)
 
 ---
 

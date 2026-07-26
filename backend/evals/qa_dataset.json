@@ -520,5 +520,23 @@
     "expected_output": "HTTP methods describe the action to perform on a resource. For example, GET is used to retrieve data without changing the server, POST sends data securely to create or update resources, PUT replaces or updates existing data, and DELETE removes resources. Document: API RELATED.md",
     "evaluation_criteria": "The response MUST explain the HTTP methods (GET, POST, etc.) and MUST explicitly cite 'API RELATED.md' as the source document.",
     "target_problem_id": null
+  },
+  {
+    "query": "How do I resolve the Gmail API RefreshError (invalid_grant)?",
+    "expected_output": "Delete the expired token file at credentials/token.json, restart the server with jobhunt, and re-authorize the account in the browser.",
+    "evaluation_criteria": "The response must contain the steps to delete the token, restart the server, and re-authenticate.",
+    "target_problem_id": "JOB_HUNT"
+  },
+  {
+    "query": "what do you do?",
+    "expected_output": "Victor's AI assistant, trained on over 20+ internal documentation files covering agentic theory, Python, React Native, UI/UX guidelines, and detailed internship logs.",
+    "evaluation_criteria": "The response MUST summarize the agent's identity explicitly mentioning 'Victor's AI assistant' and its training on 20+ files.",
+    "target_problem_id": null
+  },
+  {
+    "query": "what is langchain.db in my unified knowledge agent project?",
+    "expected_output": "A local SQLite database used by LangChain as an LLM response cache (SQLiteCache).",
+    "evaluation_criteria": "The response MUST explicitly state it is a local SQLite database and an LLM response cache.",
+    "target_problem_id": null
   }
 ]
