@@ -35,6 +35,18 @@ frontend/.env.local
 
 # Troubleshooting scripts
 test_conn.py
+add_test.py
+debug_splitter.py
+test_docstore.py
+test_search.py
+test_waqi.py
+test_weather_hitl.py
+
+# Renamed-aside index directories.
+# **/chroma_db/ above does NOT match chroma_db.bak/, so without this a
+# `git add .` stages hundreds of megabytes of superseded index.
+*.bak/
+**/*.bak/
 
 # Agents
 .agents/
