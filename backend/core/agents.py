@@ -27,15 +27,23 @@ async def route_input_node(state: State) -> str:
         return "qa_node"
 
     user_msg = state["messages"][-1].content
-    
+
+    # Deterministic lookups run BEFORE the classifier. FAST_PATH_INTERCEPTS and the
+    # Problem N extractor are exact matches, so a model call must not be able to
+    # overrule them. When the classifier ran first it could return CONVERSATIONAL and
+    # exit before route_query was ever reached, discarding the stored answer.
+    # Skipping the classifier for these queries also removes one model call per hit.
+    route_result = await route_query(user_msg)
+    if route_result.get("route_category") == "FAST_PATH":
+        return "fast_path_node"
 
     try:
         legacy_router = await fast_llm.ainvoke([
-            SystemMessage(content="You are an input router. "
-            "If the query explicitly asks about weather, temperature, or AQI, respond EXACTLY with 'IN_SCOPE'. "
-            "If the query is a basic greeting, asking about your identity, or asking a general knowledge question (e.g., capitals, distances) WITH NO mention of weather/AQI/technical docs, respond EXACTLY with 'CONVERSATIONAL'. "
-            "If explicitly asking about Kubernetes, AWS Lambda, Web scraping, Vue.js, Java Spring Boot, or multiple inheritance in Python, respond EXACTLY with 'OUT_OF_SCOPE'. "
-            "For EVERYTHING else, respond with EXACTLY 'IN_SCOPE'. DO NOT explain."),
+            SystemMessage(content="You are an input router. Apply these rules in order and stop at the first one that matches. "
+            "RULE 1 (highest priority): If the query explicitly asks about Kubernetes, AWS Lambda, Web scraping, Vue.js, Java Spring Boot, or multiple inheritance in Python, respond EXACTLY with 'OUT_OF_SCOPE'. This rule overrides every rule below it, including any request to write code or a script about those topics. "
+            "RULE 2: If the query explicitly asks about weather, temperature, or AQI, respond EXACTLY with 'IN_SCOPE'. "
+            "RULE 3: If the query is a basic greeting, asking about your identity, or asking a general knowledge question (e.g., capitals, distances) WITH NO mention of weather/AQI/technical docs, respond EXACTLY with 'CONVERSATIONAL'. "
+            "RULE 4: For EVERYTHING else, respond with EXACTLY 'IN_SCOPE'. DO NOT explain."),
             HumanMessage(content=user_msg)
         ])
         response_text = legacy_router.content.upper()
@@ -46,13 +54,6 @@ async def route_input_node(state: State) -> str:
     except Exception:
         pass
 
-    # We rely purely on FAST_PATH_INTERCEPTS for problem extraction now
-    route_result = await route_query(user_msg)
-    category = route_result.get("route_category", "UNKNOWN")
-    
-    if category == "FAST_PATH":
-        return "fast_path_node"
-        
     return "retrieval_node"
 
 async def fast_path_node(state: State):
