@@ -22,6 +22,12 @@ wheels/
 # Local Document Store
 **/docstore/
 
+# LLM response cache. Regenerated on demand, and it grows on every eval run.
+# It was tracked once, reached 56.7 MB, and HuggingFace refused every push
+# until it was removed from the history. Do not track it again.
+.langchain.db
+**/.langchain.db
+
 # Node/React (Very important for your frontend)
 node_modules/
 **/node_modules/
