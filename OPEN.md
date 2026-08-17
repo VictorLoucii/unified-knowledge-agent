@@ -113,9 +113,12 @@ marker, so it needs its own evaluation cycle.
   verdict has still flipped. The judge's `request_timeout` changed its cache
   key at one point, which re-judged everything. Do not chase it.
 - **`.langchain.db` blocks the HuggingFace push.** It is tracked, about 12 MB
-  packed and 56.7 MB raw, and lives in exactly one commit, `039a2cb`. It is the
+  packed and 56.7 MB raw, and lives in exactly one commit — the one that
+  introduced it, which `git log --all -- .langchain.db` will name. It is the
   only blob over 5 MB anywhere in the history. HuggingFace rejects the push
   because the blob exceeds 10 MiB and no `.gitattributes` rule matches `*.db`.
+  Removing it rewrites every commit from that one onward, so any hash written
+  down here would be wrong afterwards. Look it up rather than quoting one.
   The re-scan for credentials is now independent of the original: 1,502 rows and
   31.7 M characters of the committed blob checked against 13 credential pattern
   classes, and the only match is `postgresql://localhost/postgres` — no user, no
