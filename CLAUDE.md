@@ -22,12 +22,16 @@ Measured consequence, as of the last full run:
 | Metric | Headline | From the table | Genuinely exercised |
 |---|---|---|---|
 | AI Logic Score | 90/94 | 53 cases | **41 cases** |
-| Recall@k | 34/34 | 26 cases | **8 cases** |
+| Recall@k | 33/34 | 26 cases | **7 of 8 cases** |
 
-So "100% Recall@k" rests on 8 vector retrievals, not 34. The table is a
+So the Recall@k headline rests on 8 vector retrievals, not 34. The table is a
 legitimate O(1) cache in the product. It is not a measurement of the RAG
 pipeline. **When you change retrieval, report the 41-case and 8-case figures
 alongside the headline, or you will report a change that did not happen.**
+
+The 8 genuinely-exercised recall cases are indices **6, 46, 77, 78, 79, 80, 81,
+83**. `--indices` is 1-based (`eval.py:124` does `dataset[i-1]`). Index 83 is
+the current miss; see [OPEN.md](OPEN.md) item 1.
 
 Note also that the intercept keys match the eval's queries verbatim, so the
 table helps the score far more than it helps a real user, who will phrase the

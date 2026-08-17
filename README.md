@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Production-Ready & Evaluated — 100.0% Search Recall@k (34/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; vector retrieval measured on its own scores 100.0% (8/8).
+**Current Status:** Evaluated — 97.1% Search Recall@k (33/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; vector retrieval measured on its own scores 87.5% (7/8). The single recall miss is a known, diagnosed regression from the 2026-08-17 index rebuild — see [OPEN.md](OPEN.md).
 
 ---
 
@@ -48,10 +48,10 @@ This system is built for deterministic reliability, performance optimization, an
 * **Manifest Tracking:** Successfully ingested documents are tracked in `.manifest.json` to prevent duplicate processing.
 * **Continuous Content Refinement:** Existing `.md` files are regularly updated with targeted keywords and contextual enhancements to continuously improve retrieval accuracy and AI Logic synthesis.
 
-### 2. High-Performance Retrieval Engine (100% Recall)
+### 2. High-Performance Retrieval Engine
 * **Robust Header-Injection Chunking:** Preserves Markdown structure by dynamically prepending parent header contexts (e.g. `## Project Tech Stack`) to **every individual chunk** *after* recursive text splitting. This resolves ChromaDB's native metadata-stripping blind spot and eliminates orphaned context.
 * **Corpus Growth Stress-Testing:** Includes a validation suite (`eval_corpus_growth.py`) that slices the document base to evaluate recall stability against growing datasets, verifying retrieval resilience.
-* **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
+* **Optimized Search Width:** The retriever is configured with $k=40$ child documents per query. `search.py` then merges the results of every expanded query, truncates the combined candidate pool to 50, and reranks that pool down to the 10 documents passed to the model.
 
 ### 3. Unified LLM Architecture & Cost Control
 * **Unified Model Driver (Gemini 2.5 Flash):** Uses `google/gemini-2.5-flash` as the primary, fallback, and triage classifier model. This provides strict tool-calling hygiene (preventing pre-execution text leakage that breaks the HITL UI), ultra-low latency, and maximum token efficiency.

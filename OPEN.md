@@ -8,78 +8,64 @@ Decisions already taken are in [DECISIONS.md](DECISIONS.md).
 
 ---
 
-## 1. Rebuild the vector index to pick up edited markdown
+## 1. Index 83 — 'Community Type' no longer retrieves Problem 12
 
-**Status:** diagnosed, planned, not run.
+**Status:** diagnosed, cause known, not fixed. Costs one recall point.
 
-Ingestion keys on filename only, so edited files are never re-read. Three files
-in `data/` have been edited since their last ingestion — roughly 33 KB added
-across `AgenticAI_Interview_Questions_Theory.md`, `JobHunt_Project_Details.md`
-and `Unified_Knowledge_Project_Details.md` — and none of that text is in
-ChromaDB. `Pragmatic_Programmer_for_Agentic_AI.md` is on disk and absent from
-the manifest, so it would be picked up by any ingestion run.
+This is the single miss behind the 33/34 recall recorded in
+`latest_run_metrics.json`. It appeared with the 2026-08-17 index rebuild.
 
 **Already established:**
 
-- The edits are almost purely additive: 3 removed lines against 496 added.
-- **No existing test breaks after a rebuild.** Every `expected_output` was
-  matched as 8-word verbatim spans against the pre-edit and post-edit contents.
-- **Exactly one case gains:** the docker-compose build case can only pass after
-  a rebuild, because its answer has never been ingested.
-- Clearing manifest entries without rebuilding is *not* safe — it appends a
-  second copy rather than replacing the first, and changed chunks do not
-  de-duplicate, so the stale and fresh versions compete in retrieval.
+- **It is not judge noise and not flaky.** With the cached query expansion
+  dropped before each trial, target 12 was missed in 0 of 5 trials.
+- The chain is: the agent calls the tool with a shortened query,
+  `'Community Type metric'`; the expansion model turns that into
+  `'Social network community measure'` and `'Graph community detection
+  metric'`, which are the wrong domain; eight of the top ten hits then come
+  from `AgenticAI_Interview_Questions_Theory.md`, the file that gained the most
+  new text in the rebuild.
+- **The content is present and reachable.** Called directly with the user's
+  full question, the search tool returns Problem 12 at rank 1.
+- **The mechanism is the order of two steps.** `search.py:379` truncates the
+  merged candidate pool to 50. `search.py:399` reranks to 10. The truncation
+  happens *before* the rerank, so a document the reranker would have scored
+  highly can be discarded before it is ever scored.
+- This is why indices 37 and 83 keep trading against each other. Both are RAG
+  cases competing for slots in one truncated pool. The keyword-expansion change
+  swapped them one way; the rebuild swapped them back.
+- One earlier one-off run of the same short query *did* retrieve Problem 12, so
+  the expansion output has changed at least once across a session. Stability
+  over time is **not** established.
 
-**The plan:**
-
-1. Copy any new `.docx` outside `data/` first — ingestion deletes the original.
-2. `mv backend/chroma_db backend/chroma_db.bak` and the same for
-   `backend/docstore`. Rename, do not delete; both are gitignored and git holds
-   no backup.
-3. Reset `data/.manifest.json` to `{"ingested_files": []}`.
-4. There is no ingestion CLI — `initialize_rag` only fires on FastAPI startup.
-   Call it directly:
-   `uv run python -c "from backend.core.ingest import initialize_rag; initialize_rag()"`
-   It needs `OPENROUTER_API_KEY` present, because importing `config` raises
-   without it.
-5. Confirm the manifest lists every file and both directories repopulated.
-6. Re-run the evaluation and compare against the committed baseline.
-7. Delete the two `.bak` directories only once step 6 looks right.
-
-**Not checked:** how long a full ingest takes, and whether the weather case's
-criteria need a live `WAQI_API_KEY`.
-
-**Also worth deciding separately:** whether to add content-hash tracking so
-this stops being manual. A hash alone is not enough — it detects the change but
-does not remove the old chunks. A working version needs the manifest to store
-`{basename: {sha256, doc_ids}}`, a delete path for both Chroma and the
-docstore, and `add_documents` called with explicit `ids=`.
+**Not tried:** any fix. Giving each expanded query a quota, or reranking before
+truncating, would both address the mechanism. Both are application-logic changes
+to `search.py` and need their own evaluation cycle.
 
 ---
 
-## 2. Index 37 — LangGraph recursion limit answered from general knowledge
+## 2. Content-hash tracking, so re-ingestion stops being manual
 
-**Status:** diagnosed, cause known, not fixed.
+**Status:** not started. Split out of the completed rebuild item.
 
-The agent answers "100 or 1000" instead of "25 steps", and says
-`RecursionError` instead of `GraphRecursionError`.
+Ingestion keys on filename only, so an edited file is never re-read. The
+2026-08-17 rebuild was the manual workaround.
 
 **Already established:**
 
-- This is a **retrieval** failure, not a fallback failure. The cached answer
-  begins with the exact required disclaimer, so the general-knowledge fallback
-  behaved as designed. See the fallback entry in [DECISIONS.md](DECISIONS.md).
-- The content is in the index and reachable — the same case passed before the
-  query-expansion change.
-- It is the price paid for fixing indices 5 and 83. Net logic was flat; the
-  gain was on recall.
-- The evaluation is right to fail it: the answer is wrong on the facts and the
-  correct answer was available.
+- A hash alone is not enough. It detects the change but does not remove the old
+  chunks. A working version needs the manifest to store
+  `{basename: {sha256, doc_ids}}`, a delete path for both Chroma and the
+  docstore, and `add_documents` called with explicit `ids=`.
+- Clearing manifest entries without rebuilding is *not* safe — it appends a
+  second copy rather than replacing the first. Measured on the pre-rebuild
+  index: 8,404 distinct chunks were each stored 5 times, a few 10, 15 and 20
+  times.
 
-**Not tried:** anything targeted at this case. The obvious next step is to find
-why the keyword expansion misses this content specifically, rather than
-reopening the expansion prompt — a mixed keyword-plus-sentence prompt was
-already tested for one cycle and scored 0/4.
+**Measured during the rebuild, useful here:** a full ingest of 26 files —
+17,954 child chunks, 8,909 parents — took **97 seconds** on a MacBook Air with
+the embedding weights already on disk. Treat that as a floor, not a forecast,
+on other hardware or a cold model download.
 
 ---
 
@@ -126,15 +112,20 @@ marker, so it needs its own evaluation cycle.
   fast-path table, so its output is byte-identical between runs, and its
   verdict has still flipped. The judge's `request_timeout` changed its cache
   key at one point, which re-judged everything. Do not chase it.
-- **`.langchain.db` is tracked in git**, about 12 MB packed, and only one
-  commit deep. It holds prompts and completions from the knowledge base — no
-  credentials, verified by scanning all 47.8 MB of decompressed text — and it
-  is public on both GitHub and the HuggingFace Space. Worth a deliberate
-  decision about whether it should stay tracked.
-- **The README's `k=40` claim is partial.** `config.py` does set
-  `search_kwargs={"k": 40}`, but `search.py` then truncates the candidate pool
-  to 50 and reranks to 10. The sentence is true about the retriever and silent
-  about the later cuts.
+- **`.langchain.db` blocks the HuggingFace push.** It is tracked, about 12 MB
+  packed and 56.7 MB raw, and lives in exactly one commit, `039a2cb`. It is the
+  only blob over 5 MB anywhere in the history. HuggingFace rejects the push
+  because the blob exceeds 10 MiB and no `.gitattributes` rule matches `*.db`.
+  The re-scan for credentials is now independent of the original: 1,502 rows and
+  31.7 M characters of the committed blob checked against 13 credential pattern
+  classes, and the only match is `postgresql://localhost/postgres` — no user, no
+  password. Pattern matching cannot prove absence, but the record holds.
+- **`git filter-repo` cannot run in this working repo without `--force`.** Its
+  clean-tree guard calls `git ls-files -o` *without* `--exclude-standard`, so it
+  counts gitignored paths too — 126,974 entries here, 51,050 of them inside
+  `.venv`. Gitignoring does not help. And `--force` skips every guard and then
+  ends with `git reset --hard` (`reset = not is_bare`), which would discard all
+  uncommitted tracked changes. Operate on a fresh clone instead.
 - **The evaluation never exercises `chat.py`.** `eval.py` invokes the compiled
   graph directly, so the input guardrail, the output masking and the semantic
   cache are all untested by the suite.

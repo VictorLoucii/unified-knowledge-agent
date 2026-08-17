@@ -184,6 +184,33 @@ figure alongside the headline whenever retrieval changes, or you will report a
 movement that did not happen. The full explanation is in
 [CLAUDE.md](CLAUDE.md).
 
+### The recall baseline was lowered to 33/34 on purpose
+
+**Chosen:** rebuild the vector index, accept that Recall@k falls from 34/34 to
+33/34, and record the new figure as the baseline.
+
+**Rejected:** reverting the rebuild to keep 34/34. Also rejected: changing
+`search.py` to win index 83 back inside the same change.
+
+**Why:** the pre-rebuild index held roughly five copies of everything — 8,404
+distinct chunks stored 5 times each, 85,008 child chunks against 17,954 after.
+`search.py:379` truncates the candidate pool to 50 before reranking, so a pool
+of 50 held about 10 distinct documents. That is a worse defect than one recall
+point, and it was invisible in the score.
+
+The rebuild also fixed index 37, which `OPEN.md` had carried as a known failure.
+Net on AI Logic was flat at 90/94; the movement was one genuinely-exercised RAG
+case gained and one lost.
+
+Fixing index 83 properly means changing the order of truncation and reranking,
+which is application logic and needs its own evaluation cycle. Bending
+`search.py` to recover one case inside a rebuild commit would have hidden the
+mechanism. It is written up as `OPEN.md` item 1 instead.
+
+**Consequence:** `eval.py:232` still gates on `recall_score == 100.0`, so the
+suite reports `PIPELINE FAILED` at this baseline. That is expected until index
+83 is fixed. Do not relax the gate to make the message go away.
+
 ### Destructive `.docx` conversion, accepted
 
 **Chosen:** `ingest.py` converts any `.docx` in `data/` to markdown via pandoc
