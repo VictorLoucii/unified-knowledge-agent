@@ -55,8 +55,8 @@ async def search_knowledge_base(query: str) -> str:
     else:
         try:
             prompt_content = (
-                f"Generate 3 diverse, natural-language semantic search queries to find the answer to this exact query: '{query}'.\n"
-                "RULE 1: Use full, descriptive sentences or questions that capture the context and technical intent.\n"
+                f"Generate 3 diverse, highly specific keyword search queries (1-5 words each) to find the answer to this exact query: '{query}'.\n"
+                "RULE 1: Use synonyms, specific technical terms, and alternative phrasing.\n"
                 "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query.\n"
                 "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
             )
