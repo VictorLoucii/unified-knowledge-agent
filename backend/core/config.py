@@ -33,12 +33,14 @@ try:
 except Exception as e:
     print(f"⚠️ [WARNING] Failed to initialize Phoenix tracing: {e}")
 
+is_eval_mode = os.getenv("EVAL_MODE", "false").lower() == "true"
+
 primary_llm = ChatOpenAI(
     model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
-    streaming=True,
+    streaming=not is_eval_mode,
     request_timeout=45,
     max_retries=2,  # Reduced so it fails over faster
 )
@@ -48,7 +50,7 @@ fallback_llm = ChatOpenAI(
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
-    streaming=True,
+    streaming=not is_eval_mode,
     request_timeout=45,
     max_retries=3,
 )

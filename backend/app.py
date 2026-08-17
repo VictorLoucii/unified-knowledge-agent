@@ -60,8 +60,8 @@ async def lifespan(app: FastAPI):
 
     memory = AsyncPostgresSaver(async_pool)
 
-    #  We remove the interrupt. This allows the search tool to run without waiting for user approval.
-    graph = workflow.compile(checkpointer=memory)
+    # Interrupt before sensitive tools to wait for user approval
+    graph = workflow.compile(checkpointer=memory, interrupt_before=["sensitive_tools"])
     print("🚀 Async Database Pool & LangGraph Engine Started")
 
     # 2. Run the heavy auto-ingestion in a background thread!
@@ -122,17 +122,44 @@ async def chat_stream(request: ChatRequest):
     async def timed_generator():
         import time, json
         start = time.time()
+        is_interrupted = False
         async for chunk in generate_chat_responses(request.message, request.thread_id, graph, async_pool):
+            if "on_agent_interrupt" in chunk:
+                is_interrupted = True
             if chunk.strip() == "data: [DONE]":
-                latency = time.time() - start
-                timing_msg = f"\n\n*⚡ Query processed in {latency:.2f}s*"
-                yield f"data: {json.dumps({'event': 'on_chat_model_stream', 'name': 'latency', 'data': {'chunk': {'content': timing_msg}}})}\n\n"
+                if not is_interrupted:
+                    latency = time.time() - start
+                    timing_msg = f"\n\n*⚡ Query processed in {latency:.2f}s*"
+                    yield f"data: {json.dumps({'event': 'on_chat_model_stream', 'name': 'latency', 'data': {'chunk': {'content': timing_msg}}})}\n\n"
             yield chunk
 
     return StreamingResponse(
         timed_generator(),
         media_type="text/event-stream",
     )
+
+
+class RefineRequest(BaseModel):
+    transcript: str
+
+@app.post("/refine_transcript")
+async def refine_transcript(request: RefineRequest):
+    """Refines a raw voice transcript using a fast LLM."""
+    from backend.core.config import fast_llm
+    from langchain_core.messages import SystemMessage, HumanMessage
+    
+    sys_prompt = "You are a transcription refinement assistant. Fix any spelling mistakes (especially tech jargon like 'markdown', 'tech stack', 'semantically') and ensure proper punctuation (e.g., adding a question mark if it's a question) in the following text. Only return the corrected text, nothing else. Do not wrap in quotes or add preamble."
+    
+    try:
+        response = await fast_llm.ainvoke([
+            SystemMessage(content=sys_prompt),
+            HumanMessage(content=request.transcript)
+        ])
+        return {"refined_transcript": response.content.strip()}
+    except Exception as e:
+        print(f"🚨 Error refining transcript: {e}")
+        return {"refined_transcript": request.transcript} # Fallback to original
+
 
 
 @app.get("/")
@@ -151,8 +178,18 @@ class ActionRequest(BaseModel):
 async def chat_approve(request: ActionRequest):
     """Endpoint for the frontend to approve or reject a pending tool call."""
     if request.approve:
+        async def timed_resume_generator():
+            import time, json
+            start = time.time()
+            async for chunk in resume_graph_stream(request.thread_id, graph):
+                if chunk.strip() == "data: [DONE]":
+                    latency = time.time() - start
+                    timing_msg = f"\n\n*⚡ Query resumed & processed in {latency:.2f}s*"
+                    yield f"data: {json.dumps({'event': 'on_chat_model_stream', 'name': 'latency', 'data': {'chunk': {'content': timing_msg}}})}\n\n"
+                yield chunk
+                
         return StreamingResponse(
-            resume_graph_stream(request.thread_id, graph),
+            timed_resume_generator(),
             media_type="text/event-stream"
         )
     else:

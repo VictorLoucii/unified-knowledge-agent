@@ -1,29 +1,6 @@
 from backend.core.config import fast_llm
 from backend.core.fast_path_routes import FAST_PATH_INTERCEPTS
-from langchain_core.messages import SystemMessage, HumanMessage
 import re
-
-# The first batch of specific semantic domains mapped to files
-DOMAIN_FILE_MAPPING = {
-    "INTERNSHIP_BUGS": "NEXTIER_Internship_Bugs.md",
-    "AGENTIC_AI_THEORY": "AgenticAI_Interview_Questions_Theory.md",
-    "API_RELATED": "API RELATED.md",
-    "REACT_NATIVE_DOCS": "RNjs.docx.md",
-    "UNIFIED_KNOWLEDGE": "Unified_Knowledge_Project_Details.md"
-}
-
-ROUTER_SYSTEM_PROMPT = """You are an intent classifier. Your job is to classify the user's query into exactly ONE of the following domains:
-
-- INTERNSHIP_BUGS: Queries about specific bug fixes, UI issues, React Native app bugs (like tab underlines, keyboard issues, padding, API errors like invalid_grant).
-- AGENTIC_AI_THEORY: Queries about LangGraph, agent memory, semantic firewall, Iron Triangle, AI concepts, etc.
-- API_RELATED: Queries about HTTP methods, REST, APIs, web requests.
-- REACT_NATIVE_DOCS: Queries about general React Native or JavaScript rules, styling, flatlists, building for emulator, etc.
-- UNIFIED_KNOWLEDGE: Queries about the architecture of this knowledge agent, docker setup, or specific agentic AI project issues (like 'Ghost Streaming State' or 'Serialization Crash').
-- OUT_OF_SCOPE: Explicitly asking about Kubernetes, AWS Lambda, Web scraping, Vue.js, Java Spring Boot, or multiple inheritance in Python.
-- UNKNOWN: If it doesn't clearly fit into any of the above.
-
-You MUST respond with exactly the category name and NOTHING else.
-"""
 
 async def route_query(user_query: str) -> dict:
     # 1. Exact Match Intercepts (O(1) lookup)
@@ -51,24 +28,8 @@ async def route_query(user_query: str) -> dict:
                 "fast_path_target_id": problem_id
             }
         else:
-            return {"route_category": "INTERNSHIP_BUGS"}
+            return {"route_category": "RAG"}
 
-    # 2. LLM Intent Classification
-    try:
-        response = await fast_llm.ainvoke([
-            SystemMessage(content=ROUTER_SYSTEM_PROMPT),
-            HumanMessage(content=user_query)
-        ])
-        category = response.content.strip().upper()
-        
-        # Validation
-        if category in DOMAIN_FILE_MAPPING or category in ["OUT_OF_SCOPE", "UNKNOWN"]:
-            print(f"🔀 [ROUTER] Classified as {category}")
-            return {"route_category": category}
-        else:
-            print(f"⚠️ [ROUTER] Invalid classification: {category}. Defaulting to UNKNOWN.")
-            return {"route_category": "UNKNOWN"}
-            
-    except Exception as e:
-        print(f"🚨 [ROUTER] LLM Classification failed: {e}")
-        return {"route_category": "UNKNOWN"}
+    # 2. Default to RAG for Vector Database Retrieval
+    print("🔀 [ROUTER] Classified as RAG (Delegating to ChromaDB)")
+    return {"route_category": "RAG"}

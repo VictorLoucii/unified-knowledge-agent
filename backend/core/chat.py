@@ -218,7 +218,7 @@ Rules:
                         max_allowed = max(2000, last_tool_output_length + 1500)
                 yield f"data: {json.dumps(safe_event)}\n\n"
 
-            elif kind == "on_chain_end" and event.get("name") == "fast_path_node":
+            elif kind == "on_chain_end" and event.get("name") in ["fast_path_node", "conversational_node", "fallback"]:
                 output_data = event.get("data", {}).get("output", {})
                 if isinstance(output_data, dict) and "messages" in output_data:
                     for msg in output_data["messages"]:
@@ -261,7 +261,7 @@ Rules:
 
         # Check if the graph is currently interrupted
         state = await graph.aget_state(config)
-        is_interrupted = state.next and "tools" in state.next
+        is_interrupted = state.next and "sensitive_tools" in state.next
 
         if is_interrupted:
             # Send a special signal to the frontend
@@ -356,7 +356,7 @@ async def resume_graph_stream(thread_id: str, graph):
                         max_allowed = max(2000, last_tool_output_length + 1500)
                 yield f"data: {json.dumps(safe_event)}\n\n"
 
-            elif kind == "on_chain_end" and event.get("name") == "fast_path_node":
+            elif kind == "on_chain_end" and event.get("name") in ["fast_path_node", "conversational_node", "fallback"]:
                 output_data = event.get("data", {}).get("output", {})
                 if isinstance(output_data, dict) and "messages" in output_data:
                     for msg in output_data["messages"]:
@@ -399,7 +399,7 @@ async def resume_graph_stream(thread_id: str, graph):
 
         # Check if it hit ANOTHER interrupt (unlikely, but good practice)
         state = await graph.aget_state(config)
-        is_interrupted = state.next and "tools" in state.next
+        is_interrupted = state.next and "sensitive_tools" in state.next
         if is_interrupted:
             interrupt_event = {
                 "event": "on_agent_interrupt",

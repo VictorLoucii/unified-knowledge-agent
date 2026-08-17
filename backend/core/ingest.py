@@ -111,20 +111,15 @@ def initialize_rag():
         # [Pandoc Fix] Scrub any lingering Pandoc media tags (e.g. ![](something){width=something})
         markdown_document = re.sub(r'!\[.*?\]\(.*?\)(\{.*?\})?', '', markdown_document)
 
+        # [Escaped Headers Fix] Unescape headers that were escaped by markdown editors
+        markdown_document = re.sub(r'(?m)^\s*\\#\\#\\#\s', '### ', markdown_document)
+        markdown_document = re.sub(r'(?m)^\s*\\#\\#\s', '## ', markdown_document)
+        markdown_document = re.sub(r'(?m)^\s*\\#\s', '# ', markdown_document)
+
         md_header_splits = markdown_splitter.split_text(markdown_document)
 
-        # Prepend headers to page_content and add source_file metadata
         for doc in md_header_splits:
             doc.metadata["source_file"] = basename
-            header_parts = [f"Source Document: {basename}"]
-            if "Header 1" in doc.metadata:
-                header_parts.append(f"# {doc.metadata['Header 1']}")
-            if "Header 2" in doc.metadata:
-                header_parts.append(f"## {doc.metadata['Header 2']}")
-            if "Header 3" in doc.metadata:
-                header_parts.append(f"### {doc.metadata['Header 3']}")
-            
-            doc.page_content = "\n".join(header_parts) + "\n\n" + doc.page_content
 
         # ==========================================
         # Pre-split these header sections so no single document
@@ -132,17 +127,49 @@ def initialize_rag():
         # ==========================================
         safe_splits = parent_splitter.split_documents(md_header_splits)
 
+        from backend.core.config import child_splitter
+        import uuid
+
+        parents_to_store = []
+        children_to_vectorstore = []
+
+        for doc in safe_splits:
+            header_parts = [f"Source Document: {doc.metadata.get('source_file', basename)}"]
+            if "Header 1" in doc.metadata:
+                header_parts.append(f"# {doc.metadata['Header 1']}")
+            if "Header 2" in doc.metadata:
+                header_parts.append(f"## {doc.metadata['Header 2']}")
+            if "Header 3" in doc.metadata:
+                header_parts.append(f"### {doc.metadata['Header 3']}")
+            header_prefix = "\n".join(header_parts) + "\n\n"
+
+            # Create the parent document
+            doc_id = str(uuid.uuid4())
+            parent_doc = doc.copy()
+            parent_doc.metadata[retriever.id_key] = doc_id
+            parent_doc.page_content = header_prefix + parent_doc.page_content
+            parents_to_store.append((doc_id, parent_doc))
+
+            # Create the child documents
+            # We split the RAW document content, then prepend headers to EACH child
+            child_docs = child_splitter.split_documents([doc])
+            for child in child_docs:
+                child.metadata[retriever.id_key] = doc_id
+                child.page_content = header_prefix + child.page_content
+                children_to_vectorstore.append(child)
+
         print(
-            f"⚙️ Adding {len(safe_splits)} safe parent documents to the Retriever in batches for {basename}..."
+            f"⚙️ Adding {len(parents_to_store)} parent documents and {len(children_to_vectorstore)} child chunks for {basename}..."
         )
 
         BATCH_SIZE = 100
-        for i in range(0, len(safe_splits), BATCH_SIZE):
-            batch = safe_splits[i : i + BATCH_SIZE]
-            print(
-                f"📦 Processing batch {i//BATCH_SIZE + 1} (Documents {i} to {i + len(batch)})..."
-            )
-            retriever.add_documents(batch)
+        for i in range(0, len(children_to_vectorstore), BATCH_SIZE):
+            batch = children_to_vectorstore[i : i + BATCH_SIZE]
+            print(f"📦 Processing child batch {i//BATCH_SIZE + 1}...")
+            retriever.vectorstore.add_documents(batch)
+            
+        # Store parents in docstore
+        retriever.docstore.mset(parents_to_store)
             
         manifest.setdefault("ingested_files", []).append(basename)
         save_manifest(manifest)

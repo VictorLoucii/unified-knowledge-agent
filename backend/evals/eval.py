@@ -12,6 +12,8 @@ project_root = str(Path(__file__).parent.parent.parent.resolve())
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
+os.environ["EVAL_MODE"] = "true"
+
 # 2. NOW IT IS SAFE TO IMPORT LOCAL MODULES AND 3RD PARTY LIBS
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
@@ -66,6 +68,7 @@ judge_llm = ChatOpenAI(
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0.0,
+    request_timeout=45,
     max_retries=5,
 )
 structured_judge = judge_llm.with_structured_output(EvalResult)
@@ -152,6 +155,7 @@ def run_evals():
                 max_eval_retries = 5
                 for attempt in range(max_eval_retries):
                     try:
+                        print(f"🤖 [DEBUG] Test {actual_test_idx} - Waiting for LLM Judge (attempt {attempt+1})...")
                         raw_verdict = await evaluator_chain.ainvoke({
                             "query": test["query"],
                             "expected_output": test["expected_output"],
@@ -159,6 +163,7 @@ def run_evals():
                             "agent_output": agent_output
                         })
                         verdict = raw_verdict
+                        print(f"✅ [DEBUG] Test {actual_test_idx} - Judge evaluation complete.")
                         break
                     except Exception as e:
                         print(f"⚠️ Warning: LLM Judge evaluation failed (attempt {attempt + 1}/{max_eval_retries}): {e}")
