@@ -1,0 +1,205 @@
+# Unified Knowledge Agent — working rules
+
+A RAG agent over a personal knowledge base of markdown files. FastAPI +
+LangGraph backend, Next.js frontend, ChromaDB for vectors, OpenRouter for
+model calls. The `data/` directory is the single source of truth.
+
+---
+
+## Read this before you trust the evaluation score
+
+**The fast-path table answers 53 of the 94 evaluation cases without calling
+the retriever or the answering model.**
+
+`backend/core/fast_path_routes.py` holds `FAST_PATH_INTERCEPTS`, a table of 53
+question/answer pairs. `semantic_router.py` matches a key as a *substring* of
+the user query. On a hit, `agents.py:fast_path_node` returns the stored string
+as the answer and synthesises a `ToolMessage` carrying the stored problem id,
+which is exactly what `eval.py` scrapes to compute Recall@k.
+
+Measured consequence, as of the last full run:
+
+| Metric | Headline | From the table | Genuinely exercised |
+|---|---|---|---|
+| AI Logic Score | 90/94 | 53 cases | **41 cases** |
+| Recall@k | 34/34 | 26 cases | **8 cases** |
+
+So "100% Recall@k" rests on 8 vector retrievals, not 34. The table is a
+legitimate O(1) cache in the product. It is not a measurement of the RAG
+pipeline. **When you change retrieval, report the 41-case and 8-case figures
+alongside the headline, or you will report a change that did not happen.**
+
+Note also that the intercept keys match the eval's queries verbatim, so the
+table helps the score far more than it helps a real user, who will phrase the
+question differently and fall through to RAG.
+
+---
+
+## Eval-Driven Development
+
+Adding or changing anything that touches the system prompt, the semantic
+router, the tools, or the retrieval pipeline puts you under these rules.
+
+**1. Run the suite before you call the work done.**
+
+```bash
+uv run python -m backend.evals.eval
+```
+
+Use the bare command. Do **not** set `MODEL_NAME`. It is read in three places —
+`config.py` (the agent under test), `search.py` (the query-expansion model) and
+`eval.py` (the LLM judge) — and setting it silently reassigns the judge, which
+invalidates every cached judgment and makes the run far more expensive.
+
+Targeted runs are much cheaper while iterating:
+
+```bash
+uv run python -m backend.evals.eval --indices 5,37,42,83
+```
+
+**Warning: every run, including a partial `--indices` run, overwrites
+`backend/evals/latest_run_metrics.json`.** Back that file up before a partial
+run and restore it afterwards, or you will lose the committed baseline.
+
+**2. Do not drop below the committed baseline.**
+
+The floor is whatever `backend/evals/latest_run_metrics.json` holds at `HEAD`.
+Do not merge, commit, or finalise a change that lowers either score below it.
+If you regress, find the cause, fix or revert, and re-run until you are back at
+or above the committed figures. The suite's own gate lives at `eval.py` —
+read the threshold from the code, never restate a number in a rule or a skill.
+
+**3. Be surgical with the system prompt.**
+
+The directives in `backend/core/agents.py` that handle problem extraction,
+rigid formatting and the zero-knowledge guardrail are load-bearing. Do not
+remove or heavily rewrite them without a specific reason.
+
+**4. Change the test when the behaviour should change.**
+
+If a new feature legitimately changes how the agent should answer, update the
+expected output and criteria in `backend/evals/qa_dataset.json`. Do not bend
+the system prompt to satisfy a test that no longer describes what you want.
+
+**5. Follow the EDD loop for any bug you find.**
+
+1. Document the query, the wrong output and the desired output. Touch nothing.
+2. Add the failing case to `qa_dataset.json`.
+3. Run the suite and watch it fail. That is your baseline.
+4. Fix the prompt or the retrieval logic.
+5. Re-run. The new case passes, every old case still passes, and the scores are
+   at or above the committed baseline.
+
+### Judge noise is real
+
+The judge is an LLM. Cases have flipped verdict across runs on unchanged code —
+index 42 alternated fail/pass/pass/fail. Before chasing a single-case
+difference, check whether the agent's output actually changed. If the case is
+served by the fast-path table and that table is unmodified, the output is
+byte-identical and the difference is the judge.
+
+---
+
+## Never modify `data/`
+
+`data/` is the raw knowledge base. It is manually curated and is the single
+source of truth.
+
+**Never modify, edit, or append to any `.md` or `.docx` file inside `data/`.**
+
+- **No parser hacks.** Do not inject formatting tags, HTML or structural
+  markers into the source files to make them easier to parse. The data stays
+  clean, natural and human-readable.
+- **Fix the pipeline, not the data.** If retrieval misses a section, change
+  `backend/core/ingest.py` (chunking), `backend/core/tools/search.py` (query
+  expansion, reranking, score boosting) or the expansion prompt.
+- **Cache files are the exception.** `data/.manifest.json` may be modified or
+  deleted, and only when deliberately re-ingesting.
+
+### Ingestion is destructive and does not update
+
+Two behaviours to know before you run ingestion:
+
+- **Any `.docx` dropped into `data/` is converted to markdown and the original
+  is permanently deleted** (`ingest.py`). Copy the original somewhere outside
+  `data/` first.
+- **Ingestion keys on filename only.** `ingest.py` compares basenames against
+  `data/.manifest.json`. It ignores content, size and mtime, and there is no
+  delete path anywhere in the backend. A file already in the manifest will
+  never be re-read no matter how much you edit it, and clearing its manifest
+  entry adds a second copy rather than replacing the first. `search.py`
+  de-duplicates by exact `page_content`, so identical chunks collapse but
+  *changed* ones do not — you get the stale and the fresh version competing.
+  To pick up edited files, rebuild: rename `backend/chroma_db` and
+  `backend/docstore` aside, empty the manifest, then run ingestion. Both
+  directories are gitignored, so git holds no backup — rename, never delete.
+
+---
+
+## Core logic rules
+
+- Do not change application logic unless asked.
+- **Backward compatibility is the golden rule.** Changes to shared components
+  or hooks use optional props and default values so existing callers keep
+  working.
+- Do not guess or assume missing information. Reason only from files you have
+  actually read. If something cannot be confirmed from the code, say so.
+- Follow the existing project structure and style. Do not refactor unrelated
+  code.
+- Say exactly which file and which line to change.
+- **Do not add dependencies without asking.** Check `package.json`,
+  `pyproject.toml` and `uv.lock` before writing a utility or adding a package.
+- Grep for every reference to a function, hook, column or variable before
+  renaming or deleting it.
+- Never leave a catch block empty. Log the error or return a descriptive
+  message.
+- Keep components and screens under roughly 450 lines. Push presentation into
+  sub-components and business logic into hooks.
+- **Non-destructive editing.** Preserve existing comments, docstrings and
+  unrelated functions. Do not delete logic unless told to.
+- Check modified files compile or lint before calling the work done.
+- **Git hygiene.** Never run `git add .`. Stage only the files that implement
+  the requested change, and read the diff before committing.
+
+## Secrets
+
+Never hardcode API keys, passwords or credentials — read them from the
+environment. Never open, read or request the real `.env`; use `.env.example`
+to check variable names and schemas.
+
+## Frontend rules
+
+- Do not change styles, layout or design unless asked.
+- All UI changes must work on mobile, tablet and desktop.
+- **Golden rule of hooks.** Declare hooks at the top level of the component
+  that consumes their values. Never declare a hook inside a child when the
+  parent needs the data.
+- This is Next.js, not React Native. `frontend/AGENTS.md` warns that this
+  Next.js version has breaking changes against common knowledge — read the
+  relevant guide under `node_modules/next/dist/docs/` before writing frontend
+  code.
+
+---
+
+## Commands
+
+```bash
+# install
+uv sync
+
+# backend (also triggers ingestion of any file not in the manifest)
+uv run uvicorn backend.app:app --reload
+
+# frontend
+cd frontend && npm run dev
+
+# full stack
+docker compose up --build
+
+# evaluation — see the EDD section above before running
+uv run python -m backend.evals.eval
+```
+
+Observability is Arize Phoenix, self-hosted via docker compose. If no collector
+is listening, tracing degrades quietly — `config.py` uses `register(batch=True)`
+so failed exports stay off the request path. Never change that to `batch=False`.
