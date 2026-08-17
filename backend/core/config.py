@@ -27,7 +27,14 @@ try:
     # Configure Phoenix endpoint (points to your local docker container)
     os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:4317"
     
-    tracer_provider = register()
+    # batch=True is required, not a tuning knob. register() defaults to
+    # batch=False (phoenix/otel/otel.py:68), which installs a SimpleSpanProcessor
+    # and exports every span synchronously on the calling thread. When nothing is
+    # listening on the collector endpoint each export blocks on a failed
+    # connection, so the caller pays for it. A BatchSpanProcessor moves the
+    # export to a background thread, so a missing collector costs nothing on the
+    # request path.
+    tracer_provider = register(batch=True)
     LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
     print("✅ Arize Phoenix tracing successfully initialized.")
 except Exception as e:
