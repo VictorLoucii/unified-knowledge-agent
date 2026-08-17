@@ -1,5 +1,11 @@
 [
   {
+    "query": "give me some python refactoring questions",
+    "expected_output": "Question 1 — String building",
+    "evaluation_criteria": "The agent MUST return information about Python refactoring, such as string building or list comprehensions. It MUST NOT return React Native or QuestionCard context.",
+    "target_problem_id": null
+  },
+  {
     "query": "What is the project rule regarding the use of npm versus yarn?",
     "expected_output": "Use Yarn Only: Avoid `npm` commands entirely to prevent `package-lock.json` conflicts. Use `yarn install`, `yarn start`, etc.",
     "evaluation_criteria": "The agent MUST prioritize the General Workflow Rules. It MUST extract the core reasoning.",
@@ -537,6 +543,24 @@
     "query": "what is langchain.db in my unified knowledge agent project?",
     "expected_output": "A local SQLite database used by LangChain as an LLM response cache (SQLiteCache).",
     "evaluation_criteria": "The response MUST explicitly state it is a local SQLite database and an LLM response cache.",
+    "target_problem_id": null
+  },
+  {
+    "query": "from my internship blogs how many problems are there in my internship logs",
+    "expected_output": "The knowledge base currently contains 116 uniquely numbered debugging logs.",
+    "evaluation_criteria": "The response must correctly state that there are 116 uniquely numbered debugging logs.",
+    "target_problem_id": null
+  },
+  {
+    "query": "why didn't i do the docker compose build command in my unified knowledge agent project?",
+    "expected_output": "The project avoids `docker-compose build` because: 1) Hardware constraints limit memory to 2GB. 2) Disk space conservation using `--rm` flag. 3) No build overhead by pulling the pre-built `latest` image directly from Docker Hub. 4) Ephemeral sessions that wipe logs clean on container stop.",
+    "evaluation_criteria": "The agent MUST mention the 4 reasons for avoiding docker-compose build: Hardware Constraints, Disk Space Conservation, No Build Overhead, and Ephemeral Sessions.",
+    "target_problem_id": null
+  },
+  {
+    "query": "What is the weather and AQI in New Delhi right now?",
+    "expected_output": "The agent must return information about the weather and AQI in New Delhi.",
+    "evaluation_criteria": "The agent MUST return information about the weather and AQI in New Delhi by using the get_weather_and_aqi tool. It MUST NOT return 'out of scope' or rely on its knowledge base.",
     "target_problem_id": null
   }
 ]
