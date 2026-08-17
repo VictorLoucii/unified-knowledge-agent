@@ -27,6 +27,7 @@ export const useChatStream = (initialThreadId?: string) => {
   // Track the current assistant message ID to reliably resume streams
   const latestAssistantIdRef = useRef<string | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null); // <-- [NEW] Abort controller ref
+  const isSubmittingRef = useRef<boolean>(false); // <-- [FIX] Prevent double-submissions
 
   const [threadId, setThreadId] = useState<string>(() => {
     if (initialThreadId) return initialThreadId;
@@ -138,6 +139,9 @@ export const useChatStream = (initialThreadId?: string) => {
   };
 
   const sendMessage = async (userText: string, onFinish?: () => void) => {    
+    if (isSubmittingRef.current || isStreaming) return; // Prevent double clicks
+    isSubmittingRef.current = true;
+
     const userMsg: ChatMessage = {
       id: Date.now().toString(),
       role: "user",
@@ -190,9 +194,11 @@ export const useChatStream = (initialThreadId?: string) => {
         const isInterrupted = targetMsg?.currentTool === "Action Required: Pending approval.";
         
         if (isInterrupted) {
+          isSubmittingRef.current = false;
           return prev;
         } else {
           setIsStreaming(false);
+          isSubmittingRef.current = false;
           if (onFinish) onFinish();
           return prev.map((msg) =>
             msg.id === assistantId ? { ...msg, isThinking: false } : msg

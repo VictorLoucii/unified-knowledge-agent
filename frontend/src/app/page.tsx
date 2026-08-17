@@ -222,22 +222,23 @@ export default function ChatUI() {
     sendMessage(query, () => fetchHistory(true));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = (e: React.FormEvent, overrideInput?: string) => {
     e.preventDefault();
-    if (!input.trim() || isStreaming) return;
+    const finalInput = overrideInput !== undefined ? overrideInput : input;
+    if (!finalInput.trim() || isStreaming) return;
     isAutoScrollPaused.current = false;
 
     const isNewThread = !threads.some((t: any) => t.id === currentThreadId);
     if (isNewThread) {
       const optimisticTitle =
-        input.length > 40 ? input.slice(0, 40) + "..." : input;
+        finalInput.length > 40 ? finalInput.slice(0, 40) + "..." : finalInput;
       setThreads((prev) => [
         { id: currentThreadId, title: optimisticTitle },
         ...prev,
       ]);
       window.history.pushState(null, "", `?thread=${currentThreadId}`);
     }
-    sendMessage(input, () => fetchHistory(true));
+    sendMessage(finalInput, () => fetchHistory(true));
     setInput("");
   };
 
