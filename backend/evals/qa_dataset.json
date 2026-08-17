@@ -8,7 +8,7 @@
   {
     "query": "Why did we change the import from @/i18n to ./src/i18n for local wireless debugging?",
     "expected_output": "Metro bundler failed to resolve the @/i18n alias during wireless debugging and returned a 500 error (UnableToResolveError). Using the relative path ensures proper module resolution without relying on alias configuration.",
-    "evaluation_criteria": "The agent MUST return the reasoning provided in the notes. It MUST include the surrounding conceptual explanations.",
+    "evaluation_criteria": "The response MUST state that the Metro bundler failed to resolve the '@/i18n' alias during wireless debugging, that this produced a 500 error (UnableToResolveError), and that using the relative path removes the dependence on alias resolution. Providing additional relevant context about module resolution or alias configuration is acceptable and should NOT fail the test.",
     "target_problem_id": null
   },
   {
