@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Production-Ready & Evaluated (100.0% Search Recall@k & 100.0% AI Logic Score)
+**Current Status:** Production-Ready & Evaluated — 100.0% Search Recall@k (34/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; vector retrieval measured on its own scores 100.0% (8/8).
 
 ---
 
@@ -22,6 +22,9 @@ pinned: true
 
 ### The "Yellow Card" Protocol (HITL)
 The agent utilizes `on_agent_interrupt` to pause before executing heavy tools, requiring explicit human approval via the UI. The Phase 8 update ensures a seamless handshake between the LangGraph state and the Next.js frontend.
+
+### LLM-Powered Voice Autocorrect
+The frontend features a Web Speech API integration that passes raw voice transcripts through a lightweight `/refine_transcript` FastAPI endpoint. This corrects technical jargon spelling (e.g., "seementally" -> "semantically") and intelligently appends punctuation without altering user intent, ensuring accurate inputs for downstream semantic routing.
 
 <div align="center">
   <img src="./assets/ss1.png" alt="Interface Snapshot 1" width="48%">
@@ -46,7 +49,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Continuous Content Refinement:** Existing `.md` files are regularly updated with targeted keywords and contextual enhancements to continuously improve retrieval accuracy and AI Logic synthesis.
 
 ### 2. High-Performance Retrieval Engine (100% Recall)
-* **Metadata Header Preservation:** Pre-splits markdown documents and prepends header contexts (e.g. `# Problem ID`) back to the chunk `page_content` prior to ingestion. This resolves ChromaDB's native metadata-stripping blind spot.
+* **Robust Header-Injection Chunking:** Preserves Markdown structure by dynamically prepending parent header contexts (e.g. `## Project Tech Stack`) to **every individual chunk** *after* recursive text splitting. This resolves ChromaDB's native metadata-stripping blind spot and eliminates orphaned context.
 * **Corpus Growth Stress-Testing:** Includes a validation suite (`eval_corpus_growth.py`) that slices the document base to evaluate recall stability against growing datasets, verifying retrieval resilience.
 * **Optimized Search Width:** Configured with optimized $k=40$ child document retrieval bounds feeding the reranker for maximum coverage.
 
@@ -58,9 +61,11 @@ This system is built for deterministic reliability, performance optimization, an
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
 * **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
+* **Hyper-Local Weather & AQI Integration (HITL Protected):** Seamlessly answers dynamic environmental queries using Open-Meteo's APIs. Features a custom-built algorithm to calculate the **Indian National AQI (CPCB)** from raw pollutant data, entirely protected by LangGraph's Human-in-the-Loop pause/resume functionality to prevent unwarranted API requests.
 
 ### 4. Production Security & Guardrails
 * **Zero-Cost Trace Observability (Arize Phoenix):** Integrated Arize Phoenix via Docker, completely replacing LangChain/LangSmith to provide powerful local tracing and debugging without external API dependencies or costs.
+* **General Knowledge Fallback with Strict Disclaimers:** Enforces strict RAG adherence but allows a clean fallback to general LLM knowledge for basic, out-of-scope conversational queries. When doing so, it prepends a prominent disclaimer to prevent users from mistaking generalized advice for internal company policy.
 * **Fast Input Firewall:** An instant API gateway guardrail enforcing a **1,000-character input ceiling** and blocking jailbreaks, system prompt exposure attempts, and credential leaks.
 * **Data Loss Prevention (DLP) Masking:** A sliding 120-character regex buffer window that automatically redacts API keys and database secrets before they stream to the client interface.
 * **Dynamic Response Capping:** Prevents response truncations by scaling content length restrictions dynamically: $\text{Max Allowed Chars} = \max(2000, \text{Last Tool Output Length} + 1500)$.
@@ -97,7 +102,8 @@ This system is built for deterministic reliability, performance optimization, an
 │   │   ├── chat.py        # Core agent execution & streaming handlers
 │   │   ├── config.py      # VectorStore & Supabase PostgresSaver setup
 │   │   ├── guardrails.py  # Runtime input/output guardrail checks
-│   │   ├── ingest.py      # RAG auto-ingestion & schema setup
+│   │   ├── ingest.py      # RAG auto-ingestion & robust markdown chunking
+│   │   ├── semantic_router.py # Semantic query classifier (Fast Path & Triage)
 │   │   └── tools/         # Modular Librarian Triage & Search sub-package
 │   │       ├── __init__.py
 │   │       ├── problem_index.py
@@ -129,6 +135,7 @@ This system is built for deterministic reliability, performance optimization, an
 ├── Dockerfile             # Backend containerization
 ├── generate_dataset.py    # Synthetic dataset generation script
 ├── pyproject.toml         # Python dependencies (uv)
+├── phoenix_trace_log.txt  # Generated local tracing log for Arize Phoenix
 ├── scratch/               # Experimental root-level tests (test_agent.py, test_guardrails.py, test_params.py)
 ├── test_conn.py           # Database connectivity test script
 └── uv.lock                # Deterministic lockfile
