@@ -1,0 +1,85 @@
+# Build context exclusions.
+#
+# The build context is the whole repository (docker-compose.yml sets
+# `context: .`). Everything not excluded here is sent to the Docker daemon on
+# every build, whether or not the Dockerfile copies it.
+#
+# The Dockerfile only needs: pyproject.toml, uv.lock, backend/ and data/.
+#
+# NOT excluded on purpose: backend/chroma_db/ and backend/docstore/. The
+# Dockerfile's `COPY backend/ ./backend/` is what gives the container its
+# vector index, because data/.manifest.json is tracked and ingestion returns
+# early when every file is already listed (ingest.py:91). Excluding them would
+# leave the container with an empty index.
+
+# Virtual environment. The image builds its own with `uv sync`.
+.venv/
+**/.venv/
+
+# Frontend. Not copied by the Dockerfile.
+frontend/
+
+# Git metadata.
+.git/
+.gitignore
+.gitattributes
+.github/
+
+# Superseded index directories, kept aside during the rebuild. These sit inside
+# backend/, so without this they would be copied into the image (638 MB).
+**/*.bak
+backend/chroma_db.bak
+backend/docstore.bak
+
+# LLM response cache. Regenerated on demand; not needed at runtime.
+.langchain.db
+
+# Secrets. The Dockerfile never copies these; this is a second barrier.
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.local
+
+# Python build and cache artefacts.
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+wheels/
+
+# Node.
+node_modules/
+**/node_modules/
+.next/
+
+# Logs and evaluation output.
+*.log
+*_log.txt
+*_logs.txt
+.pytest_cache/
+
+# Documentation and media not used at runtime.
+assets/
+README.md
+CLAUDE.md
+DECISIONS.md
+OPEN.md
+
+# Agent and editor configuration.
+.claude/
+.agents/
+scratch/
+miscellaneous/
+
+# Notebooks and ad-hoc scripts.
+*.ipynb
+add_test.py
+debug_splitter.py
+test_*.py
+
+# OS noise.
+.DS_Store
+**/.DS_Store
