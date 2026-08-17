@@ -24,8 +24,11 @@ try:
     from openinference.instrumentation.langchain import LangChainInstrumentor
     from phoenix.otel import register
     
-    # Configure Phoenix endpoint (points to your local docker container)
-    os.environ["PHOENIX_COLLECTOR_ENDPOINT"] = "http://localhost:4317"
+    # Default the Phoenix endpoint to the local docker container, but let the
+    # environment win. A plain assignment here overwrote whatever the deployed
+    # container had been configured with, so it could never point the collector
+    # elsewhere or opt out.
+    os.environ.setdefault("PHOENIX_COLLECTOR_ENDPOINT", "http://localhost:4317")
     
     # batch=True is required, not a tuning knob. register() defaults to
     # batch=False (phoenix/otel/otel.py:68), which installs a SimpleSpanProcessor
