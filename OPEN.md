@@ -657,7 +657,7 @@ compatibility signal anyone has, and its cost is unknown.
 
 ---
 
-## 9. The deployed API is public, unauthenticated, and two of its routes spend credit
+## 9. The deployed API is public, unauthenticated, and three of its routes spend credit
 
 **Status:** found 2026-08-19 from the Space's access log. Diagnosed from source.
 **Nothing changed. No decision taken.** This is a product call, not a defect.
@@ -678,9 +678,9 @@ session from a container log pasted by the user; I did not read that log.*
   recursive grep over `backend/` for `Depends(`, `APIKeyHeader`, `HTTPBearer`,
   `set_cookie`, `slowapi`, `RateLimit` and `Authorization` returns **zero
   matches**.
-- **Two public routes reach a paid model.** `app.py:127` `/chat_stream` runs the
-  full graph. `app.py:152` `/refine_transcript` calls `fast_llm.ainvoke` at
-  `app.py:161`. Neither checks anything about the caller.
+- **Three public routes reach a paid model** — `/chat_stream`,
+  `/refine_transcript` and `/chat_approve`. None checks anything about the
+  caller. The full route table is below.
 - `app.py:90-96` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
   The comment at `app.py:87` calls this "Secure CORS" and `app.py:92` says it
   "Allows any local origin format"; `.*` matches **every** origin, not local
@@ -692,11 +692,10 @@ session from a container log pasted by the user; I did not read that log.*
 not data, and for a portfolio project a browsable schema may be exactly what is
 wanted.
 
-**The exposure that matters is not the schema.** It is that `/chat_stream` and
-`/refine_transcript` are open to anyone with the URL and spend the owner's
-OpenRouter balance per call. Closing `/openapi.json` does **not** address that —
-the routes answer a plain `curl` whether or not their schema is published. The
-scanners in the log did not find them, but they are two guesses away.
+**The exposure that matters is not the schema.** It is that the spend routes
+are open to anyone with the URL, and that the three `/history` routes hand out
+stored conversations. Closing `/openapi.json` does **not** address either — the
+routes answer a plain `curl` whether or not their schema is published.
 
 **CORS is not the control here.** `allow_origin_regex=".*"` is wrong as written,
 but CORS only governs what browser JavaScript may *read*. It does not gate
@@ -704,20 +703,158 @@ but CORS only governs what browser JavaScript may *read*. It does not gate
 the balance. Worth fixing so the comment stops claiming something untrue; do not
 expect it to buy security.
 
+### The full public surface — every route, read from source 2026-08-19
+
+`app.py` declares eight routes. **None of them checks anything about the
+caller.**
+
+| Route | Line | Reaches a model | Notes |
+|---|---|---|---|
+| `GET /health` | :102 | no | Reports `rag_hydrated`. Harmless. |
+| `POST /chat_stream` | :127 | **yes** | Runs the full graph. **Guarded — see below.** |
+| `POST /refine_transcript` | :152 | **yes** | `fast_llm.ainvoke` at :161. **No guard at all.** |
+| `GET /` | :172 | no | Serves `static/index.html` if present. |
+| `POST /chat_approve` | :184 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
+| `GET /history` | :209 | no | Lists **every** thread id and title, with `limit`/`offset`. |
+| `GET /history/{thread_id}` | :222 | no | Full message content of any conversation. |
+| `DELETE /history/{thread_id}` | :252 | no | Deletes all data for that thread. |
+
+**The three `/history` routes chain, and that is the data exposure.** `/history`
+at :209 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
+at :222 returns the messages; `DELETE /history/{id}` at :252 removes them. The
+stored conversations contain retrieved fragments of the personal knowledge base,
+because that is what the agent answers with.
+
+**`/chat_approve` extends the chain to a fourth spend route.** It takes a
+`thread_id` and calls `resume_graph_stream`, so a thread id obtained from
+`/history` can be used to resume someone else's interrupted run — which spends
+credit. **An earlier version of this item counted two spend routes. There are
+three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
+
+### The guardrails are asymmetric, and `/refine_transcript` is the soft target
+
+**Read.** `/chat_stream` is genuinely defended, but none of the defence lives in
+`app.py` — it is all in `chat.py`, which only `/chat_stream` routes through.
+
+- `chat.py:49` calls `check_input_guardrail`. `guardrails.py:13` refuses any
+  message over 1,000 characters, and `guardrails.py:20-25` blocks jailbreak and
+  key-extraction phrases.
+- `chat.py:66-99` checks the semantic cache first. A repeated or near-identical
+  question is answered with **no model call**.
+- The fast-path table intercepts 53 known questions before any model call.
+  *(Taken from CLAUDE.md as a record; the count is not re-derived here.)*
+
+`/refine_transcript` at `app.py:152-168` has **none** of them. No guardrail, no
+length check, no cache. `app.py:149-150` is
+`class RefineRequest(BaseModel): transcript: str` — **no maximum length**. Every
+call reaches the model. It is simultaneously the cheapest route to abuse and the
+only one with no brakes.
+
+**This is the same seam as item 10's note that "the evaluation never exercises
+`chat.py`", seen from the other side.** Protections that live in `chat.py` cover
+only what routes through `chat.py`.
+
+### The key itself is not exposed
+
+**Read.** `config.py:50`, `:60` and `:70` each pass
+`openai_api_key=os.getenv("OPENROUTER_API_KEY")`. The key stays in the container
+and never reaches a browser. The exposure is not key theft — it is that public
+routes make model calls on behalf of whoever asks.
+
+### Two pieces of dead configuration
+
+- **`app.py:88` reads `VERCEL_FRONTEND_URL` into `frontend_url`, and nothing
+  ever uses it.** A grep across `backend/` returns that single line and no other
+  hit — read. The CORS middleware at `app.py:90-96` uses
+  `allow_origin_regex=".*"` with `allow_credentials=True` instead. **So the
+  allowlist the comment at `app.py:86` calls "Secure CORS" was written and never
+  wired in.**
+- CORS is not the control here regardless. It governs what browser JavaScript
+  may *read*, not what `curl` or a server may call.
+
+### Withholding the frontend link is not a mitigation
+
+**Read.** The Space's own hostname is in the public repository three times:
+
+- `data/Agentic_AI_Engineer.md:13824` — the full `/health` URL.
+- `data/Errors_in_AgenticAI_Projects.md:1706` — the Space URL.
+- `.github/workflows/sync_to_hub.yml:20` — the Space URL.
+
+Vercel serves the frontend and holds no key, so withholding that link protects
+nothing. HuggingFace Spaces are also publicly listed — *general knowledge, not
+verified for this Space* — so the Space is discoverable without the repository
+at all. **Recorded so a future session does not treat the withheld link as
+protection.** The two `data/` occurrences are accurate notes, merely revealing;
+correcting them is **not** a correction in the sense the per-file rule means, so
+no `data/` edit is proposed.
+
+### Scope of the loss
+
+**Stated by the user, not read — an OpenRouter dashboard setting.** Auto-topup
+is **off**, so the financial loss is capped at the balance, about **$1.12**.
+
+The consequence that matters for a portfolio project is not the money. **A
+drained balance means the Space stops answering, and the demo is dead at the
+moment a recruiter opens it.**
+
+### No evidence of abuse
+
+*Container log, pasted by the user; I did not read it.* The scanner traffic
+probed secrets paths, `/api/config` and `POST /api/predict`. `/api/predict` is
+**Gradio's** endpoint, not this app's, so the scanner did not have the real
+route names. No POST to `/chat_stream`, `/refine_transcript` or `/chat_approve`
+appears.
+
+**The link to `/openapi.json` is real, though.** It returns 200 and publishes
+exactly the route names the scanner was missing.
+
 ### Options, none started
 
-- **Leave both, record the decision.** Costs nothing. Buys the demo. This is
-  defensible and may well be right — but it should then be a decision in
-  [DECISIONS.md](DECISIONS.md), not a FastAPI default nobody chose.
-- **`openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`.** One
-  line. Buys a smaller surface to enumerate. Loses the browsable schema.
-- **A spend cap.** The only option that addresses the actual risk. Not designed.
-  **The OpenRouter balance is about $1.12**, so the practical ceiling on this
-  today is small.
+**(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
+next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**Not checked:** whether the HuggingFace Space sits behind any gateway that
-rate-limits or filters before the container sees a request. That could change
-the whole assessment and I have no evidence either way.
+**(b) A length cap on `RefineRequest.transcript`, `app.py:149-150`.** One line,
+purely additive, breaks no caller. Bounds the cost per call; does not stop
+abuse. `1000` would match `guardrails.py:13` and keep the two routes
+consistent. **Not applied — `CLAUDE.md` forbids changing application logic
+unless asked.**
+
+**(c) A shared secret required by the spend routes.** **This does not work as
+stated, and the frontend is why.** Read: every call site is client-side —
+`page.tsx:71`, `ChatInput.tsx:84`, and `useChatStream.ts:48`, `:173`, `:218`,
+`:261`, `:293`. All three files resolve
+`process.env.NEXT_PUBLIC_API_URL`, and `ChatInput.tsx` and `page.tsx` are
+`"use client"`. **A `NEXT_PUBLIC_*` variable is inlined into the JavaScript
+bundle at build time and served to every visitor**, so a secret the frontend
+holds is readable in devtools by anyone. The only version of (c) that works puts
+a server-side proxy in front — a Next.js route handler that holds the secret
+server-side and forwards. That is a real feature, not a one-line change.
+
+**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`.** One
+line. Obscurity only — `/chat_stream` is not an exotic name. Slightly better
+than it first appears, because the scanner in the log demonstrably did **not**
+have the route names, and `/openapi.json` hands them over. Fixes nothing on its
+own.
+
+**(e) Authentication on the three `/history` routes.** **Blocked by the same
+thing as (c).** The frontend calls `/history` from the browser at
+`page.tsx:71` and `useChatStream.ts:48`, so any credential it carries is equally
+public. Narrowing the scope does not escape the problem: this frontend has no
+server-side session to hold anything.
+
+**The real dependency, stated plainly.** (c) and (e) are not backend tasks. They
+need a server-side component the frontend does not currently have. Doing either
+badly breaks the demo, which is worse than the exposure it fixes. **Give them
+their own session with the frontend in scope.**
+
+### Not checked
+
+- Whether the HuggingFace Space sits behind any gateway that rate-limits or
+  filters before the container sees a request. That could change the whole
+  assessment; there is no evidence either way.
+- Whether `resume_graph_stream` fails safely for a `thread_id` with no pending
+  interrupt. `/chat_approve` was read at `app.py:184-203`; the resume path in
+  `chat.py` was not.
 
 ---
 
