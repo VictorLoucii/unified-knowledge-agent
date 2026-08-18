@@ -113,7 +113,7 @@ async def health_check():
 
     return {
         "status": "online",
-        "version": "6.3-tracing-fix",  # <--- CHANGE THIS ON EVERY PUSH
+        "version": "6.4-router-logging",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": is_hydrated,
         "provider": "Hugging Face Spaces",
     }

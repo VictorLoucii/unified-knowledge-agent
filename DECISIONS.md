@@ -200,6 +200,29 @@ no warning. The mechanism converted a silent failure into a visible one, and
 the evaluation still fails the case, which is correct because the right answer
 was in the knowledge base. Keep the feature; fix the retrieval.
 
+### The scope router keeps failing open; only its silence was fixed
+
+**Chosen (2026-08-18):** `agents.py:54` logs the exception and still falls
+through to `retrieval_node`. Behaviour is unchanged.
+
+**Rejected — failing closed.** Refusing the query when the router model is
+unavailable would refuse legitimate questions during any outage, which is a
+worse product than answering an out-of-scope one.
+
+**Rejected — leaving the empty `except Exception: pass`.** It broke CLAUDE.md's
+rule against empty catch blocks, and its real cost was that nothing in the
+container log recorded that the guardrail had been skipped.
+
+**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:41`,
+the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:50-51`. The
+refusal recorded above under "OUT_OF_SCOPE takes precedence in the router
+prompt" therefore stops firing. That guardrail was fixed deliberately once
+already, so a future session finding this fall-through should know it was seen
+and left, not missed. The exposure is written up as [OPEN.md](OPEN.md) item 7.
+
+**Not decided:** whether to give `fast_llm` a fallback. It has none —
+`config.py:77` wraps only `primary_llm`.
+
 ### Arize Phoenix over LangSmith
 
 **Chosen:** self-hosted Phoenix via docker compose, with LangSmith environment
@@ -306,6 +329,28 @@ score is therefore not a measure of the RAG pipeline.
 figure alongside the headline whenever retrieval changes, or you will report a
 movement that did not happen. The full explanation is in
 [CLAUDE.md](CLAUDE.md).
+
+### Changing a fallback model does not oblige an evaluation run
+
+**Chosen (2026-08-18):** a change to `config.py:59` `fallback_llm`, or to any
+fallback added later, may be made and committed without running the suite.
+
+**Rejected:** spending roughly $0.11 of a $1.13 balance to confirm a no-op.
+
+**Why, established from source rather than argued.**
+`langchain_core/runnables/fallbacks.py:187-188` iterates the runnables and
+returns on the first success, and `fallbacks.py:156-161` documents that iterator
+as yielding the runnable and then its fallbacks. A fallback is therefore never
+reached while the primary succeeds. A passing 94-case run cannot execute the
+changed code, so the score cannot move.
+
+The rule's own trigger in [CLAUDE.md](CLAUDE.md) names the system prompt, the
+semantic router, the tools and the retrieval pipeline. A fallback model is none
+of those.
+
+**The limit of this, stated explicitly:** it applies only while the primary
+succeeds. Changing `config.py:49` `primary_llm` changes the model under test and
+does require a full run.
 
 ### The recall baseline was lowered to 33/34 on purpose
 

@@ -224,7 +224,111 @@ has to move with it.
 
 ---
 
-## 7. Smaller items
+## 7. `fast_llm` has no fallback, and every model in the system is the same model
+
+**Status:** diagnosed from source 2026-08-18 after a live rate-limit incident.
+The silent part is fixed; the exposure itself is not.
+
+### What happened
+
+On 2026-08-18 a question through the deployed frontend hit
+`openai.APIError: google/gemini-2.5-flash is temporarily rate-limited upstream`
+at `search.py:63`. `search.py:65-69` caught it, logged it, and set
+`search_variants = []`, so the tool searched with the user's original phrase and
+the answer was still correct. That path degraded gracefully and worked as
+designed.
+
+**It is not a one-off blip.** `search.py:22` sets `max_retries=5` on the
+expansion model, and the error was raised only after those five retries were
+exhausted.
+
+### Every model call is the same model
+
+Read from source:
+
+| Site | Model |
+|---|---|
+| `config.py:49` `primary_llm` | `MODEL_NAME`, defaulting to `google/gemini-2.5-flash` |
+| `config.py:59` `fallback_llm` | `google/gemini-2.5-flash`, hardcoded |
+| `config.py:69` `fast_llm` | `google/gemini-2.5-flash`, hardcoded |
+| `search.py:16` `expansion_llm` | `MODEL_NAME`, same default |
+
+`config.py:77` is `llm = primary_llm.with_fallbacks([fallback_llm])`. With
+`MODEL_NAME` unset — which CLAUDE.md instructs — the fallback asks the same
+provider for the same model that just refused. It protects against a
+per-request error, not a model-level or provider-level outage.
+
+**Unverified, and it would soften this:** OpenRouter routes one model across
+several upstream providers, and the error said "rate-limited *upstream*". The
+retry may therefore land on a different upstream. That is inferred from the
+wording of the error message, not from OpenRouter's documented routing.
+
+### `fast_llm` is the sharper exposure
+
+`config.py:77` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
+It makes the first model call on every request and carries the lowest retry
+count of the four, `max_retries=2` at `config.py:74`. Three call sites:
+
+| Site | Behaviour on failure |
+|---|---|
+| `chat.py:119` triage | `chat.py:154-155` logs and falls through to the core pipeline. Graceful. |
+| `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
+| `agents.py:126` conversational | No local handler. Propagates to `chat.py:289-296`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
+
+`semantic_router.py:1` imports `fast_llm` and never uses it — `route_query` is
+pure string matching and regex (`semantic_router.py:7-35`), so the router itself
+is not exposed. That import is dead.
+
+### The scope router fails open, and it used to fail silently
+
+**Fixed 2026-08-18:** `agents.py:54` was `except Exception: pass`, which broke
+CLAUDE.md's rule against empty catch blocks. It now logs.
+
+**Not fixed, and deliberately so:** the behaviour is unchanged. When
+`fast_llm` fails at `agents.py:41`, control reaches `agents.py:71` and returns
+`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:50-51` and
+the `CONVERSATIONAL` branch at `agents.py:52-53`. So a query that should be
+refused is answered instead, for as long as the model is unavailable.
+
+**Taken from DECISIONS.md, not source:** that refusal is deliberate and
+load-bearing. The entry "OUT_OF_SCOPE takes precedence in the router prompt"
+records that it stopped firing for a LinkedIn scraping request and that the rule
+ordering was changed to restore it. A rate limit now reproduces that same
+failure by a different route.
+
+**Whether it should fail closed instead is a product decision and has not been
+taken.** Failing closed would refuse legitimate queries during any outage.
+
+### Options, none started
+
+- **Give `expansion_llm` its own fallback** (`search.py:15-23`) on a different
+  provider. The constraint below does not apply to it: `search.py:63` calls
+  `ainvoke` on a plain prompt and parses `.content` as text, so it never calls a
+  tool and never touches the approval panel. But this feeds retrieval, so it is
+  under the EDD rules. Low value — the current path already produced a correct
+  answer.
+- **Point `config.py:59` at a different provider.** This protects the failure
+  that would actually break the product. **Taken from DECISIONS.md:** the
+  replacement must not emit text before its tool call, or the frontend's
+  human-in-the-loop approval panel breaks, and it must support `bind_tools`,
+  `astream_events`, `with_structured_output` and `with_fallbacks`. That is a
+  candidate search plus testing, not a one-line edit. Gated on finding a model.
+- **Give `fast_llm` a fallback.** Not previously considered. It never calls
+  tools at any of its three sites, so the approval-panel constraint does not
+  apply to it either — the same reasoning as `expansion_llm`.
+
+**This does not oblige an evaluation run, established from source.**
+`langchain_core/runnables/fallbacks.py:187-188` iterates the runnables and
+returns on the first success, and `fallbacks.py:156-161` documents that iterator
+as yielding the runnable and then its fallbacks. A fallback is never reached
+while the primary succeeds, so a passing 94-case run cannot exercise a changed
+fallback and the score cannot move. This holds only for `config.py:59` and the
+fallbacks above. Changing `config.py:49` changes the model under test and does
+require a run.
+
+---
+
+## 8. Smaller items
 
 - **Index 22 is judge noise, not a regression.** It is served by the unchanged
   fast-path table, so its output is byte-identical between runs, and its

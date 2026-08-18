@@ -51,8 +51,22 @@ async def route_input_node(state: State) -> str:
             return "fallback"
         if "CONVERSATIONAL" in response_text:
             return "conversational_node"
-    except Exception:
-        pass
+    except Exception as e:
+        # Do not swallow this. fast_llm has no fallback — config.py:77 wraps
+        # only primary_llm — so a rate limit or timeout lands here, and the
+        # fall-through below skips the OUT_OF_SCOPE and CONVERSATIONAL branches
+        # above. The refusal that DECISIONS.md records under "OUT_OF_SCOPE takes
+        # precedence in the router prompt" therefore stops firing for as long as
+        # the model is unavailable, and before this log said so, nothing in the
+        # container log recorded that it had happened.
+        #
+        # Failing open is the pre-existing behaviour and is deliberately left
+        # unchanged here; only the silence is fixed. See OPEN.md item 7.
+        print(
+            "⚠️ [WARNING] Scope router failed; defaulting to retrieval_node. "
+            "OUT_OF_SCOPE and CONVERSATIONAL routing are NOT applied to this "
+            f"query. Cause: {e}"
+        )
 
     return "retrieval_node"
 
