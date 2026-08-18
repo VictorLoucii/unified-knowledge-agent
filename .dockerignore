@@ -16,7 +16,7 @@
 # It builds from a git clone, and .gitignore excludes the index directories
 # and (since 2026-08-18) data/.manifest.json too. The Space therefore starts
 # with no manifest, ingest.py:32 returns an empty one, and the container
-# ingests all 26 files in the background thread at app.py:69.
+# ingests all 26 files in the background thread at app.py:76.
 
 # Virtual environment. The image builds its own with `uv sync`.
 .venv/

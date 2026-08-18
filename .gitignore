@@ -70,6 +70,12 @@ latest_run_logs.txt
 # initialize_rag then took the early return at ingest.py:91-93 and served an
 # empty vector database. Untracked, the Space has no manifest,
 # ingest.py:32 returns an empty one, and the container ingests at startup in
-# the background thread at app.py:69. The local copy is untouched, so local
+# the background thread at app.py:76. The local copy is untouched, so local
 # Docker builds still use the existing index.
 data/.manifest.json
+
+# Claude Code local permissions. Untracked on purpose: the file holds absolute
+# paths containing the username, and this repository is public. .claude/ is
+# only partially tracked — .claude/skills/close-out/SKILL.md is committed — so
+# this names the one file, not the directory.
+.claude/settings.local.json
