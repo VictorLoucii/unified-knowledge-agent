@@ -339,13 +339,19 @@ wording of the error message, not from OpenRouter's documented routing.
 
 `config.py:77` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
 It makes the first model call on every request and carries the lowest retry
-count of the four, `max_retries=2` at `config.py:74`. Three call sites:
+count of the four, `max_retries=2` at `config.py:74`. **Four call sites** — an
+earlier version of this item said three, having grepped only `backend/core/` and
+missed the one in `app.py`:
 
 | Site | Behaviour on failure |
 |---|---|
 | `chat.py:119` triage | `chat.py:154-155` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:126` conversational | No local handler. Propagates to `chat.py:289-296`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
+| `agents.py:140` conversational | No local handler. Propagates to `chat.py:289-296`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
+| `app.py:161` `/refine_transcript` | `app.py:166-168` logs and returns the raw transcript unchanged. Graceful. |
+
+**Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
+added the router log. Re-grep rather than trusting a line number in this file.
 
 `semantic_router.py:1` imports `fast_llm` and never uses it — `route_query` is
 pure string matching and regex (`semantic_router.py:7-35`), so the router itself
@@ -418,8 +424,13 @@ using your own key. Both need checking before relying on either.
 
 ### Options, in priority order after the OpenRouter findings
 
-**0. Add a BYOK provider key.** Not a code change, not in this repository, and
-above everything below it. See the finding above.
+**0. Add a BYOK provider key. DONE 2026-08-18, AND CURRENTLY INERT.** The key
+was added and its connection test for `google/gemini-2.5-flash` **failed** — the
+model is closed to new users. Every request therefore still falls through to
+OpenRouter's shared endpoints, which is the pre-existing behaviour including the
+rate limit that failed. **This option cannot help until the model strings
+change. See item 8**, which also records why nothing broke when the key was
+added.
 
 - **Give `expansion_llm` its own fallback** (`search.py:15-23`) on a different
   provider. The constraint below does not apply to it: `search.py:63` calls
@@ -435,7 +446,9 @@ above everything below it. See the finding above.
   or the frontend's human-in-the-loop approval panel breaks, and it must support
   `bind_tools`, `astream_events`, `with_structured_output` and
   `with_fallbacks`. That is a candidate search plus testing, not a one-line
-  edit. Gated on finding a model, and now lower priority than option 0.
+  edit. Gated on finding a model. **Item 8 changes this calculation:** the
+  question is no longer only which fallback to add, but which model the whole
+  system should name at all.
 - **Give `fast_llm` a fallback.** Not previously considered. It never calls
   tools at any of its three sites, so the approval-panel constraint does not
   apply to it either — the same reasoning as `expansion_llm`.
@@ -451,7 +464,152 @@ require a run.
 
 ---
 
-## 8. Smaller items
+## 8. The whole system names one model, and that model is closing to new users
+
+**Status:** documented 2026-08-18. **No model choice has been made. No model
+string has been changed. No migration has been started.** This item exists so
+the next session does not rediscover any of it.
+
+### Provenance — read this before acting on anything here
+
+**Sections marked *dashboard* below come from the OpenRouter and Google AI
+Studio web dashboards, read from screenshots by the user's advisor.** They are
+not from this repository, not from its documentation, and have not been
+re-verified. Re-check them on the dashboard before acting. The source-read
+sections are marked separately and were verified against the files.
+
+### The blocker — *dashboard*
+
+A Google AI Studio provider key was added under OpenRouter BYOK. **Its
+connection test for `google/gemini-2.5-flash` FAILED**, with:
+
+> This model models/gemini-2.5-flash is no longer available to new users. Please
+> update your code to use models/gemini-3.6-flash for the latest features and
+> improvements. (Tested with: Google AI Studio | google/gemini-2.5-flash)
+
+**Two consequences, and the second is the one that matters.**
+
+1. **The BYOK key currently changes nothing.** Every request names
+   `gemini-2.5-flash`, the key cannot serve it, and the request falls through to
+   OpenRouter's shared endpoints — the pre-existing behaviour, including the
+   shared rate limit that failed on 2026-08-18. This supersedes item 7's
+   option 0, which is now done but inert.
+2. **Nothing broke, and that was not luck.** The key sits in the *Prioritized*
+   section with "Always use for this provider — Never fall back to OpenRouter
+   endpoints" **OFF**. Had it been ON, every request to the deployed Space would
+   now fail outright. **Do not turn that setting on while the code still names
+   2.5.**
+
+Key configuration, for the record: the user's existing free-tier key on Google
+Cloud project "Gemini Project" (`gen-lang-client-0161969403`), created
+1 Jul 2026, billing tier "Free tier". **Deliberately not** the key on project
+"vision-flow-analtyics", which sits on a paid billing account for different
+work — keeping those separate was an explicit requirement. Filters are Models =
+All, API Keys = All, row enabled.
+
+**Connection tests PASSED for `gemini-3.6-flash` and `gemini-3.5-flash`.**
+
+**The limit of those passes, and it is the important one.** A connection test
+proves the key can reach the model. **It does not exercise tool calling.** So no
+candidate is validated against the constraint that decides this project.
+**Taken from DECISIONS.md, not source:** a model that emits text before its tool
+call breaks the frontend's human-in-the-loop approval panel, which is why
+DeepSeek V3 was rejected as the driver.
+
+### The exposure — *read from source*
+
+Every model string in the repository names `gemini-2.5-flash`. Five
+occurrences, and there are no others — checked across `backend/`,
+`frontend/src`, the `Dockerfile`, `docker-compose.yml` and `.env.example`:
+
+| Site | Form |
+|---|---|
+| `config.py:49` `primary_llm` | `MODEL_NAME` env var, default `google/gemini-2.5-flash` |
+| `config.py:59` `fallback_llm` | hardcoded |
+| `config.py:69` `fast_llm` | hardcoded |
+| `search.py:16` `expansion_llm` | `MODEL_NAME` env var, same default |
+| `generate_eval_dataset.py:41` | hardcoded. Offline script, not on the request path. |
+
+**OpenRouter still serves the model** — two questions were answered correctly
+through the deployed Space on 2026-08-18. "No longer available to new users" is
+not "switched off", and existing access usually continues. That last sentence is
+**inferred** from the wording, not established. The point stands regardless: the
+whole application rests on one model that has begun closing doors.
+
+### The trap that will bite a migration — *read from source*
+
+`eval.py:67` is `model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat")`.
+`config.py:49` and `search.py:16` read the **same variable** with a different
+default. So setting `MODEL_NAME` does not only change the agent — **it swaps the
+evaluation judge from DeepSeek to whatever is set.** That is exactly what
+CLAUDE.md warns about under Eval-Driven Development.
+
+**Therefore: any migration belongs in the hardcoded default strings in source,
+never in an environment variable.**
+
+**And `config.py:49` is the one change that does oblige an evaluation run**,
+because it is the model under test. **Taken from CLAUDE.md:** roughly $0.11 of a
+$1.12 balance, and any run — including a partial `--indices` one — overwrites
+`backend/evals/latest_run_metrics.json`, so back that file up first.
+
+### Pricing — *dashboard*, per 1M tokens
+
+| Model | List in / out | Weighted average actually paid |
+|---|---|---|
+| `google/gemini-2.5-flash` (current) | $0.30 / $2.50 | — |
+| `google/gemini-3.5-flash-lite` | $0.30 / $2.50 — **cost parity** | $0.2125 / $2.351 |
+| `google/gemini-3.5-flash` | $1.50 / $9.00 — 5x in, 3.6x out | $0.9848 / $8.999 |
+
+- **`gemini-3.5-flash-lite`:** released 21 Jul 2026, 1M context. Providers:
+  Google AI Studio, Google Vertex, Google Vertex (US). Latency 0.53 s / 0.67 s,
+  throughput 72 / 64 tps, uptime 99.92%. Its own description says it is "suited
+  for subagents that execute focused tasks within complex, multi-agent
+  workflows."
+- **`gemini-3.5-flash`:** released 19 May 2026, 1M context. Same three
+  providers. Latency 1.53 s / 2.06 s, throughput 144 / 177 tps, uptime
+  99.63% / 99.66%.
+
+**Do not read Lite as simply faster.** It has the lower latency and the *lower*
+throughput. For long answers throughput probably dominates. Not established.
+
+**Three providers per model** extends the two-provider finding in item 7, which
+was measured on the 2.5 family.
+
+**The gap: `gemini-3.6-flash` and `gemini-3.7-flash` have not been priced.**
+3.6 is the model Google's own error names as the replacement, which is the only
+compatibility signal anyone has, and its cost is unknown.
+
+### Two things nobody has looked at
+
+1. **OpenRouter routing modes.** Every model page states that requests are
+   routed "based on the routing mode you pick — Balanced (price + speed), Nitro
+   (fastest), or **Exacto (highest tool-calling accuracy)**". *Dashboard.*
+   Tool-calling accuracy is this project's binding constraint and Exacto has
+   never been considered. It may matter more than the price difference.
+2. **A per-site model split.** `fast_llm` does short classification and cleanup
+   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:119` and
+   `app.py:161` — **read from source**. None of them calls a tool, so none is
+   bound by the approval-panel constraint. `fast_llm` does not have to share a
+   model with the agent that does tool calls and formatted answers. All four
+   currently use one model, which is why this reads as a single decision.
+   **It is not one decision.**
+
+### Unread, and the user's to check
+
+- **The Google AI Studio Rate Limit page.** Decides whether an evaluation run,
+  which fires roughly 188 model calls in a burst, would throttle against the
+  user's own free-tier key.
+- **Google's free-tier data-use terms.** The agent sends chunks of personal
+  notes — internship logs, project details — on every request, and free and paid
+  tiers have historically differed here. That last clause is the advisor's own
+  knowledge, unverified. **The free tier was taken by default, not by decision.**
+- **Whether OpenRouter charges a fee for BYOK requests, and how much.** Stated
+  on the BYOK page.
+- **Prices for `gemini-3.6-flash` and `gemini-3.7-flash`.**
+
+---
+
+## 9. Smaller items
 
 - **Index 22 is judge noise, not a regression.** It is served by the unchanged
   fast-path table, so its output is byte-identical between runs, and its
