@@ -83,9 +83,28 @@ cases only.
 
 **Measured during the rebuild:** a full ingest of 26 files — 17,954 child
 chunks, 8,909 parents — took **97 seconds** on a MacBook Air with the embedding
-weights already on disk. Treat that as a floor, not a forecast. The deployed
-Space pays this on every restart, in the background thread at `app.py:76`, so it
-never blocks the port bind.
+weights already on disk. Treat that as a floor, not a forecast.
+
+**The deployed Space pays roughly twelve times that. Measured 2026-08-19:**
+17,958 children in **about twenty minutes**, against 97 seconds locally — about
+**15 chunks per second in the container, against about 185 on the Mac.** The
+Space pays it on every container start, in the background thread at `app.py:76`,
+so it never blocks the port bind. **It is not brief.** See item 4.
+
+**The likely cause, read:** `config.py:88` is
+`HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")` with **no device pinned**,
+so the library selects the device. The Mac has one to select and the container
+does not. *That the library picks the Mac GPU is general knowledge and is
+unverified; what is read from source is that the code names no device.*
+
+**Corroboration that the log describes this code.** `ingest.py:106` loops per
+file and `ingest.py:165-169` batches within each file at `BATCH_SIZE = 100`.
+17,958 children over 26 files, each file rounding up, gives between 180 and 205
+batches. The log's 194 sits inside that range.
+
+**Provenance:** the twenty-minute figure and the batch count come from the
+Space's startup log, pasted by the user and read by the advisory session. I did
+not read that log. The 97-second local figure is a record of a past run.
 
 ### Three options, none started
 
@@ -202,6 +221,44 @@ parents and 17,958 children, against the 8,909 / 17,954 recorded for the local
 rebuild at item 2. Commit `5103325` is the only `data/` change between them, so
 `+2 / +4` is *plausibly* the two added bullets — **inferred, not proven per
 file.** Do not treat item 2's local figures as a baseline for the Space.
+
+### The Space reports healthy while its knowledge base is still loading
+
+**Found 2026-08-19. Diagnosed from source. Nothing changed.** This is a
+*different fact* from the residue closed above, which was about proving all 26
+files eventually load. This one is about the window before they do.
+
+Read, three lines:
+
+1. `app.py:76` fires ingestion with
+   `asyncio.create_task(asyncio.to_thread(initialize_rag))`. **Nothing awaits
+   it.**
+2. `app.py:110` computes `rag_hydrated` as `next(store.yield_keys(), None)`,
+   which is true once **any** key exists — that is, after the **first** of 26
+   files.
+3. Item 2 records the Space's ingest at roughly **twenty minutes**.
+
+**So for about twenty minutes after every container start, the Space reports
+`rag_hydrated: true` while answering from a partially loaded knowledge base.**
+It does not error. It answers, from less than it has. A question whose evidence
+lives in a file not yet ingested gets a confident answer built on whatever did
+load.
+
+**Why this may recur rather than being a one-off after a push.** Free
+HuggingFace Spaces sleep when idle and cold-start on the next visit, which would
+put a visitor inside this window regularly. *General knowledge, *not* verified
+for this Space.* If true, it matters most for the case the project exists to
+serve: a recruiter opening the demo cold.
+
+**Not fixed, and not obviously a one-liner.** Making `/health` report true coverage
+needs a count the docstore does not expose, and gating answers on completion
+would trade a wrong answer for a twenty-minute outage. Both are product calls.
+
+**Cheapest honest option, not applied:** have `initialize_rag` set a module-level
+flag when it finishes and report that alongside `rag_hydrated`, so the two
+questions — "is anything loaded" and "is loading finished" — stop sharing one
+answer. Purely additive. `CLAUDE.md` forbids changing application logic unless
+asked.
 
 ### Still genuinely open
 

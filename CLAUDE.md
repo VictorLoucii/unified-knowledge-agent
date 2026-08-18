@@ -232,6 +232,14 @@ Two behaviours to know before you run ingestion:
 - Check modified files compile or lint before calling the work done.
 - **Git hygiene.** Never run `git add .`. Stage only the files that implement
   the requested change, and read the diff before committing.
+- **A commit that changes a file's line count invalidates every citation to
+  it.** `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
+  `file:line`. After such a commit, grep all four for that filename and re-check
+  each hit against the file. Commit `247dd15` replaced a 10-line block in
+  `app.py` with a 17-line comment, and **eight citations across two records
+  silently became wrong by exactly 7** — found by accident, weeks later. Leave
+  citations that describe *deleted* code in the past tense alone; those are
+  history and are correct as written.
 
 ## History rewrites
 

@@ -136,9 +136,17 @@ LFS rules that already sit unused at `.gitattributes:4-6`.
 
 1. **The startup cost is already absorbed.** `app.py:74-76` runs
    `initialize_rag` in a background thread precisely so HuggingFace health
-   checks pass instantly — the comment there says so. The 97-second ingest
-   measured in `OPEN.md` item 2 never blocks the port bind. The Space answers
-   from the first second; only retrieval is cold, and only briefly.
+   checks pass instantly — the comment there says so. The ingest never blocks
+   the port bind, and the Space does answer from the first second.
+
+   **Corrected 2026-08-19 — "only briefly" was wrong, by more than an order of
+   magnitude.** This reason originally read "only retrieval is cold, and only
+   briefly", reasoning from the 97-second local ingest in `OPEN.md` item 2. The
+   Space's measured ingest is **roughly twenty minutes**, about 15 chunks per
+   second against 185 locally. The reason still holds — the startup cost is
+   absorbed and the port binds immediately — but the cold window is twenty
+   minutes, not seconds. See `OPEN.md` item 4, "The Space reports healthy while
+   its knowledge base is still loading".
 2. **A shipped index goes stale silently.** Ingestion keys on filename, so an
    edited `data/` file is never re-read (`OPEN.md` item 2). A committed index
    would drift from the source of truth with nothing to signal it, and fixing
@@ -320,6 +328,40 @@ wrong twice over:** the fence closes at :1368, and the stale text started at
 startup log showed the batch processor, the 4317 gRPC endpoint, and no
 "already instrumented" line. Ask the agent how tracing works and it now
 describes `config.py`.
+
+### A `data/` correction carries its reasoning, not just the corrected text
+
+**Chosen (2026-08-19, commit `5103325`):** when correcting the stale
+instrumentation block in `data/Unified_Knowledge_Project_Details.md`, replace the
+wrong code **and** add two bullets explaining why `batch=True` is required and
+why the setup may not go back into `app.py`.
+
+**Rejected:** the minimal swap — fix the fenced code, add nothing. It was offered
+and declined.
+
+**Why the minimal swap is not enough.** Established while checking the fast-path
+table for that edit: **the vector index is the only path this text takes to a
+reader.** `extract_problem_block` never serves this file — its regex at
+`config.py:176-178` is `^\s*(?:#|//|\*)` and every heading in the file is
+pandoc-escaped as `\#`, giving **0 matches** when run against it. No fast-path
+key concerns tracing either. So a reader gets a *retrieved chunk*, not the
+section.
+
+A bare corrected fence therefore reaches someone as `register(batch=True)` with
+no indication that it is load-bearing rather than a default somebody typed.
+`CLAUDE.md` says "Never change that to `batch=False`" and this file says "Do not
+change this back" — **and neither file is in `data/`, so the agent cannot cite
+either.** The note is the only place that reasoning can reach a reader through
+this system.
+
+**The honest limit.** The bullets help only if they land in the same retrieved
+chunk as the fence. `config.py:113` sets the parent chunk size to 1000 and the
+section runs to roughly 1,600 characters, so they probably do not. Recorded
+rather than resolved.
+
+**Precedent set:** a correction under the `data/` per-file exception may add
+reasoning that did not exist before, when the corrected fact is one a reader
+would otherwise act wrongly on. It is still not licence to rewrite for style.
 
 ### The Phoenix endpoint is defaulted, not assigned
 
