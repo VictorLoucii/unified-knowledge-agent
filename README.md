@@ -64,7 +64,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Hyper-Local Weather & AQI Integration (HITL Protected):** Seamlessly answers dynamic environmental queries using Open-Meteo's APIs. Features a custom-built algorithm to calculate the **Indian National AQI (CPCB)** from raw pollutant data, entirely protected by LangGraph's Human-in-the-Loop pause/resume functionality to prevent unwarranted API requests.
 
 ### 4. Production Security & Guardrails
-* **Zero-Cost Trace Observability (Arize Phoenix):** Integrated Arize Phoenix via Docker, completely replacing LangChain/LangSmith to provide powerful local tracing and debugging without external API dependencies or costs.
+* **Zero-Cost Trace Observability (Arize Phoenix):** Integrated Arize Phoenix as a locally-run collector, completely replacing LangChain/LangSmith to provide powerful local tracing and debugging without external API dependencies or costs. Instrumentation lives in one place, `backend/core/config.py`, and uses a batching span processor so a missing collector costs nothing on the request path. Phoenix is started by hand — `docker-compose.yml` does not define a Phoenix service.
 * **General Knowledge Fallback with Strict Disclaimers:** Enforces strict RAG adherence but allows a clean fallback to general LLM knowledge for basic, out-of-scope conversational queries. When doing so, it prepends a prominent disclaimer to prevent users from mistaking generalized advice for internal company policy.
 * **Fast Input Firewall:** An instant API gateway guardrail enforcing a **1,000-character input ceiling** and blocking jailbreaks, system prompt exposure attempts, and credential leaks.
 * **Data Loss Prevention (DLP) Masking:** A sliding 120-character regex buffer window that automatically redacts API keys and database secrets before they stream to the client interface.
@@ -83,7 +83,7 @@ This system is built for deterministic reliability, performance optimization, an
 | **Orchestration** | **LangGraph** | Stateful state machine with HITL interrupts & persistence |
 | **Cloud State** | **Supabase (PostgreSQL)** | State survives container prunes; enables multi-device sync |
 | **Logic Layer** | **Python (FastAPI)** | Hardened "Raw Interceptors" & Regex Anchors |
-| **Observability** | **Arize Phoenix (Docker)** | Zero-cost, local real-time X-ray of trace observability (replaced LangChain/LangSmith) |
+| **Observability** | **Arize Phoenix (local collector)** | Zero-cost, local real-time X-ray of trace observability (replaced LangChain/LangSmith) |
 | **Data Ingestion** | **ChromaDB** | Vector storage using `all-MiniLM-L6-v2` local embeddings |
 | **Frontend** | **Next.js 14 / Tailwind** | Markdown-rendered UI with HITL "Action Required" status |
 
@@ -117,11 +117,12 @@ This system is built for deterministic reliability, performance optimization, an
 │   │   └── qa_dataset.json # Golden Dataset (80+ cases)
 │   ├── memory.py          # Persistence logic
 │   ├── scratch/           # Experimental & testing scripts
-│   │   └── test_semantic_cache.py # Semantic cache integration test
+│   │   └── test_semantic_cache.py # Semantic cache integration test (gitignored, not in a clone)
 │   └── static/            # Static assets for the backend
 ├── data/                  
 │   ├── *.md / *.docx      # Dynamic multi-file knowledge bases ingested on startup
-│   ├── .manifest.json     # Tracks successfully ingested files
+│   ├── .manifest.json     # Tracks ingested files. Gitignored on purpose, so the
+│   │                      # deployed Space arrives without one and re-ingests.
 │   └── media_dump/        # Parsed document assets and diagrams
 ├── frontend/         
 │   ├── src/               
@@ -146,39 +147,69 @@ This system is built for deterministic reliability, performance optimization, an
 ## 🚦 Developer Commands & Evaluation Workflow
 
 ### Running the Evaluation Suite
-By default, the evaluation suite now runs on the primary model, `google/gemini-2.5-flash`.
 
-**1. Running the Standard Evaluation (Gemini 2.5 Flash):**
+Two different models are involved, and they have different defaults. The **agent
+under test** is `google/gemini-2.5-flash` (`backend/core/config.py`). The
+**LLM judge that scores the answers** is `deepseek/deepseek-chat`
+(`backend/evals/eval.py`). Run the bare command and you get that pairing:
+
 ```bash
 uv run python -m backend.evals.eval
 ```
 
-**2. Running with alternative models (e.g., DeepSeek V3):**
 > [!WARNING]
-> While DeepSeek V3 can be evaluated by setting `MODEL_NAME`, it exhibits pre-execution hallucinations during tool calls that break the frontend's HITL approval panel.
+> **Do not set `MODEL_NAME`.** It is read in three places — the agent, the
+> query-expansion model, and the LLM judge — so setting it silently reassigns
+> the judge as well as the agent. That invalidates every cached judgment and
+> makes the run far more expensive. It is also why a model change belongs in the
+> source defaults rather than the environment.
+
+Targeted runs are much cheaper while iterating. Note that **any** run, including
+a partial one, overwrites `backend/evals/latest_run_metrics.json`, so back that
+file up first:
+
 ```bash
-MODEL_NAME="deepseek/deepseek-chat" uv run python -m backend.evals.eval
+uv run python -m backend.evals.eval --indices 5,37,42,83
 ```
+
+DeepSeek V3 remains usable for evaluation but not as the driver: it emits text
+before it emits its tool call, which breaks the frontend's HITL approval panel.
+See [DECISIONS.md](DECISIONS.md).
 
 ### Running the Corpus Growth Evaluation Stress-Test
 Verify retrieval recall against expanding database sizes:
 ```bash
-MODEL_NAME="google/gemini-2.5-flash" uv run python -m backend.evals.eval_corpus_growth
+uv run python -m backend.evals.eval_corpus_growth
 ```
 
 ### Running the Semantic Cache Integration Test
-Verify the hit, miss, and exclusion behavior of the semantic cache locally:
+
+Verifies the hit, miss, and exclusion behaviour of the semantic cache locally:
 ```bash
 uv run python -m backend.scratch.test_semantic_cache
 ```
 
+> [!NOTE]
+> `backend/scratch/` is gitignored, so this script is **not** part of a fresh
+> clone. The command works only in a working copy that already has it.
+
 ### Running the Application Locally
-You can run the full system using Docker Compose:
+
+Start the backend from the **repository root** — `backend/app.py` uses absolute
+`backend.*` imports, so running it from inside `backend/` fails with
+`ModuleNotFoundError`:
 ```bash
-docker-compose up --build
+uv run uvicorn backend.app:app --reload --port 8000
 ```
-Or start the backend locally:
+
+Docker Compose builds both services, but note the known defect below:
 ```bash
-cd backend
-uv run uvicorn app:app --reload --port 8000
+docker compose up --build
 ```
+
+> [!WARNING]
+> **The backend is currently unreachable through Docker Compose.**
+> `docker-compose.yml` publishes port `8000:8000` while the `Dockerfile` binds
+> port `7860`, so nothing listens on the published port and the frontend cannot
+> reach the API. Use the local `uvicorn` command above until this is fixed. See
+> [OPEN.md](OPEN.md).
