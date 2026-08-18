@@ -4,16 +4,23 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel
 import asyncio
 
-# OpenTelemetry & Phoenix Initialization
-from openinference.instrumentation.langchain import LangChainInstrumentor
-from opentelemetry.exporter.otlp.proto.http.trace_exporter import OTLPSpanExporter
-from opentelemetry.sdk import trace as trace_sdk
-from opentelemetry.sdk.trace.export import SimpleSpanProcessor
-
-endpoint = "http://localhost:6006/v1/traces"
-tracer_provider = trace_sdk.TracerProvider()
-tracer_provider.add_span_processor(SimpleSpanProcessor(OTLPSpanExporter(endpoint)))
-LangChainInstrumentor().instrument(tracer_provider=tracer_provider)
+# OpenTelemetry & Phoenix tracing is set up in ONE place: config.py:23-44.
+#
+# Do not add a second setup here. This file previously built its own
+# TracerProvider with a SimpleSpanProcessor exporting to
+# http://localhost:6006/v1/traces, and because these lines run before the
+# `from backend.core.ingest import ...` below pulls in config.py, that setup
+# won it. config.py's LangChainInstrumentor().instrument() call was then
+# refused with "Attempting to instrument while already instrumented", so the
+# BatchSpanProcessor it installs never received a LangChain span.
+#
+# The cost was on the live request path. A SimpleSpanProcessor exports on the
+# thread that ended the span, and with no collector listening each export
+# retries and then times out. Measured 2026-08-18 against a closed port,
+# reproducing these exact lines: 7.194 s per span on the caller's thread,
+# against effectively zero for a BatchSpanProcessor. A deployed container has
+# nothing listening, so every request paid it. See DECISIONS.md,
+# "batch=True is a requirement, not a tuning knob".
 
 from backend.core.ingest import initialize_rag
 from backend.core.chat import generate_chat_responses, resume_graph_stream
@@ -106,7 +113,7 @@ async def health_check():
 
     return {
         "status": "online",
-        "version": "6.2-stable",  # <--- CHANGE THIS ON EVERY PUSH
+        "version": "6.3-tracing-fix",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": is_hydrated,
         "provider": "Hugging Face Spaces",
     }

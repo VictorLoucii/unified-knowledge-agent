@@ -224,13 +224,28 @@ uv run uvicorn backend.app:app --reload
 # frontend
 cd frontend && npm run dev
 
-# full stack
+# full stack — WARNING: the backend is unreachable through compose today.
+# docker-compose.yml:29 publishes 8000:8000, but Dockerfile:33 binds port 7860.
+# See OPEN.md item 6.
 docker compose up --build
 
 # evaluation — see the EDD section above before running
 uv run python -m backend.evals.eval
 ```
 
-Observability is Arize Phoenix, self-hosted via docker compose. If no collector
-is listening, tracing degrades quietly — `config.py` uses `register(batch=True)`
-so failed exports stay off the request path. Never change that to `batch=False`.
+Observability is Arize Phoenix. Note that `docker-compose.yml` defines no
+Phoenix service — only `backend` and `frontend` — so Phoenix is started by
+hand, not by compose. `config.py:31` defaults the collector to
+`http://localhost:4317`, which `phoenix.otel` resolves to the gRPC exporter
+(`phoenix/config.py:2828` sets `GRPC_PORT = 4317`).
+
+If no collector is listening, tracing degrades quietly, because `config.py:40`
+uses `register(batch=True)` so failed exports stay off the request path. Never
+change that to `batch=False`.
+
+**Instrument in exactly one place: `config.py:23-44`.** `app.py` once carried a
+second setup with a `SimpleSpanProcessor`, and because it ran before the import
+chain reached `config.py` it silently won, leaving the batch processor with no
+spans. Measured against a closed port: 7.194 s per span on the caller's thread,
+against roughly zero for the batch processor. `app.py:7-23` is now a comment
+explaining why nothing may go back there. Do not add a second instrumentation.

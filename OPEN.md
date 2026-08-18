@@ -114,83 +114,52 @@ marker, so it needs its own evaluation cycle.
 
 ---
 
-## 4. The deployed Space runs with an empty vector database
+## 4. The deployed Space ran with an empty vector database — FIXED and VERIFIED
 
-**Status: fix applied 2026-08-18, not yet verified in the deployed Space.**
-The route chosen was startup ingestion. `data/.manifest.json` is no longer
-tracked. What remains open is confirmation, not work.
+**Status: fixed and confirmed live 2026-08-18, commit `003496a`.** Kept here
+only for the small residue below. The decision and the full mechanism are in
+[DECISIONS.md](DECISIONS.md), "The Space ingests at startup".
 
-**Do not confuse this with the HuggingFace sync failure. That is settled.** The
-sync works — run #78, commit `8142e49`, six green steps in 8 seconds. Fixing the
-push did not touch this, and this predates it: runs #66 through #73 all
-succeeded and the Space still had no index.
+`data/.manifest.json` is no longer tracked, so the Space's clone arrives without
+one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
+files in the background thread at `app.py:69`.
 
-### The mechanism, every line verified 2026-08-18
+**How it was confirmed, at zero OpenRouter cost.** `app.py:95-112` exposes
+`/health`, which reports `rag_hydrated` by testing whether the docstore holds
+any key (`app.py:103`). An empty docstore was the entire bug, so this flag was
+`false` before.
 
-1. `.gitignore:21` excludes `**/chroma_db/` and `.gitignore:23` excludes
-   `**/docstore/`, so neither directory is in the repository.
-2. `Dockerfile:21` is `COPY backend/ ./backend/`, which therefore copies no
-   index — there is nothing to copy.
-3. `Dockerfile:24` is `COPY data/ ./data/`, which *did* ship
-   `data/.manifest.json`, because that file was tracked.
-4. The shipped manifest named all 26 files, so at startup `initialize_rag`
-   found nothing to ingest and took the early return at `ingest.py:91-93`,
-   printing "Vector Database & DocStore up to date" over an empty store.
-5. Chroma then creates an empty persistent directory, so nothing errors. The
-   failure was silent.
+1. `13:28:04` Space stage `RUNNING_BUILDING`.
+2. `13:28:24` `RUNNING_APP_STARTING`.
+3. `13:31:07` `RUNNING`. About three minutes end to end.
+4. `13:31:46` through `13:37:09`, polled every 45 s: `{"status":"online",
+   "rag_hydrated":true}` on all eight polls. The container did not die during
+   ingestion.
 
-**Confirmed by observation, twice.** The Space's `backend/` folder holds only
-`core/`, `evals/`, `app.py`, `basics.ipynb` and `memory.py`. Re-confirmed
-2026-08-18 through the HuggingFace tree API: no `chroma_db`, no `docstore`.
+The docstore cannot be populated by anything else. `backend/docstore` is
+gitignored so it is not in the clone, and the Space reports `storage: None`, so
+there is no persistent disk carrying one over. Only ingestion can have written
+those keys.
 
-### The fix
+**Two of the three unknowns are now answered.** The models *do* resolve inside
+the Space — ingestion cannot embed without `all-MiniLM-L6-v2`, and the store is
+populated. The startup penalty *does not* break anything — the app reported
+`online` while ingestion ran, which is what `app.py:67-69` was built for.
 
-`data/.manifest.json` is untracked (`git rm --cached`) and added to
-`.gitignore`. No Python changed. `ingest.py:32` already returns
-`{"ingested_files": []}` when the manifest is absent, so a clone without one
-ingests all 26 files.
+### Residue, genuinely still open
 
-**Nothing in the local workflow changes.** The file still exists on disk, so
-`COPY data/ ./data/` still ships it into a *local* Docker build, which
-therefore still takes the early return and uses the index that
-`COPY backend/ ./backend/` copied from the working tree. Only a git clone —
-which is what HuggingFace builds from — behaves differently.
-
-**Why the startup cost is affordable:** `app.py:67-69` already runs
-`initialize_rag` in a background thread, with a comment saying it exists so
-HuggingFace health checks pass instantly. The 97 seconds in item 2 never
-blocks the port bind. The Space answers immediately; retrieval is simply empty
-for the first minute or two after each restart.
-
-**Two facts established while deciding this, not previously recorded:**
-
-- **`data/*.md` are stored in Git LFS** (`.gitattributes:8`). Startup ingestion
-  reads whatever the clone contains, so LFS pointers instead of content would
-  have made this route useless. Checked directly: HuggingFace served 25,990
-  bytes of real markdown for `AgenticAI_Interview_Questions_Coding.md`. The
-  content is genuinely there.
-- **`sync_to_hub.yml:16` sets `lfs.allowincompletepush true`**, so a green
-  workflow run does not prove the LFS objects arrived. This time they did. That
-  is a measurement, not a guarantee the setting provides. If `data/` content
-  ever goes missing from the Space, look here first.
-
-**Also settled by this choice:** the LFS rules at `.gitattributes:4-6` for
-`backend/chroma_db/**` stay permanently dead. `.gitignore:21` cancels them and
-now always will. They are harmless; removing them is optional tidying.
-
-### Still to confirm — these steps are the user's
-
-- **Whether `all-MiniLM-L6-v2` and `cross-encoder/ms-marco-MiniLM-L-6-v2`
-  resolve inside the Space.** Not verified. The Space runs on HuggingFace's own
-  infrastructure, so this is expected to work, but that is inference. If it
-  fails, startup ingestion cannot work and the only remaining route is shipping
-  the index through LFS.
-- **The model download time.** The Dockerfile has no pre-download step, so both
-  models are fetched at first use. That time is not inside the 97 seconds and
-  has never been measured.
-- **What the Space answers after the next rebuild.** Watch the Space logs for
-  `Vector Database missing 26 files` rather than `up to date`, then ask a
-  question only the knowledge base can answer.
+- **The model download time is still unmeasured.** The Dockerfile has no
+  pre-download step, so `all-MiniLM-L6-v2` and
+  `cross-encoder/ms-marco-MiniLM-L-6-v2` are fetched at first use. That time is
+  not inside the 97 seconds in item 2. The three-minute figure above covers
+  build plus app start, not ingestion alone, so it does not isolate it either.
+- **`rag_hydrated` proves "at least one document", not "all 26 files".**
+  `app.py:103` calls `next(store.yield_keys(), None)`. Nothing exposes a count.
+  Full coverage has not been demonstrated, only started and sustained.
+- **No question has been put to the Space.** Doing so spends OpenRouter credit,
+  so it was deliberately skipped. The remaining user-side check is the Space
+  build log: look for `Vector Database missing 26 files` rather than
+  `up to date`.
 
 **One latent trap this route introduces.** If a `.docx` is ever added to
 `data/`, the container will try to convert it with pandoc (`ingest.py:66`),
@@ -199,9 +168,63 @@ skips the file, so it degrades rather than crashes, but that document would
 silently never be ingested in the Space. There are no `.docx` files in `data/`
 today — checked 2026-08-18, count zero, none tracked.
 
+**Also settled by this choice:** the LFS rules at `.gitattributes:4-6` for
+`backend/chroma_db/**` stay permanently dead. `.gitignore:21` cancels them and
+now always will. They are harmless; removing them is optional tidying.
+
 ---
 
-## 5. Smaller items
+## 5. Two documents now describe tracing code that no longer exists
+
+**Status:** found 2026-08-18 while removing the duplicate tracing setup. Not
+fixed, and one of them must not be fixed here.
+
+- **`data/Unified_Knowledge_Project_Details.md:1342-1364`** presents the
+  deleted `app.py` block — `SimpleSpanProcessor`, `OTLPSpanExporter`,
+  `http://localhost:6006/v1/traces` — as the way to instrument the backend.
+  **Do not edit this.** `data/` is the curated source of truth and this
+  project's rules forbid touching it. The consequence is real: ask the deployed
+  agent how tracing is set up and it will answer with code that was removed for
+  being a production defect. Editing that note is the user's call, in their own
+  editor, followed by a rebuild — and ingestion keys on filename, so an edit
+  alone will not be picked up (see item 2).
+- **`CLAUDE.md`** states that Phoenix is self-hosted via docker compose.
+  `docker-compose.yml` defines two services, `backend` and `frontend`, plus a
+  commented-out postgres. There is no Phoenix service — read, whole file. So
+  there is also no compose service in which to open the gRPC port that
+  `config.py:31` now depends on.
+
+---
+
+## 6. `docker compose up` cannot reach the backend
+
+**Status:** diagnosed from source 2026-08-18, not fixed, never observed
+failing because nobody reported running it. Does not affect the deployed Space.
+
+`CLAUDE.md` documents `docker compose up --build` as the full-stack command.
+
+- `docker-compose.yml:29` publishes `"8000:8000"`.
+- `Dockerfile:30` is `EXPOSE 7860` and `Dockerfile:33` binds `--port 7860`.
+
+Nothing listens on container port 8000, so the published port reaches nothing.
+`docker-compose.yml:49` then points the frontend at `http://localhost:8000`.
+
+**Two dead volume mounts in the same file, lower stakes.**
+`docker-compose.yml:35-36` mount `./chroma_db:/app/chroma_db` and
+`./docstore:/app/docstore`. `config.py:84` sets `BASE_DIR` to the parent of
+`core/`, so the real paths are `/app/backend/chroma_db` and
+`/app/backend/docstore`. The host sources are wrong too — the repository has
+`backend/chroma_db`, not `./chroma_db`. Local RAG still works, because
+`COPY backend/ ./backend/` puts the index in the image, so these mounts are
+dead rather than harmful. They do mean a local compose run persists nothing.
+
+**Not tried:** any fix. Changing the published port is a one-line change but it
+is application configuration, and the frontend URL at `docker-compose.yml:49`
+has to move with it.
+
+---
+
+## 7. Smaller items
 
 - **Index 22 is judge noise, not a regression.** It is served by the unchanged
   fast-path table, so its output is byte-identical between runs, and its

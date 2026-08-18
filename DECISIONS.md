@@ -162,9 +162,25 @@ unchanged — `data/.manifest.json` still exists on disk, so a local Docker buil
 still copies both the manifest and the working-tree index, and still takes the
 early return. Only clones behave differently.
 
-**Not verified, and recorded as such in [OPEN.md](OPEN.md) item 4:** whether
-the two sentence-transformer models resolve inside the Space, how long they
-take to download, and what the Space answers after the next rebuild.
+**Confirmed live the same day, commit `003496a`.** The Space rebuilt in about
+three minutes and `/health` then reported `rag_hydrated: true` on eight
+consecutive polls over five and a half minutes. That flag tests whether the
+docstore holds any key (`app.py:103`), and an empty docstore was the entire
+bug. It cost no OpenRouter credit. Two assumptions became facts: the
+sentence-transformer models do resolve inside the Space, and the background
+ingestion thread does keep the app answering while it runs.
+
+**One fact found afterwards that strengthens the choice:** the Space reports
+`storage: None`. There is no persistent disk, so an index could never survive a
+restart there even if one were shipped. The rejected route would have paid
+146 MB for something the platform discards.
+
+**Still unverified, and recorded as such in [OPEN.md](OPEN.md) item 4:** the
+model download time, and whether all 26 files complete rather than merely
+start — `rag_hydrated` proves "at least one document", and nothing exposes a
+count.
+
+---
 
 ## Guardrails and observability
 
@@ -209,6 +225,61 @@ failed-export lines in the two logs went from 2,489 to 8. This is a production
 defect, not a test-speed one — the backend imports `config.py`, and nothing
 listens on the collector port inside the deployed container, so every live user
 request was paying for it. **Do not change this back.**
+
+### One tracing setup only, and it lives in `config.py`
+
+**Chosen (2026-08-18):** delete the OpenTelemetry block that stood at
+`app.py:7-16` and let `config.py:23-44` be the only instrumentation. A comment
+now occupies those lines explaining why nothing may go back there.
+
+**Rejected — keeping both and making `app.py`'s processor a batch one.** It
+leaves two setups to drift apart, which is how this defect appeared.
+
+**Rejected — recording it in `OPEN.md` and leaving the code alone.** Every
+deployed request kept paying for it.
+
+**Why `app.py`'s block was the live one, read rather than inferred from logs.**
+`app.py:16` ran at module level. `app.py:18` then imported `ingest`, and
+`ingest.py:21` imports `config`, which is what reached `config.py:41`. So
+`app.py` always instrumented first and `config.py` was always the one refused
+with "Attempting to instrument while already instrumented". The
+`BatchSpanProcessor` that `config.py` installs therefore never received a
+single LangChain span.
+
+**The cost, measured.** A `SimpleSpanProcessor` exports on the thread that
+ended the span. Reproducing `app.py:13-15` exactly against a closed port — the
+deployed container's condition, since nothing listens there:
+
+| Processor | 3 spans | Per span, on the caller's thread |
+|---|---|---|
+| `SimpleSpanProcessor` | 21.581 s | **7.194 s** |
+| `BatchSpanProcessor` | 0.000 s | ~0 |
+
+That matches the retry backoff in the container log, 1.17 + 1.96 + 4.77 s. A
+production log showed 23 such cycles for one startup and one question.
+
+**Why deleting it leaves no gap, read from the installed package.**
+
+- `phoenix/config.py:2828` defines `GRPC_PORT = 4317`, so `config.py:31`'s
+  endpoint is the correct gRPC port and not a guess.
+- `otel.py:691-694` infers the gRPC exporter when the URL has no path and the
+  port matches. `http://localhost:4317` satisfies both.
+- `otel.py:291-294` removes the constructor's default `SimpleSpanProcessor`
+  when another processor is added, so `register(batch=True)` really is
+  batch-only.
+- `otel.py:180-181` shows `register()` sets the global tracer provider by
+  default, which `config.py:40` never overrides. The global provider was
+  already Phoenix's.
+
+**The one cost accepted:** local tracing moves from HTTP on 6006 to gRPC on
+4317. Whether a locally-run Phoenix binds 4317 was **not** verified — the
+figures above are the client-side default. Check the Phoenix startup banner.
+
+**A knowledge-base document now contradicts the code.**
+`data/Unified_Knowledge_Project_Details.md:1342-1364` presents the deleted
+block as the way to instrument the backend. `data/` is never edited by this
+project's rules, so it is left alone and recorded in [OPEN.md](OPEN.md)
+item 5 instead. Ask the agent how tracing works and it will describe the removed code.
 
 ### The Phoenix endpoint is defaulted, not assigned
 
