@@ -104,12 +104,45 @@ byte-identical and the difference is the judge.
 
 ---
 
-## Never modify `data/`
+## `data/` is the source of truth — corrections need approval, per file
 
 `data/` is the raw knowledge base. It is manually curated and is the single
 source of truth.
 
-**Never modify, edit, or append to any `.md` or `.docx` file inside `data/`.**
+**The default is still: do not modify, edit, or append to any `.md` or `.docx`
+file inside `data/`.** Nothing here licenses a routine edit.
+
+### The one exception: a proposed correction, approved per file
+
+Since 2026-08-18 a `data/` file may be corrected, under these conditions, all of
+which must hold:
+
+1. **Propose first, write second.** Show the exact file, the exact lines, and
+   the exact replacement text. Wait for approval. Approval covers **that one
+   file**, and does not carry to the next file or the next session — the same
+   shape as a push.
+2. **Corrections only.** The permitted reason is that the note states something
+   that is no longer true, such as documenting code that has since been deleted.
+   Rewriting for style, brevity or tone is not a correction.
+3. **The parser-hack ban is unchanged and absolute.** See the bullet below. An
+   edit that exists to make the text easier to chunk, retrieve or parse is
+   forbidden whether or not it is approved.
+4. **Check `git status` on `data/` first.** The rule below about hand-written
+   notes existing in no commit is real. If anything in `data/` is modified or
+   untracked, commit it before editing, so every file has a recoverable version.
+
+**Before proposing any `data/` edit, check the fast-path table.** 26 of the 53
+entries in `backend/core/fast_path_routes.py` are verbatim copies of `data/`
+problem blocks, and `agents.py:36-38` consults that table before any model call.
+If a table key matches the query a reader would ask, editing `data/` changes
+nothing the user sees — the fix is in the Python file instead. See
+[OPEN.md](OPEN.md) item 5.
+
+**An approved edit reaches the deployed Space by commit and push alone.** The
+Space ships no manifest since `003496a`, so it re-ingests every file on each
+container start. No manual rebuild is needed there. **The local index is a
+different matter** — it never updates, and `eval.py` measures against it. See
+[OPEN.md](OPEN.md) item 2.
 
 - **No parser hacks.** Do not inject formatting tags, HTML or structural
   markers into the source files to make them easier to parse. The data stays

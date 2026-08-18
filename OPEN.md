@@ -44,14 +44,33 @@ to `search.py` and need their own evaluation cycle.
 
 ---
 
-## 2. Content-hash tracking, so re-ingestion stops being manual
+## 2. The local index never updates, which silently ages the evaluation baseline
 
-**Status:** not started. Split out of the completed rebuild item.
+**Status:** not started. Reframed 2026-08-18 — this is a correctness problem for
+measurement, not only a workflow convenience.
 
 Ingestion keys on filename only, so an edited file is never re-read. The
 2026-08-17 rebuild was the manual workaround.
 
-**Already established:**
+### Why this is now a correctness problem
+
+The deployed Space no longer has this defect. Since `003496a` it ships no
+manifest and re-ingests all 26 files on every container start, so its index
+always matches `data/`. **The staleness that survives is local — and local is
+where measurement happens.** `eval.py` drives the compiled graph against the
+local index, so an edited `data/` file leaves the committed baseline in
+`latest_run_metrics.json` measured against content that no longer exists, with
+nothing reporting it.
+
+**The scope limit, which decides how much a fix buys.** **Taken from CLAUDE.md,
+not source:** 53 of the 94 cases are answered by the fast-path table without
+touching the retriever, and 26 of the 34 recall cases likewise. For those, the
+stale copy lives in `backend/core/fast_path_routes.py` as hardcoded Python — see
+item 5. **Content-hash tracking would report a difference and change nothing
+about what those 53 cases return.** It addresses the 41 genuinely-exercised
+cases only.
+
+### Already established
 
 - A hash alone is not enough. It detects the change but does not remove the old
   chunks. A working version needs the manifest to store
@@ -62,16 +81,28 @@ Ingestion keys on filename only, so an edited file is never re-read. The
   index: 8,404 distinct chunks were each stored 5 times, a few 10, 15 and 20
   times.
 
-**Measured during the rebuild, useful here:** a full ingest of 26 files —
-17,954 child chunks, 8,909 parents — took **97 seconds** on a MacBook Air with
-the embedding weights already on disk. Treat that as a floor, not a forecast,
-on other hardware or a cold model download.
+**Measured during the rebuild:** a full ingest of 26 files — 17,954 child
+chunks, 8,909 parents — took **97 seconds** on a MacBook Air with the embedding
+weights already on disk. Treat that as a floor, not a forecast. The deployed
+Space pays this on every restart, in the background thread at `app.py:69`, so it
+never blocks the port bind.
 
-That 97 seconds decided item 4. The deployed Space now ingests at startup, so
-it pays this cost on every restart — in a background thread, so it never blocks
-the port bind. Content-hash tracking would not remove that cost, because Space
-storage is ephemeral and there is never a prior index to compare against. This
-item is now purely about the local workflow.
+### Three options, none started
+
+- **Detector only.** Hash each `data/` file at startup, compare against hashes
+  stored in the manifest, print a warning naming any that differ. **Buys:** the
+  silent failure becomes visible, which is the shape of all three defects fixed
+  on 2026-08-18. **Costs:** purely additive — no delete path, nothing
+  destructive, cannot lose data. The Space ignores it, having no manifest.
+  **Recommended first.**
+- **Hash change triggers a full rebuild.** **Buys:** one moving part that cannot
+  half-succeed. **Costs:** ~97 s locally, and it must rename the index
+  directories aside rather than delete them — **taken from CLAUDE.md:** both are
+  gitignored, so git holds no backup.
+- **Incremental update**, as described under "Already established" above.
+  **Buys:** no full reprocessing. **Costs:** three parts that can each fail
+  silently. The measured 5x duplication came from exactly this class of partial
+  update, which is evidence against it in this codebase.
 
 ---
 
@@ -174,25 +205,66 @@ now always will. They are harmless; removing them is optional tidying.
 
 ---
 
-## 5. Two documents now describe tracing code that no longer exists
+## 5. Stale content: three paths carry `data/` to the user, and they age differently
 
-**Status:** found 2026-08-18 while removing the duplicate tracing setup. Not
-fixed, and one of them must not be fixed here.
+**Status:** two stale documents found 2026-08-18; the propagation analysis added
+after them. Nothing fixed.
 
-- **`data/Unified_Knowledge_Project_Details.md:1342-1364`** presents the
-  deleted `app.py` block — `SimpleSpanProcessor`, `OTLPSpanExporter`,
-  `http://localhost:6006/v1/traces` — as the way to instrument the backend.
-  **Do not edit this.** `data/` is the curated source of truth and this
-  project's rules forbid touching it. The consequence is real: ask the deployed
-  agent how tracing is set up and it will answer with code that was removed for
-  being a production defect. Editing that note is the user's call, in their own
-  editor, followed by a rebuild — and ingestion keys on filename, so an edit
-  alone will not be picked up (see item 2).
-- **`CLAUDE.md`** states that Phoenix is self-hosted via docker compose.
-  `docker-compose.yml` defines two services, `backend` and `frontend`, plus a
-  commented-out postgres. There is no Phoenix service — read, whole file. So
-  there is also no compose service in which to open the gRPC port that
-  `config.py:31` now depends on.
+### The two stale documents
+
+- **`data/Unified_Knowledge_Project_Details.md`**, section
+  `### C. Backend Instrumentation`. Precise anchors: the heading is at
+  **:1342**, "Code snippet added at the top" at **:1348**, and the python fence
+  opens at **:1350** and closes at **:1364**. The fenced block presents the
+  deleted `app.py` code — `OTLPSpanExporter`, `SimpleSpanProcessor`,
+  `http://localhost:6006/v1/traces` — as current. **Only the fence is stale.**
+  The prose at :1344 and the surrounding reasoning about Arize Phoenix and
+  running it in Docker to control cost are still accurate.
+- **`CLAUDE.md`** claimed Phoenix is self-hosted via docker compose. Corrected
+  2026-08-18. `docker-compose.yml` defines only `backend` and `frontend` plus a
+  commented-out postgres — read, whole file.
+
+### The three paths, and why this matters more than "a note is out of date"
+
+Read from source:
+
+| Path | Reads what | After a `data/` edit |
+|---|---|---|
+| `config.py:171-174` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
+| The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:32` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
+| `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
+
+**The permanently stale path wins.** `agents.py:36-38` calls `route_query`
+first and returns `fast_path_node` on a hit, before any model call, and
+`semantic_router.py:9` matches the key as a *substring* of the user's query.
+**Taken from DECISIONS.md, not source:** that ordering is deliberate, recorded
+under "The deterministic fast-path table runs before the classifying model", so
+a probabilistic call cannot override a deterministic match.
+
+**Measured 2026-08-18:** the table holds 53 entries. **26 carry a `target_id`
+and are verbatim copies of `data/` problem blocks**, ending with the same
+`<END OF PROBLEM>` marker that appears in the markdown. 27 are short answers
+with `target_id: None`.
+
+### Consequences to act on
+
+1. **An edit to `data/` that is committed and pushed reaches the deployed
+   Space with no manual rebuild.** That makes fixing the stale document far
+   smaller than it first appears. Confidence HIGH — `ingest.py:32` read, plus
+   two observed startups.
+2. **But check the fast-path table first.** If a table key matches the query a
+   reader would ask, the edit never surfaces, on any host, ever. Nothing in the
+   ingestion pipeline can fix that; the fix is editing
+   `backend/core/fast_path_routes.py`.
+3. **A consistency check is cheap and nothing does it today.** For each of the
+   26 entries with a `target_id`, compare the stored `output` against
+   `extract_problem_block(target_id)`. That needs no hashing, no manifest and no
+   ingestion, because `extract_problem_block` already reads the files live. Not
+   started.
+
+`data/` is currently clean — `git status --porcelain --untracked-files=all
+data/` is empty, 39 files tracked, checked 2026-08-18. See item 2 for what this
+does to the evaluation baseline.
 
 ---
 
@@ -299,7 +371,55 @@ failure by a different route.
 **Whether it should fail closed instead is a product decision and has not been
 taken.** Failing closed would refuse legitimate queries during any outage.
 
-### Options, none started
+### OpenRouter findings, 2026-08-18 — provenance: a third-party dashboard
+
+**Read these with their provenance attached.** The two findings below come from
+the OpenRouter web dashboard, read from screenshots by the user's advisor. They
+are **not** from this repository, not from its documentation, and have not been
+re-verified from source. Anything acted on from here should be re-checked on the
+dashboard first. Both are the user's to act on — the OpenRouter dashboard is
+outside the repository.
+
+**1. `google/gemini-2.5-flash` has more than one upstream provider.** The model
+page's Providers table lists Google Vertex and Google AI Studio, both at
+$0.30 / $2.50 per million tokens, and the performance charts plot three series:
+Google AI Studio, Google Vertex (Global) and Google Vertex (EU).
+
+*Consequence:* a retry of the same model can land on a different provider, so
+`config.py:77`'s same-model fallback is **not pure decoration**. This lowers the
+priority of the "point `config.py:59` at a different provider" option below —
+that option was recorded without knowing the provider count.
+
+*Not settled:* whether OpenRouter fails over between providers **inside** a
+single request or only between requests. The aggregate availability figure on
+the model page is higher than any individual provider's, which hints at the
+former, but the figures were not legible at the zoom level used. This does not
+change the ranking, so it was left open.
+
+**2. No BYOK provider key is configured, and this is the root cause.** Every
+entry on the OpenRouter BYOK page reads "Not configured", including Google AI
+Studio and Google Vertex. So every request goes through OpenRouter's shared
+arrangement with Google, and **the shared rate limit is what the 2026-08-18
+failure hit.** The error's own remedy — "add your own key to accumulate your
+rate limits" — is therefore the actual fix.
+
+That page also states that OpenRouter prioritises your own key when present and
+falls back to its own endpoints if your key is rate-limited, when that option is
+enabled.
+
+**This is the largest item here.** It removes the failure rather than routing
+around it, and **no code change in this repository can achieve it.** It is an
+account action on the OpenRouter dashboard, and the key is the user's to create
+and enter. Never request a key in chat.
+
+*Stated on the BYOK page and NOT read:* that Google AI Studio's free tier might
+make these calls materially cheaper, and that OpenRouter charges some fee for
+using your own key. Both need checking before relying on either.
+
+### Options, in priority order after the OpenRouter findings
+
+**0. Add a BYOK provider key.** Not a code change, not in this repository, and
+above everything below it. See the finding above.
 
 - **Give `expansion_llm` its own fallback** (`search.py:15-23`) on a different
   provider. The constraint below does not apply to it: `search.py:63` calls
@@ -307,12 +427,15 @@ taken.** Failing closed would refuse legitimate queries during any outage.
   tool and never touches the approval panel. But this feeds retrieval, so it is
   under the EDD rules. Low value — the current path already produced a correct
   answer.
-- **Point `config.py:59` at a different provider.** This protects the failure
-  that would actually break the product. **Taken from DECISIONS.md:** the
-  replacement must not emit text before its tool call, or the frontend's
-  human-in-the-loop approval panel breaks, and it must support `bind_tools`,
-  `astream_events`, `with_structured_output` and `with_fallbacks`. That is a
-  candidate search plus testing, not a one-line edit. Gated on finding a model.
+- **Point `config.py:59` at a different provider.** **Downgraded 2026-08-18.**
+  It protects the failure that would break the product, but the multi-provider
+  finding above means the existing same-model fallback may already retry against
+  a different upstream, and a BYOK key addresses the cause directly. **Taken
+  from DECISIONS.md:** the replacement must not emit text before its tool call,
+  or the frontend's human-in-the-loop approval panel breaks, and it must support
+  `bind_tools`, `astream_events`, `with_structured_output` and
+  `with_fallbacks`. That is a candidate search plus testing, not a one-line
+  edit. Gated on finding a model, and now lower priority than option 0.
 - **Give `fast_llm` a fallback.** Not previously considered. It never calls
   tools at any of its three sites, so the approval-panel constraint does not
   apply to it either — the same reasoning as `expansion_llm`.

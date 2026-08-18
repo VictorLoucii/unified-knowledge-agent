@@ -409,6 +409,64 @@ commit here, rotate the credential. The rewrite is for size, not secrecy.
 `.gitignore`, so the path back to the same failure is closed. Keep a copy of the
 cache outside the repository if you want eval runs to stay cheap.
 
+### `data/` may be corrected, one file at a time, with approval
+
+**Chosen (2026-08-18):** the absolute prohibition in `CLAUDE.md` becomes a
+default with one exception. An agent may **propose** a correction to one named
+`data/` file, showing the exact lines and the exact replacement, and may write it
+only after the user approves that file. Approval does not carry to another file
+or another session.
+
+**Rejected — keeping the absolute ban.** Not because it was unfollowable. It was
+followable, and it was being followed. The ban bound the agent, not the user: it
+placed every `data/` correction on the user, who could open any file and fix it
+at any time. Nothing was ever unreachable.
+
+What changed is who does the work. The user's stated reason is volume — enough
+notes carry content that has gone stale that correcting them all by hand is
+impractical — so the work was delegated under per-file approval. **That volume
+is the user's assessment and has not been measured.** One stale passage is
+verified: `data/Unified_Knowledge_Project_Details.md:1350-1364` documents an
+`app.py` block deleted on 2026-08-18 for being a production defect, confirmed by
+reading the file and commit `247dd15`. How many others exist is unknown, and
+`OPEN.md` item 5 records that no check for them exists.
+
+**This is a delegation of labour, not a judgement that the rule was wrong.** The
+distinction matters for whoever reads this next. "The rule forbade something
+necessary, so the rule was wrong" would generalise to any future request to
+widen the exception. "The user chose to delegate work that was always theirs"
+does not generalise, and the per-file approval is what keeps it from doing so.
+
+**Rejected — a verbal allowance carried in conversation.** It does not reach the
+next session, which reads `CLAUDE.md` and refuses. The relaxation has to live in
+the file or it does not exist.
+
+**Why the guard rails kept their shape.** The original rule protected two
+different things and only one of them needed relaxing.
+
+- **The parser-hack ban is untouched and absolute.** Injecting tags, HTML or
+  structural markers to make chunking easier stays forbidden, approved or not.
+  That was always the real point of the rule, and none of it is a correction.
+- **Corrections only.** Restating a fact that is no longer true is permitted.
+  Rewriting for style, brevity or tone is not.
+- **`git status` on `data/` first.** The history section of `CLAUDE.md` records
+  that this repository has held hand-written `data/` notes existing in no
+  commit. `data/` was verified clean before this change — `git status
+  --porcelain --untracked-files=all data/` empty, 39 files tracked — so every
+  file already has a recoverable version. That precondition is a standing
+  requirement, not a one-off.
+
+**The trap that makes this less useful than it looks, and is stated in the
+rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries are verbatim copies of
+`data/` problem blocks, and `agents.py:36-38` consults that table before any
+model call. Editing `data/` cannot change what those queries return. See
+[OPEN.md](OPEN.md) item 5.
+
+**Consequence:** an approved edit reaches the deployed Space by commit and push
+alone, because the Space ships no manifest since `003496a` and re-ingests on
+every start. The local index does not update, and `eval.py` measures against it
+— see [OPEN.md](OPEN.md) item 2.
+
 ### Destructive `.docx` conversion, accepted
 
 **Chosen:** `ingest.py` converts any `.docx` in `data/` to markdown via pandoc
