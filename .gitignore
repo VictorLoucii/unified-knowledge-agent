@@ -63,3 +63,13 @@ miscellaneous/
 
 # Local logs
 latest_run_logs.txt
+
+# Ingestion manifest. Tracked once, which was the bug: the Dockerfile copies
+# data/, so the Space received a manifest naming all 26 files while
+# .gitignore:21 and :23 kept the index itself out of the repository.
+# initialize_rag then took the early return at ingest.py:91-93 and served an
+# empty vector database. Untracked, the Space has no manifest,
+# ingest.py:32 returns an empty one, and the container ingests at startup in
+# the background thread at app.py:69. The local copy is untouched, so local
+# Docker builds still use the existing index.
+data/.manifest.json

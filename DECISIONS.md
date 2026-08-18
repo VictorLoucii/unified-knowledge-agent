@@ -122,6 +122,50 @@ out-of-scope cases before spending an evaluation cycle.
 
 ---
 
+## Deployment
+
+### The Space ingests at startup; the index is not shipped
+
+**Chosen (2026-08-18):** stop tracking `data/.manifest.json`, so a git clone
+arrives with no manifest and the container ingests all 26 files at startup.
+
+**Rejected:** shipping `backend/chroma_db` and `backend/docstore` through the
+LFS rules that already sit unused at `.gitattributes:4-6`.
+
+**Why:** three reasons, in order of weight.
+
+1. **The startup cost is already absorbed.** `app.py:67-69` runs
+   `initialize_rag` in a background thread precisely so HuggingFace health
+   checks pass instantly — the comment there says so. The 97-second ingest
+   measured in `OPEN.md` item 2 never blocks the port bind. The Space answers
+   from the first second; only retrieval is cold, and only briefly.
+2. **A shipped index goes stale silently.** Ingestion keys on filename, so an
+   edited `data/` file is never re-read (`OPEN.md` item 2). A committed index
+   would drift from the source of truth with nothing to signal it, and fixing
+   that drift would mean a ~146 MB commit each time.
+3. **It adds nothing to the repository.** The rejected route costs about
+   146 MB of LFS — `chroma_db` 111 MB, `docstore` 35 MB — against a project
+   whose history was rewritten a day earlier specifically to remove a 12 MB
+   blob. Whether HuggingFace would even accept that much was never verified.
+
+**What made the chosen route safe to pick.** `data/*.md` are LFS-tracked
+(`.gitattributes:8`), so startup ingestion would read 130-byte pointers rather
+than notes if the objects were missing — and `sync_to_hub.yml:16` sets
+`lfs.allowincompletepush true`, which lets a push succeed when LFS uploads
+fail. Checked directly rather than assumed: HuggingFace serves 25,990 bytes of
+real markdown for `AgenticAI_Interview_Questions_Coding.md`. The content is
+there.
+
+**Consequence:** the LFS rules at `.gitattributes:4-6` are now permanently
+dead, since `.gitignore:21` cancels them and always will. Local behaviour is
+unchanged — `data/.manifest.json` still exists on disk, so a local Docker build
+still copies both the manifest and the working-tree index, and still takes the
+early return. Only clones behave differently.
+
+**Not verified, and recorded as such in [OPEN.md](OPEN.md) item 4:** whether
+the two sentence-transformer models resolve inside the Space, how long they
+take to download, and what the Space answers after the next rebuild.
+
 ## Guardrails and observability
 
 ### The general-knowledge fallback stays, disclaimer and all

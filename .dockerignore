@@ -7,10 +7,16 @@
 # The Dockerfile only needs: pyproject.toml, uv.lock, backend/ and data/.
 #
 # NOT excluded on purpose: backend/chroma_db/ and backend/docstore/. The
-# Dockerfile's `COPY backend/ ./backend/` is what gives the container its
-# vector index, because data/.manifest.json is tracked and ingestion returns
-# early when every file is already listed (ingest.py:91). Excluding them would
-# leave the container with an empty index.
+# Dockerfile's `COPY backend/ ./backend/` is what gives a LOCAL build its
+# vector index, because the working tree also holds data/.manifest.json and
+# ingestion returns early when every file is already listed (ingest.py:91).
+# Excluding them would leave a local container with an empty index.
+#
+# The HuggingFace Space is a different case and does not rely on any of this.
+# It builds from a git clone, and .gitignore excludes the index directories
+# and (since 2026-08-18) data/.manifest.json too. The Space therefore starts
+# with no manifest, ingest.py:32 returns an empty one, and the container
+# ingests all 26 files in the background thread at app.py:69.
 
 # Virtual environment. The image builds its own with `uv sync`.
 .venv/

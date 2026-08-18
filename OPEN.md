@@ -67,8 +67,11 @@ Ingestion keys on filename only, so an edited file is never re-read. The
 the embedding weights already on disk. Treat that as a floor, not a forecast,
 on other hardware or a cold model download.
 
-That 97 seconds is also the number that decides item 4, where the question is
-whether the deployed container can afford to ingest at startup.
+That 97 seconds decided item 4. The deployed Space now ingests at startup, so
+it pays this cost on every restart — in a background thread, so it never blocks
+the port bind. Content-hash tracking would not remove that cost, because Space
+storage is ephemeral and there is never a prior index to compare against. This
+item is now purely about the local workflow.
 
 ---
 
@@ -113,65 +116,88 @@ marker, so it needs its own evaluation cycle.
 
 ## 4. The deployed Space runs with an empty vector database
 
-**Status:** diagnosed from source and confirmed by observation. Never recorded
-until 2026-08-18. Not fixed. This is the most consequential item here: the
-deployed product cannot answer from the knowledge base at all.
+**Status: fix applied 2026-08-18, not yet verified in the deployed Space.**
+The route chosen was startup ingestion. `data/.manifest.json` is no longer
+tracked. What remains open is confirmation, not work.
 
 **Do not confuse this with the HuggingFace sync failure. That is settled.** The
 sync works — run #78, commit `8142e49`, six green steps in 8 seconds. Fixing the
 push did not touch this, and this predates it: runs #66 through #73 all
 succeeded and the Space still had no index.
 
-**The mechanism, every line verified 2026-08-18:**
+### The mechanism, every line verified 2026-08-18
 
 1. `.gitignore:21` excludes `**/chroma_db/` and `.gitignore:23` excludes
    `**/docstore/`, so neither directory is in the repository.
 2. `Dockerfile:21` is `COPY backend/ ./backend/`, which therefore copies no
    index — there is nothing to copy.
-3. `Dockerfile:24` is `COPY data/ ./data/`, which *does* ship
-   `data/.manifest.json`, because that file is tracked.
-4. The shipped manifest names all 26 files, so at startup `initialize_rag`
-   finds nothing to ingest and takes the early return at `ingest.py:91-93`,
+3. `Dockerfile:24` is `COPY data/ ./data/`, which *did* ship
+   `data/.manifest.json`, because that file was tracked.
+4. The shipped manifest named all 26 files, so at startup `initialize_rag`
+   found nothing to ingest and took the early return at `ingest.py:91-93`,
    printing "Vector Database & DocStore up to date" over an empty store.
 5. Chroma then creates an empty persistent directory, so nothing errors. The
-   failure is silent.
+   failure was silent.
 
-**Confirmed by observation:** the Space's `backend/` folder is 255 kB and holds
-only `core/`, `evals/`, `app.py`, `basics.ipynb` and `memory.py`. No
-`chroma_db`, no `docstore`.
+**Confirmed by observation, twice.** The Space's `backend/` folder holds only
+`core/`, `evals/`, `app.py`, `basics.ipynb` and `memory.py`. Re-confirmed
+2026-08-18 through the HuggingFace tree API: no `chroma_db`, no `docstore`.
 
-**Someone already intended to ship the index and was silently overruled.**
-`.gitattributes:4-6` carry LFS rules for `backend/chroma_db/**/*.bin`,
-`**/*.pickle` and `*.sqlite3`. `.gitignore:21` cancels all three, so those rules
-match nothing and have never done anything.
+### The fix
 
-**Two routes, neither obviously right:**
+`data/.manifest.json` is untracked (`git rm --cached`) and added to
+`.gitignore`. No Python changed. `ingest.py:32` already returns
+`{"ingested_files": []}` when the manifest is absent, so a clone without one
+ingests all 26 files.
 
-- **Ship the index** through the LFS rules that already exist. Costs about
-  146 MB of LFS (`chroma_db` 111 MB, `docstore` 35 MB), and the shipped index
-  goes stale the moment any `data/` file is edited, because ingestion keys on
-  filename — see item 2. Every rebuild becomes a large commit. Buys instant
-  startup and deterministic content.
-- **Stop tracking `data/.manifest.json`** so the container ingests at startup.
-  Buys nothing large in git and content that is always current. Costs a startup
-  penalty on every restart, because Space storage is ephemeral.
+**Nothing in the local workflow changes.** The file still exists on disk, so
+`COPY data/ ./data/` still ships it into a *local* Docker build, which
+therefore still takes the early return and uses the index that
+`COPY backend/ ./backend/` copied from the working tree. Only a git clone —
+which is what HuggingFace builds from — behaves differently.
 
-**The number that decides it is already in item 2:** a full ingest of 26 files
-took **97 seconds** locally, with the embedding weights already on disk. That is
-a floor, not a forecast — see below.
+**Why the startup cost is affordable:** `app.py:67-69` already runs
+`initialize_rag` in a background thread, with a comment saying it exists so
+HuggingFace health checks pass instantly. The 97 seconds in item 2 never
+blocks the port bind. The Space answers immediately; retrieval is simply empty
+for the first minute or two after each restart.
 
-**Not checked, and load-bearing for the second route:**
+**Two facts established while deciding this, not previously recorded:**
 
-- Whether `all-MiniLM-L6-v2` and `cross-encoder/ms-marco-MiniLM-L-6-v2` resolve
-  inside the Space's network sandbox. If they do not, startup ingestion cannot
-  work and only the first route is available.
-- The Dockerfile has **no model pre-download step**, so both models are fetched
-  at first use inside the container. Their download time is not in the 97
-  seconds and is not measured.
-- What the deployed Space actually answers today. Nobody has asked it a
-  question. The expected behaviour, given an empty index, is that it answers
-  only from the 53-entry fast-path table and from general knowledge behind the
-  disclaimer.
+- **`data/*.md` are stored in Git LFS** (`.gitattributes:8`). Startup ingestion
+  reads whatever the clone contains, so LFS pointers instead of content would
+  have made this route useless. Checked directly: HuggingFace served 25,990
+  bytes of real markdown for `AgenticAI_Interview_Questions_Coding.md`. The
+  content is genuinely there.
+- **`sync_to_hub.yml:16` sets `lfs.allowincompletepush true`**, so a green
+  workflow run does not prove the LFS objects arrived. This time they did. That
+  is a measurement, not a guarantee the setting provides. If `data/` content
+  ever goes missing from the Space, look here first.
+
+**Also settled by this choice:** the LFS rules at `.gitattributes:4-6` for
+`backend/chroma_db/**` stay permanently dead. `.gitignore:21` cancels them and
+now always will. They are harmless; removing them is optional tidying.
+
+### Still to confirm — these steps are the user's
+
+- **Whether `all-MiniLM-L6-v2` and `cross-encoder/ms-marco-MiniLM-L-6-v2`
+  resolve inside the Space.** Not verified. The Space runs on HuggingFace's own
+  infrastructure, so this is expected to work, but that is inference. If it
+  fails, startup ingestion cannot work and the only remaining route is shipping
+  the index through LFS.
+- **The model download time.** The Dockerfile has no pre-download step, so both
+  models are fetched at first use. That time is not inside the 97 seconds and
+  has never been measured.
+- **What the Space answers after the next rebuild.** Watch the Space logs for
+  `Vector Database missing 26 files` rather than `up to date`, then ask a
+  question only the knowledge base can answer.
+
+**One latent trap this route introduces.** If a `.docx` is ever added to
+`data/`, the container will try to convert it with pandoc (`ingest.py:66`),
+which is **not installed in the image**. `ingest.py:80-81` catches the error and
+skips the file, so it degrades rather than crashes, but that document would
+silently never be ingested in the Space. There are no `.docx` files in `data/`
+today — checked 2026-08-18, count zero, none tracked.
 
 ---
 
