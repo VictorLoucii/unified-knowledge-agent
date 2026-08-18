@@ -72,8 +72,16 @@ one sentence among three queries was enough to pull retrieval back off target.
 **The cost, recorded honestly:** this trades one failure for two fixes. Indices
 5 and 83 pass; index 37 regressed and now answers the LangGraph recursion limit
 from general knowledge. Net logic is flat at 90/94, and the entire gain is on
-recall, 33/34 → 34/34, which is what opens the suite's gate. Index 37 is open
-work, not an accepted loss — see [OPEN.md](OPEN.md).
+recall, 33/34 → 34/34, which is what opens the suite's gate.
+
+**Update, 2026-08-18 — that trade has since reversed.** The index rebuild
+swapped the pair back: index 37 now passes and index 83 now misses. Recall
+returned to 33/34. The decision above still stands — keyword expansion beat
+sentences on its own merits — but the two cases were never independent. They
+compete for slots in one candidate pool that `search.py:379` truncates *before*
+`search.py:399` reranks it, so whichever change lands last decides the winner.
+That mechanism, not the expansion style, is the thing to fix. See
+[OPEN.md](OPEN.md) item 1.
 
 **Also ruled out in the same investigation:** the header relevance boost, which
 was changed from +200 to +30. Tested on its own, restoring it to 200 fixed
@@ -210,6 +218,36 @@ mechanism. It is written up as `OPEN.md` item 1 instead.
 **Consequence:** `eval.py:232` still gates on `recall_score == 100.0`, so the
 suite reports `PIPELINE FAILED` at this baseline. That is expected until index
 83 is fixed. Do not relax the gate to make the message go away.
+
+### `.langchain.db` was stripped from the history, not migrated to LFS
+
+**Chosen:** remove the blob from every commit with `git filter-repo`, run in a
+throwaway clone, then force-push. The same pass also stripped the
+`Co-Authored-By` and `Claude-Session` trailers, since the rewrite range was
+already set by the older blob commit and doing both cost zero extra disruption.
+
+**Rejected — migrating it to LFS.** It is a regenerable response cache that
+grows on every eval run. Tracking it in LFS would have kept shipping it, and the
+quota problem would have returned larger.
+
+**Rejected — `git rm --cached` alone.** The remote was ten commits behind, so the
+blob sat inside the pack being pushed either way. It would not have unblocked
+anything.
+
+**Rejected — running `filter-repo --force` in the working repo.** Its clean-tree
+guard cannot pass here, and `--force` skips every guard and ends with
+`git reset --hard`. Roughly 33 KB of hand-written `data/` notes existed in no
+commit at the time. The fresh clone avoided the question entirely.
+
+**Why it was safe to publish the rewrite:** the committed blob was re-scanned
+independently — 1,502 rows, 31.7 M characters, 13 credential pattern classes —
+and the only match was `postgresql://localhost/postgres`, with no user and no
+password. Note that a rewrite does not unpublish: if a secret ever does reach a
+commit here, rotate the credential. The rewrite is for size, not secrecy.
+
+**Consequence:** 17 of 66 commits have new hashes. `.langchain.db` is now in
+`.gitignore`, so the path back to the same failure is closed. Keep a copy of the
+cache outside the repository if you want eval runs to stay cheap.
 
 ### Destructive `.docx` conversion, accepted
 

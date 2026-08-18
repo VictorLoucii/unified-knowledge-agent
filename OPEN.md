@@ -85,8 +85,10 @@ the next word as the id, so `### **Problem Statement**` yields the id
 
 **Already established:**
 
-- Across `data/` this manufactures **37 fake ids**: `Summary` ×12,
-  `Description` ×9, `The` ×5, `Statement` ×2, and others.
+- Across `data/` this manufactures **30 distinct fake ids over 57
+  occurrences**: `Summary` ×12, `Description` ×9, `The` ×5, `str` ×2,
+  `Statement` ×2, and others. (An earlier note said 37; that was an occurrence
+  count taken before the 2026-08-17 content additions. Recounted 2026-08-18.)
 - Fake ids leak into the `RETRIEVED_PROBLEM_IDS` marker — real logs show
   `['67', '12', 'Statement']`. Harmless for scoring, which only tests
   membership of the target, but the signal is dirty.
@@ -112,17 +114,6 @@ marker, so it needs its own evaluation cycle.
   fast-path table, so its output is byte-identical between runs, and its
   verdict has still flipped. The judge's `request_timeout` changed its cache
   key at one point, which re-judged everything. Do not chase it.
-- **`.langchain.db` blocks the HuggingFace push.** It is tracked, about 12 MB
-  packed and 56.7 MB raw, and lives in exactly one commit — the one that
-  introduced it, which `git log --all -- .langchain.db` will name. It is the
-  only blob over 5 MB anywhere in the history. HuggingFace rejects the push
-  because the blob exceeds 10 MiB and no `.gitattributes` rule matches `*.db`.
-  Removing it rewrites every commit from that one onward, so any hash written
-  down here would be wrong afterwards. Look it up rather than quoting one.
-  The re-scan for credentials is now independent of the original: 1,502 rows and
-  31.7 M characters of the committed blob checked against 13 credential pattern
-  classes, and the only match is `postgresql://localhost/postgres` — no user, no
-  password. Pattern matching cannot prove absence, but the record holds.
 - **`git filter-repo` cannot run in this working repo without `--force`.** Its
   clean-tree guard calls `git ls-files -o` *without* `--exclude-standard`, so it
   counts gitignored paths too — 126,974 entries here, 51,050 of them inside

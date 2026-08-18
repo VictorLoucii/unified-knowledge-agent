@@ -165,6 +165,26 @@ Two behaviours to know before you run ingestion:
 - **Git hygiene.** Never run `git add .`. Stage only the files that implement
   the requested change, and read the diff before committing.
 
+## History rewrites
+
+**Never run `git filter-repo` in this working repository.** Its clean-tree guard
+calls `git ls-files -o` *without* `--exclude-standard`, so it counts gitignored
+paths as untracked. Here that is over 126,000 entries, most of them inside
+`.venv`, and no amount of gitignoring reduces it. The guard can never pass.
+
+`--force` skips every guard and then ends with `git reset --hard`, because
+`reset = not is_bare`. That discards every uncommitted change to a tracked file.
+The repository has repeatedly held hand-written `data/` notes that exist in no
+commit, so this is a live data-loss path, not a theoretical one.
+
+Clone to a scratch directory and operate there. Use `GIT_LFS_SKIP_SMUDGE=1` so
+the clone keeps LFS pointers instead of downloading every object. In a fresh
+clone the guards pass on their own and `--force` is never needed.
+
+`--dry-run` does not help: it disables commit-message rewriting outright, so it
+cannot verify a `--message-callback`. Run the real pass in the throwaway clone
+and inspect `git log` there before pushing anything.
+
 ## Secrets
 
 Never hardcode API keys, passwords or credentials — read them from the
