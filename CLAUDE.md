@@ -151,6 +151,27 @@ container start. No manual rebuild is needed there. **The local index is a
 different matter** — it never updates, and `eval.py` measures against it. See
 [OPEN.md](OPEN.md) item 2.
 
+### `data/` is Git LFS — `git diff` will not show you the change
+
+`.gitattributes:8` is `data/*.md filter=lfs diff=lfs merge=lfs -text`. Two
+things follow, and both have already caught a session out.
+
+- **`git diff` on a `data/` file prints a three-line pointer, not the text.** A
+  13-line correction reported "2 insertions, 2 deletions". Never read a `data/`
+  diff that way. Smudge the committed side first:
+
+  ```bash
+  git cat-file -p HEAD:data/<file>.md | git lfs smudge > /tmp/before.md
+  diff -u /tmp/before.md data/<file>.md
+  ```
+
+- **`.github/workflows/sync_to_hub.yml:16` sets
+  `git config lfs.allowincompletepush true`** before force-pushing to
+  HuggingFace. The mirror can therefore report success while shipping a pointer
+  instead of the file. **After every `data/` push, confirm the bytes arrived**
+  by fetching the Space's copy and grepping it for text you just added. Nothing
+  in the workflow fails when the object is missing.
+
 - **No parser hacks.** Do not inject formatting tags, HTML or structural
   markers into the source files to make them easier to parse. The data stays
   clean, natural and human-readable.

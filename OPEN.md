@@ -84,7 +84,7 @@ cases only.
 **Measured during the rebuild:** a full ingest of 26 files — 17,954 child
 chunks, 8,909 parents — took **97 seconds** on a MacBook Air with the embedding
 weights already on disk. Treat that as a floor, not a forecast. The deployed
-Space pays this on every restart, in the background thread at `app.py:69`, so it
+Space pays this on every restart, in the background thread at `app.py:76`, so it
 never blocks the port bind.
 
 ### Three options, none started
@@ -153,11 +153,11 @@ only for the small residue below. The decision and the full mechanism are in
 
 `data/.manifest.json` is no longer tracked, so the Space's clone arrives without
 one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
-files in the background thread at `app.py:69`.
+files in the background thread at `app.py:76`.
 
-**How it was confirmed, at zero OpenRouter cost.** `app.py:95-112` exposes
+**How it was confirmed, at zero OpenRouter cost.** `app.py:102-119` exposes
 `/health`, which reports `rag_hydrated` by testing whether the docstore holds
-any key (`app.py:103`). An empty docstore was the entire bug, so this flag was
+any key (`app.py:110`). An empty docstore was the entire bug, so this flag was
 `false` before.
 
 1. `13:28:04` Space stage `RUNNING_BUILDING`.
@@ -175,22 +175,47 @@ those keys.
 **Two of the three unknowns are now answered.** The models *do* resolve inside
 the Space — ingestion cannot embed without `all-MiniLM-L6-v2`, and the store is
 populated. The startup penalty *does not* break anything — the app reported
-`online` while ingestion ran, which is what `app.py:67-69` was built for.
+`online` while ingestion ran, which is what `app.py:74-76` was built for.
 
-### Residue, genuinely still open
+### Residue
+
+**Closed 2026-08-19 — full 26-file coverage is now demonstrated.** The previous
+entry read: "`rag_hydrated` proves 'at least one document', not 'all 26 files'.
+`app.py:110` calls `next(store.yield_keys(), None)`. Nothing exposes a count."
+The Space's startup log for the `5103325` rebuild printed
+`Vector Database missing 26 files. Initiating Incremental Auto-Ingestion...`,
+then one `Loading and splitting markdown data for` line per file — **26 of
+them** — then `Auto-Ingestion complete. The Agent's memory is hydrated.`
+Counting those log lines is what closes this; `/health` still cannot.
+**Provenance: this is the advisory session's count over a container log pasted
+by the user. I did not read that log and cannot re-derive it.**
+
+**The same log settles three claims that were reasoned from the installed
+package rather than seen.** The container printed `Span Processor:
+BatchSpanProcessor`, `Collector Endpoint: localhost:4317`, `Transport: gRPC`,
+and **no** `Attempting to instrument while already instrumented` line. That is
+[DECISIONS.md](DECISIONS.md), "One tracing setup only", confirmed in
+production. Same provenance caveat: reported, not read by me.
+
+**Chunk counts moved, and the delta is not isolated.** The Space reported 8,911
+parents and 17,958 children, against the 8,909 / 17,954 recorded for the local
+rebuild at item 2. Commit `5103325` is the only `data/` change between them, so
+`+2 / +4` is *plausibly* the two added bullets — **inferred, not proven per
+file.** Do not treat item 2's local figures as a baseline for the Space.
+
+### Still genuinely open
 
 - **The model download time is still unmeasured.** The Dockerfile has no
   pre-download step, so `all-MiniLM-L6-v2` and
   `cross-encoder/ms-marco-MiniLM-L-6-v2` are fetched at first use. That time is
   not inside the 97 seconds in item 2. The three-minute figure above covers
   build plus app start, not ingestion alone, so it does not isolate it either.
-- **`rag_hydrated` proves "at least one document", not "all 26 files".**
-  `app.py:103` calls `next(store.yield_keys(), None)`. Nothing exposes a count.
-  Full coverage has not been demonstrated, only started and sustained.
+  **The `5103325` log does not help.** Its `Loading weights: 100%|...| 103/103
+  [00:00<00:00, ...]` line is a load from disk, no download progress appears,
+  and the log carries no per-line timestamps, so neither duration can be read
+  off it.
 - **No question has been put to the Space.** Doing so spends OpenRouter credit,
-  so it was deliberately skipped. The remaining user-side check is the Space
-  build log: look for `Vector Database missing 26 files` rather than
-  `up to date`.
+  so it was deliberately skipped.
 
 **One latent trap this route introduces.** If a `.docx` is ever added to
 `data/`, the container will try to convert it with pandoc (`ingest.py:66`),
@@ -207,22 +232,45 @@ now always will. They are harmless; removing them is optional tidying.
 
 ## 5. Stale content: three paths carry `data/` to the user, and they age differently
 
-**Status:** two stale documents found 2026-08-18; the propagation analysis added
-after them. Nothing fixed.
+**Status: the two stale documents are FIXED. The propagation analysis below
+stands and is the reason to keep this item.**
 
-### The two stale documents
+### The two stale documents — both corrected
 
 - **`data/Unified_Knowledge_Project_Details.md`**, section
-  `### C. Backend Instrumentation`. Precise anchors: the heading is at
-  **:1342**, "Code snippet added at the top" at **:1348**, and the python fence
-  opens at **:1350** and closes at **:1364**. The fenced block presents the
-  deleted `app.py` code — `OTLPSpanExporter`, `SimpleSpanProcessor`,
-  `http://localhost:6006/v1/traces` — as current. **Only the fence is stale.**
-  The prose at :1344 and the surrounding reasoning about Arize Phoenix and
-  running it in Docker to control cost are still accurate.
+  `### C. Backend Instrumentation`. **Corrected 2026-08-19, commit `5103325`,
+  approved per file under the `data/` exception.** Lines **1344-1368** were
+  replaced; 13 out, 13 in, file length unchanged at 1952.
+  **Two things this item got wrong before the fix, both corrected here.** The
+  fence closes at **:1368**, not :1364 — :1364 was the `add_span_processor`
+  line. And "only the fence is stale" was one line too narrow: :1344 said the
+  provider went into "the application server's entry point" and :1346 named
+  `app.py` as the file modified, and both were false once `247dd15` moved the
+  setup to `config.py`.
+  The surrounding reasoning about Arize Phoenix and running it in Docker to
+  control cost was accurate and is untouched.
 - **`CLAUDE.md`** claimed Phoenix is self-hosted via docker compose. Corrected
   2026-08-18. `docker-compose.yml` defines only `backend` and `frontend` plus a
-  commented-out postgres — read, whole file.
+  commented-out postgres — read, whole file. **`DECISIONS.md` carried the same
+  claim and was not corrected at the same time; fixed 2026-08-19.**
+
+### `data/` is Git LFS, which hides the diff
+
+Found while applying `5103325`, and in no record before it. `.gitattributes:8`
+is `data/*.md filter=lfs diff=lfs merge=lfs -text` — read. Two consequences.
+
+- **`git diff` on a `data/` file shows a three-line pointer, not the text.**
+  `5103325` reports "2 insertions, 2 deletions" for a 13-line change. To read a
+  real diff, smudge the committed side first:
+  `git cat-file -p HEAD:data/<f>.md | git lfs smudge > /tmp/before.md`
+- **`.github/workflows/sync_to_hub.yml:16` sets
+  `git config lfs.allowincompletepush true`** before the force-push to
+  HuggingFace at :20 — read, whole file. That lets the mirror report success
+  while shipping a pointer instead of the file. It did not fire for `5103325`,
+  confirmed by the user fetching the Space's copy and matching
+  `register(batch=True)`. **Treat that fetch as a standing check after every
+  `data/` push**, because nothing in the workflow fails when the object is
+  missing.
 
 ### The three paths, and why this matters more than "a note is out of date"
 
@@ -609,7 +657,71 @@ compatibility signal anyone has, and its cost is unknown.
 
 ---
 
-## 9. Smaller items
+## 9. The deployed API is public, unauthenticated, and two of its routes spend credit
+
+**Status:** found 2026-08-19 from the Space's access log. Diagnosed from source.
+**Nothing changed. No decision taken.** This is a product call, not a defect.
+
+**What the log showed.** Automated scanners probed the Space repeatedly during
+startup: the four common secrets paths (dotenv, its `.local` and `.production`
+variants, and `.streamlit/secrets.toml`) plus two path-traversal attempts using
+`file%3D../` prefixes. **Every secrets path returned 404. Nothing leaked.** One
+endpoint answered: `GET /openapi.json` returned 200. *Reported by the advisory
+session from a container log pasted by the user; I did not read that log.*
+
+### Read from source, not from the log
+
+- `app.py:84` is `app = FastAPI(lifespan=lifespan)` with no `docs_url`,
+  `redoc_url` or `openapi_url` argument, so FastAPI's defaults apply and
+  `/docs`, `/redoc` and `/openapi.json` are all public.
+- **There is no authentication and no rate limiting anywhere in `backend/`.** A
+  recursive grep over `backend/` for `Depends(`, `APIKeyHeader`, `HTTPBearer`,
+  `set_cookie`, `slowapi`, `RateLimit` and `Authorization` returns **zero
+  matches**.
+- **Two public routes reach a paid model.** `app.py:127` `/chat_stream` runs the
+  full graph. `app.py:152` `/refine_transcript` calls `fast_llm.ainvoke` at
+  `app.py:161`. Neither checks anything about the caller.
+- `app.py:90-96` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
+  The comment at `app.py:87` calls this "Secure CORS" and `app.py:92` says it
+  "Allows any local origin format"; `.*` matches **every** origin, not local
+  ones.
+
+### The assessment, and where it differs from the first reading
+
+`/openapi.json` on its own is **low**. It publishes API shape, not secrets and
+not data, and for a portfolio project a browsable schema may be exactly what is
+wanted.
+
+**The exposure that matters is not the schema.** It is that `/chat_stream` and
+`/refine_transcript` are open to anyone with the URL and spend the owner's
+OpenRouter balance per call. Closing `/openapi.json` does **not** address that —
+the routes answer a plain `curl` whether or not their schema is published. The
+scanners in the log did not find them, but they are two guesses away.
+
+**CORS is not the control here.** `allow_origin_regex=".*"` is wrong as written,
+but CORS only governs what browser JavaScript may *read*. It does not gate
+`curl`, a script, or a server-to-server call. Tightening it would not protect
+the balance. Worth fixing so the comment stops claiming something untrue; do not
+expect it to buy security.
+
+### Options, none started
+
+- **Leave both, record the decision.** Costs nothing. Buys the demo. This is
+  defensible and may well be right — but it should then be a decision in
+  [DECISIONS.md](DECISIONS.md), not a FastAPI default nobody chose.
+- **`openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`.** One
+  line. Buys a smaller surface to enumerate. Loses the browsable schema.
+- **A spend cap.** The only option that addresses the actual risk. Not designed.
+  **The OpenRouter balance is about $1.12**, so the practical ceiling on this
+  today is small.
+
+**Not checked:** whether the HuggingFace Space sits behind any gateway that
+rate-limits or filters before the container sees a request. That could change
+the whole assessment and I have no evidence either way.
+
+---
+
+## 10. Smaller items
 
 - **Index 22 is judge noise, not a regression.** It is served by the unchanged
   fast-path table, so its output is byte-identical between runs, and its

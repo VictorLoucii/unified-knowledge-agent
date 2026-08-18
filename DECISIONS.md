@@ -134,7 +134,7 @@ LFS rules that already sit unused at `.gitattributes:4-6`.
 
 **Why:** three reasons, in order of weight.
 
-1. **The startup cost is already absorbed.** `app.py:67-69` runs
+1. **The startup cost is already absorbed.** `app.py:74-76` runs
    `initialize_rag` in a background thread precisely so HuggingFace health
    checks pass instantly — the comment there says so. The 97-second ingest
    measured in `OPEN.md` item 2 never blocks the port bind. The Space answers
@@ -165,7 +165,7 @@ early return. Only clones behave differently.
 **Confirmed live the same day, commit `003496a`.** The Space rebuilt in about
 three minutes and `/health` then reported `rag_hydrated: true` on eight
 consecutive polls over five and a half minutes. That flag tests whether the
-docstore holds any key (`app.py:103`), and an empty docstore was the entire
+docstore holds any key (`app.py:110`), and an empty docstore was the entire
 bug. It cost no OpenRouter credit. Two assumptions became facts: the
 sentence-transformer models do resolve inside the Space, and the background
 ingestion thread does keep the app answering while it runs.
@@ -225,8 +225,15 @@ and left, not missed. The exposure is written up as [OPEN.md](OPEN.md) item 7.
 
 ### Arize Phoenix over LangSmith
 
-**Chosen:** self-hosted Phoenix via docker compose, with LangSmith environment
-variables actively popped at import.
+**Chosen:** a self-hosted Phoenix collector run locally, with LangSmith
+environment variables actively popped at import.
+
+**Corrected 2026-08-19.** This entry said "via docker compose". It is not.
+`docker-compose.yml` defines only `backend` and `frontend` plus a commented-out
+postgres — read, whole file. Phoenix is started by hand with the `docker run`
+command recorded in `data/Unified_Knowledge_Project_Details.md` at :1408, which
+publishes both 6006 and 4317. `CLAUDE.md` was corrected on 2026-08-18 and this
+file was missed.
 
 **Rejected:** LangSmith.
 
@@ -298,11 +305,21 @@ production log showed 23 such cycles for one startup and one question.
 4317. Whether a locally-run Phoenix binds 4317 was **not** verified — the
 figures above are the client-side default. Check the Phoenix startup banner.
 
-**A knowledge-base document now contradicts the code.**
-`data/Unified_Knowledge_Project_Details.md:1342-1364` presents the deleted
-block as the way to instrument the backend. `data/` is never edited by this
-project's rules, so it is left alone and recorded in [OPEN.md](OPEN.md)
-item 5 instead. Ask the agent how tracing works and it will describe the removed code.
+**The knowledge-base document that contradicted the code is now corrected.**
+`data/Unified_Knowledge_Project_Details.md` presented the deleted block as the
+way to instrument the backend. When this entry was written, `data/` was never
+edited, so it was recorded in [OPEN.md](OPEN.md) item 5 instead.
+
+**Superseded 2026-08-19, commit `5103325`.** The `data/` correction exception
+added on 2026-08-18 allows an approved, per-file fix, and one was approved.
+Lines **1344-1368** were replaced. **The range this entry gave, `1342-1364`, was
+wrong twice over:** the fence closes at :1368, and the stale text started at
+:1344, not at the fence. Both are corrected in OPEN.md item 5.
+
+**Confirmed live.** The Space rebuilt seven minutes after the commit and its
+startup log showed the batch processor, the 4317 gRPC endpoint, and no
+"already instrumented" line. Ask the agent how tracing works and it now
+describes `config.py`.
 
 ### The Phoenix endpoint is defaulted, not assigned
 
