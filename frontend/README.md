@@ -49,20 +49,29 @@ yarn install
 pnpm install
 ```
 
-### 2. Configure Environment Variables
+### 2. Environment Variables — none needed for local development
 
-Create a `.env.local` file in this directory and specify the backend endpoint.
-The variable is read at `src/app/page.tsx`, `src/components/ChatInput.tsx` and
-`src/hooks/useChatStream.ts`, which fall back to `http://localhost:7860` when it
-is unset — so set it to whichever port you started the backend on. The `README`
-at the repository root starts it on 8000:
+**Start the backend on port 7860 and this step is unnecessary.**
+`src/app/page.tsx`, `src/components/ChatInput.tsx` and
+`src/hooks/useChatStream.ts` all read `process.env.NEXT_PUBLIC_API_URL` and fall
+back to `http://localhost:7860`, which is the port the repository-root `README`
+tells you to start the backend on. The two halves meet with no configuration.
+
+Set `NEXT_PUBLIC_API_URL` only when the backend is somewhere else — a deployed
+Space, or a different local port. Create a `.env.local` file in this directory:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=https://your-backend-host
 ```
 
-Next.js freezes this value into the browser bundle when you build, so a change
-here needs a rebuild, not just a restart.
+Two things to know before you rely on it:
+
+- **Next.js freezes this value into the browser bundle at build time.** A change
+  needs a rebuild, not a restart. That is why `docker-compose.yml` passes it as a
+  build argument rather than an environment variable.
+- **`.env.local` is gitignored**, so it configures your machine only and never
+  reaches a clone or a deployment. Set the variable in the hosting platform's own
+  settings instead — Vercel project settings for the frontend.
 
 ### 3. Start the Development Server
 

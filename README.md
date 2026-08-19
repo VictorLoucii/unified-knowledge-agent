@@ -199,17 +199,34 @@ Start the backend from the **repository root** — `backend/app.py` uses absolut
 `backend.*` imports, so running it from inside `backend/` fails with
 `ModuleNotFoundError`:
 ```bash
-uv run uvicorn backend.app:app --reload --port 8000
+uv run uvicorn backend.app:app --reload --port 7860
 ```
 
-Docker Compose builds both services, but note the remaining defect below:
+**Pass `--port 7860`.** Uvicorn defaults to 8000, and the frontend calls 7860 —
+`src/app/page.tsx`, `src/components/ChatInput.tsx` and `src/hooks/useChatStream.ts`
+all fall back to `http://localhost:7860`. On 7860 the two halves meet with no
+configuration: you need no `.env.local` and no environment variable. 7860 is not
+a free choice — Hugging Face Spaces serve on it, which is why `app_port: 7860`
+sits at the top of this file and `Dockerfile:33` binds it.
+
+Then start the frontend:
+```bash
+cd frontend && npm run dev
+```
+
+### Running the Application with Docker Compose
+
 ```bash
 docker compose up --build
 ```
 
-The backend is published on `http://localhost:8000`. The container binds port
-`7860`, not `8000`, so `docker-compose.yml:31` maps `8000:7860`. Do not change
-the container side of that mapping without changing `Dockerfile:33` to match.
+> [!IMPORTANT]
+> **Compose uses a different host port from the local command above, and that is
+> deliberate — do not "fix" it.** Locally the backend is on
+> **`http://localhost:7860`**. Under Compose it is on
+> **`http://localhost:8000`**, because `docker-compose.yml:31` maps host `8000`
+> to container `7860`. The container side must stay 7860; only the host side
+> differs, so the two can run at once without colliding.
 
 The frontend's API URL is baked into its browser bundle at build time, so
 `docker-compose.yml:62` passes it as a **build argument**, not an environment

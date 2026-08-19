@@ -331,8 +331,12 @@ to check variable names and schemas.
 # install
 uv sync
 
-# backend (also triggers ingestion of any file not in the manifest)
-uv run uvicorn backend.app:app --reload
+# backend (also triggers ingestion of any file not in the manifest).
+# --port 7860 is REQUIRED, not optional. Uvicorn defaults to 8000 and the three
+# frontend call sites fall back to localhost:7860, so omitting it leaves the
+# browser calling a port nothing serves. 7860 is what HuggingFace Spaces serve
+# on and what Dockerfile:33 binds. Compose is the one exception — see below.
+uv run uvicorn backend.app:app --reload --port 7860
 
 # frontend
 cd frontend && npm run dev

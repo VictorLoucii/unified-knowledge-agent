@@ -502,29 +502,89 @@ host, which would need a rebuild with a different `--build-arg`. This costs
 nothing today: the HuggingFace Space does not use this image, and
 `docker-compose.yml` is not part of the deployed path.
 
-### Adjacent inconsistency, found 2026-08-19, not part of this item
+### Local development pointed at the wrong port — FIXED 2026-08-19
 
-Local development, outside Docker, mismatches for the same reason minus the
-freezing. `README.md` starts the backend with `--port 8000`, while the frontend
-defaults to `http://localhost:7860` at the three sites above, with no
-environment file under `frontend/` to override it. `backend/app.py:269` defaults
-to 7860 when `app.py` is run directly, which is the HuggingFace convention.
+**This was a real, live breakage, not a tidiness issue.** Every documented way
+of starting the backend landed on port 8000, while the browser called 7860.
+Nothing bridged them, so the frontend could not reach the backend on any
+documented local path.
 
-**The documented variable name was wrong — FIXED 2026-08-19.** The frontend
-README told the reader to set `NEXT_PUBLIC_BACKEND_URL`. No file under
-`frontend/` read that name; the only hit in the whole directory was the README
-line itself. The three call sites read `NEXT_PUBLIC_API_URL`, so following that
-README set a variable nothing consumed and the frontend silently kept its 7860
-default. The name is corrected, and the section now also names the three
-reading sites, states the 7860 fallback, and warns that the value is frozen at
-build time so a change needs a rebuild.
+**The three paths, as they were:**
 
-**The port mismatch itself is NOT fixed.** It cannot be fixed by a committed
-file: `.gitignore:15` and `:40` exclude `frontend/.env.local`, so the only
-committable options are changing the hardcoded fallback in three source files or
-changing what `README.md` instructs. The first is application logic, which
-CLAUDE.md says not to touch unasked. Left as a separate, recorded defect.
-**Read from source, not run.**
+| Path | Backend bound | Browser called | Worked |
+|---|---|---|---|
+| `README.md` — `--port 8000`, explicit | 8000 | 7860 | no |
+| `CLAUDE.md` — no `--port` at all | 8000, uvicorn's default | 7860 | no |
+| `python backend/app.py` — `app.py:269` | 7860 | 7860 | yes, but documented nowhere |
+
+Uvicorn's default is `port: int = 8000`, read in the installed package at
+`.venv/lib/python3.12/site-packages/uvicorn/config.py:183` and `main.py:490`.
+There is no environment file of any kind under `frontend/`, and
+`frontend/next.config.ts` sets no rewrite or proxy, so nothing bridged the gap.
+
+**CORS was never a factor.** `app.py:92` sets `allow_origin_regex=".*"` with
+`allow_methods` and `allow_headers` both `["*"]`. Any origin is accepted. If the
+ports agree, CORS will not be what blocks a request.
+
+### Why the fix was to move the docs to 7860, not the code to 8000
+
+**7860 is a platform constraint, not a preference.** The user's own note at
+`data/Errors_in_AgenticAI_Projects.md:1745` records a **deployment restart
+loop**: HuggingFace Spaces expect traffic on 7860 and the system was mismatched.
+`:1674` records the resolution as "Standardized all infrastructure on port
+7860", and `:1760` records the frontend fallback of `localhost:7860` as a
+deliberate choice "for local dev". That section names `sync_to_hub.yml`,
+`HF_TOKEN`, `useChatStream.ts` and `VERCEL_FRONTEND_URL`, so it describes this
+repository.
+
+The code agrees with the note in five places: `Dockerfile:30` and `:33`,
+`README.md:7`'s `app_port: 7860`, `backend/app.py:269`, and the three frontend
+call sites. **The number 8000 appears in no Python or TypeScript source file at
+all** — grepped repo-wide, excluding `data/`, the records and the virtualenv.
+The only source hits are `search.py:470` and `:472`, which truncate a text block
+at 8000 *characters*.
+
+So `README.md`'s `--port 8000` was the single line out of step, and moving the
+frontend fallback to 8000 would have reintroduced the split against a container
+that must bind 7860.
+
+**The fix, applied:** `README.md` and `CLAUDE.md` both now instruct
+`--port 7860`, and CLAUDE.md states that the flag is required rather than
+optional. **On 7860 no configuration is needed at all** — the fallback already
+points there, so a fresh clone works with no `.env.local` and no environment
+variable. That is why this was fixed in documentation rather than by asking
+every user to create a gitignored file. `.gitignore:15` and `:40` exclude
+`frontend/.env.local`, so a file-based fix could never have reached a clone.
+
+**`frontend/README.md` rewritten to match.** It previously told the reader to
+create `.env.local` — first with `NEXT_PUBLIC_BACKEND_URL`, a name no file under
+`frontend/` reads, and then, briefly, with the right name but port 8000. That
+second error was introduced by commit `1163357` in this same sequence, reasoning
+from `README.md`'s `--port 8000` before the `data/` note was found. The section
+now states that local development needs no configuration, and keeps `.env.local`
+only for pointing at a backend somewhere else.
+
+### Two host ports now coexist deliberately
+
+Local `uvicorn` serves `http://localhost:7860`. Compose serves
+`http://localhost:8000`, because `docker-compose.yml:31` maps host 8000 to
+container 7860. **This looks exactly like the defect that was just fixed and is
+not one.** Only the host side differs; the container side is 7860, which is what
+was standardised. Keeping them distinct also means the local server and the
+Compose stack can run at the same time without colliding on a port.
+
+`README.md` carries an `[!IMPORTANT]` block saying this in as many words, so a
+later reader — including a later session — does not "fix" the two numbers into
+one and break the local path.
+
+### Still not observed
+
+**A matching port is necessary, not sufficient.** Nothing here has been run.
+Whether the frontend and backend actually talk once both are on 7860 — the
+streaming endpoint, the request shape, session handling — is untested by
+anything in this analysis. Nothing was listening on 7860, 8000 or 3000 when the
+check was made. If it still fails with the ports agreeing, that is a different
+defect and is not evidence against the analysis above.
 
 ---
 
