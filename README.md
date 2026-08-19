@@ -202,14 +202,21 @@ Start the backend from the **repository root** — `backend/app.py` uses absolut
 uv run uvicorn backend.app:app --reload --port 8000
 ```
 
-Docker Compose builds both services, but note the known defect below:
+Docker Compose builds both services, but note the remaining defect below:
 ```bash
 docker compose up --build
 ```
 
+The backend is published on `http://localhost:8000`. The container binds port
+`7860`, not `8000`, so `docker-compose.yml:31` maps `8000:7860`. Do not change
+the container side of that mapping without changing `Dockerfile:33` to match.
+
 > [!WARNING]
-> **The backend is currently unreachable through Docker Compose.**
-> `docker-compose.yml` publishes port `8000:8000` while the `Dockerfile` binds
-> port `7860`, so nothing listens on the published port and the frontend cannot
-> reach the API. Use the local `uvicorn` command above until this is fixed. See
-> [OPEN.md](OPEN.md).
+> **The frontend still cannot reach the backend through Docker Compose.**
+> Next.js freezes `NEXT_PUBLIC_API_URL` into the browser bundle when
+> `frontend/frontend.Dockerfile:16` runs `next build`, and the variable is unset
+> at that moment. The bundle therefore keeps its `http://localhost:7860`
+> fallback, while Compose publishes only host `8000`. Setting the variable at
+> container start, as `docker-compose.yml:52` does, is too late to change it.
+> Use the local `uvicorn` command above until this is fixed. See
+> [OPEN.md](OPEN.md) item 6, defect 3.

@@ -373,31 +373,129 @@ does to the evaluation baseline.
 
 ---
 
-## 6. `docker compose up` cannot reach the backend
+## 6. `docker compose up` cannot reach the backend — HOST PATH FIXED, BROWSER PATH STILL BROKEN
 
-**Status:** diagnosed from source 2026-08-18, not fixed, never observed
-failing because nobody reported running it. Does not affect the deployed Space.
+**Status 2026-08-19: two of three defects fixed. The frontend still cannot reach
+the backend, for a third reason found after the first fix.** Never affected the
+deployed Space.
 
-`CLAUDE.md` documents `docker compose up --build` as the full-stack command.
+### Defect 1, the published port — FIXED, and NOT verified by running it
 
-- `docker-compose.yml:29` publishes `"8000:8000"`.
-- `Dockerfile:30` is `EXPOSE 7860` and `Dockerfile:33` binds `--port 7860`.
+The published port was `"8000:8000"` while `Dockerfile:30` is `EXPOSE 7860` and
+`Dockerfile:33` binds `--port 7860`. Nothing listened on container port 8000, so
+the published port reached nothing.
 
-Nothing listens on container port 8000, so the published port reaches nothing.
-`docker-compose.yml:49` then points the frontend at `http://localhost:8000`.
+**The fix changed the container side only.** `docker-compose.yml:31` is now
+`"8000:7860"`. The host port stays 8000, so `README.md`'s local `uvicorn`
+command and the compose mapping agree on one number.
 
-**Two dead volume mounts in the same file, lower stakes.**
-`docker-compose.yml:35-36` mount `./chroma_db:/app/chroma_db` and
-`./docstore:/app/docstore`. `config.py:84` sets `BASE_DIR` to the parent of
-`core/`, so the real paths are `/app/backend/chroma_db` and
-`/app/backend/docstore`. The host sources are wrong too — the repository has
-`backend/chroma_db`, not `./chroma_db`. Local RAG still works, because
-`COPY backend/ ./backend/` puts the index in the image, so these mounts are
-dead rather than harmful. They do mean a local compose run persists nothing.
+Publishing `7860:7860` was rejected as a way of fixing defect 1. It would have
+contradicted `README.md`'s `--port 8000`. See defect 3, where it returns as a
+candidate for a different reason.
 
-**Not tried:** any fix. Changing the published port is a one-line change but it
-is application configuration, and the frontend URL at `docker-compose.yml:49`
-has to move with it.
+**VERIFICATION STATUS: read-correct, not run.** The YAML parses and
+`services.backend.ports` resolves to `['8000:7860']`, checked with
+`yaml.safe_load`. **`docker compose up --build` has never been executed, before
+or after the fix.** The Docker daemon was down and the build cache had been
+emptied by `docker builder prune -a -f` on 2026-08-19, so a first build must
+re-download everything `Dockerfile:18`'s `uv sync --frozen` pulls, including
+CPU-only PyTorch. A long build is expected and is not evidence about any of
+this.
+
+### Defect 2, two dead volume mounts — FIXED by deletion
+
+The file used to mount `./chroma_db:/app/chroma_db` and
+`./docstore:/app/docstore` under a comment calling them "CRITICAL for keeping
+your AI's knowledge base". Both sides were wrong.
+
+- **Host side:** neither `./chroma_db` nor `./docstore` exists. The index is at
+  `backend/chroma_db` and `backend/docstore` — read, `ls`.
+- **Container side:** `config.py:84` sets `BASE_DIR` to the parent of `core/`,
+  which is `/app/backend` in the image, so `config.py:85-86` resolve to
+  `/app/backend/chroma_db` and `/app/backend/docstore`. Nothing read
+  `/app/chroma_db`.
+
+They were inert rather than harmful, because `.dockerignore` deliberately keeps
+`backend/chroma_db/` in the build context so `COPY backend/ ./backend/` bakes the
+index into the image — that file states this in its own comment at lines 9-13.
+Their only costs were two empty directories created in the repository root and a
+false comment.
+
+**Deleted rather than repointed.** Repointing them at
+`./backend/chroma_db:/app/backend/chroma_db` would have made the container read
+the local index, which item 2 records as stale. That is a behaviour change, not a
+typo fix. The `volumes:` key is gone from the backend service entirely; a comment
+in its place records why.
+
+### Defect 3, the frontend's API URL is frozen at build time — NOT FIXED
+
+**Found 2026-08-19, after defect 1 was fixed. This is why item 6's original
+headline is still true for the browser.** Fixing the port made the backend
+reachable *from the host* at `localhost:8000`, which it never was. It did not
+make the frontend reach the backend.
+
+Read, each step:
+
+1. `frontend/frontend.Dockerfile:16` runs `npm run build` — that is `next build`
+   (`frontend/package.json` scripts) — at **image build time**.
+2. At that moment `NEXT_PUBLIC_API_URL` is unset. No environment file exists
+   anywhere under `frontend/`, and `frontend/next.config.ts` sets no `env` key.
+3. Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle during
+   `next build`. **This is read from this version's own bundled documentation,
+   not from general knowledge** — `next` is 16.2.2 per `frontend/package.json`,
+   and
+   `frontend/node_modules/next/dist/docs/01-app/02-guides/environment-variables.md:166`
+   states that the values "will be frozen with the value evaluated at build
+   time", naming the single-Docker-image case explicitly. Line 198 repeats it.
+   `frontend/AGENTS.md` warns this Next version departs from common knowledge,
+   which is why the bundled docs were read rather than recalled.
+4. All three call sites are in the client graph, so all three freeze their
+   fallback, `http://localhost:7860`: `frontend/src/app/page.tsx:69` and
+   `frontend/src/components/ChatInput.tsx:8` both carry `"use client"` on line 2,
+   and `frontend/src/hooks/useChatStream.ts:5` is a hook imported by that page.
+   All three are static `process.env.NEXT_PUBLIC_API_URL` lookups, which the doc
+   at :182-188 distinguishes from dynamic lookups that are *not* inlined.
+5. `docker-compose.yml:52` sets the variable under `environment:`, which applies
+   at **container start** — after step 1. It never reaches the browser bundle.
+
+**Consequence:** the browser calls `http://localhost:7860`, and compose publishes
+only host 8000. Nothing listens on host 7860.
+
+**Confidence: high, but READ AND INFERRED, NOT RUN.** Every step above is a file
+that was opened. The inference is that steps 1-5 compose the way the
+documentation describes. Building the image and grepping the bundle for `7860`
+would settle it; that was not done.
+
+**Two candidate fixes, neither applied.**
+
+- **Pass the value in at build time.** Add `args:` under the frontend service's
+  `build:` block and an `ARG`/`ENV` pair before `frontend.Dockerfile:16`.
+  **Buys:** the host port stays 8000, `README.md` stays true, and
+  `docker-compose.yml:52` can then be deleted or kept honestly. **Costs:** three
+  lines across two files, and a rebuild against an empty build cache.
+  **Recommended.**
+- **Publish `"7860:7860"` instead.** **Buys:** one line; the frozen 7860 fallback
+  becomes correct. **Costs:** contradicts `README.md`'s `--port 8000` and
+  `docker-compose.yml:52`, leaving two documents disagreeing. It works by
+  coincidence rather than by design, which is the failure these records exist to
+  prevent.
+
+### Adjacent inconsistency, found 2026-08-19, not part of this item
+
+Local development, outside Docker, mismatches for the same reason minus the
+freezing. `README.md` starts the backend with `--port 8000`, while the frontend
+defaults to `http://localhost:7860` at the three sites above, with no
+environment file under `frontend/` to override it. `backend/app.py:269` defaults
+to 7860 when `app.py` is run directly, which is the HuggingFace convention.
+
+**And the documented variable name is wrong.** `frontend/README.md:57` tells the
+reader to set `NEXT_PUBLIC_BACKEND_URL`. No file under `frontend/` reads that
+name — grepped, one hit, the README line itself. The three sites read
+`NEXT_PUBLIC_API_URL`. Following that README therefore sets a variable nothing
+consumes, and the frontend silently keeps its 7860 default.
+
+**All of this is read from source, not run.** Not fixed; these are separate
+defects from the compose mapping.
 
 ---
 

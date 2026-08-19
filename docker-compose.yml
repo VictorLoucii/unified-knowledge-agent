@@ -26,14 +26,17 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "8000:8000"
+      # Host 8000 -> container 7860. The Dockerfile binds 7860 (Dockerfile:33),
+      # so the container side must be 7860; publishing 8000:8000 reached nothing.
+      - "8000:7860"
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - DATABASE_URL=${DATABASE_URL}
-    volumes:
-      # Kept from your version: CRITICAL for keeping your AI's knowledge base!
-      - ./chroma_db:/app/chroma_db
-      - ./docstore:/app/docstore
+    # No volumes. The index is baked into the image by `COPY backend/ ./backend/`
+    # (.dockerignore keeps backend/chroma_db and backend/docstore in the build
+    # context on purpose). The two mounts removed here named ./chroma_db and
+    # ./docstore, which do not exist, and mapped them to /app/chroma_db, which
+    # nothing reads — config.py:84 puts the real paths under /app/backend.
     # depends_on:
     #   postgres:
     #     condition: service_healthy
