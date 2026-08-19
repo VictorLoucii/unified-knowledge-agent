@@ -227,8 +227,14 @@ Compose stack run at the same time without colliding on a port. `README.md`
 carries an `[!IMPORTANT]` block saying so, because two different local URLs look
 exactly like the defect that was just fixed.
 
-**Not verified by running anything.** A matching port is necessary, not
-sufficient. See [OPEN.md](OPEN.md) item 6.
+**Confirmed by running it, 2026-08-19.** With the backend on 7860 and
+`npm run dev` alongside it, a query put through the browser returned
+`GET /history 200`, an `OPTIONS /chat_stream 200` preflight and
+`POST /chat_stream 200`; the answer rendered and the thread persisted to the
+history sidebar. A matching port was never sufficient on its own, and this shows
+the two halves actually talk. *Provenance: terminal output pasted by the user
+and read, not re-run inside a session.* The **compose** path remains unrun — see
+[OPEN.md](OPEN.md) item 6.
 
 ---
 

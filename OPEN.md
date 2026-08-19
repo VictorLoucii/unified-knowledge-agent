@@ -375,11 +375,41 @@ does to the evaluation baseline.
 
 ## 6. `docker compose up` has never been run
 
-**Status 2026-08-19: four defects found, all four fixed in source, none of it
-confirmed by execution.** Fixed in `a147950` (published port, two dead volume
-mounts), `1163357` (the frontend's frozen API URL), and `ff45f62` (local
-development documented on the wrong port). Never affected the deployed Space,
-which uses neither `docker-compose.yml` nor `frontend/frontend.Dockerfile`.
+**Status 2026-08-19: four defects found, all four fixed in source. The local
+path is CONFIRMED WORKING by execution. The compose path has still never been
+run.** Fixed in `a147950` (published port, two dead volume mounts), `1163357`
+(the frontend's frozen API URL), and `ff45f62` (local development documented on
+the wrong port). Never affected the deployed Space, which uses neither
+`docker-compose.yml` nor `frontend/frontend.Dockerfile`.
+
+### The local path works — observed 2026-08-19, after `ff45f62`
+
+The user started `uv run uvicorn backend.app:app --reload --port 7860` and
+`cd frontend && npm run dev`, then put one query through the browser at
+`localhost:3000`. From the server output:
+
+```
+INFO:  Uvicorn running on http://127.0.0.1:7860
+INFO:  127.0.0.1:59286 - "GET /history?limit=20&offset=0 HTTP/1.1" 200 OK
+INFO:  127.0.0.1:59296 - "OPTIONS /chat_stream HTTP/1.1" 200 OK
+INFO:  127.0.0.1:59296 - "POST /chat_stream HTTP/1.1" 200 OK
+⚡ [ROUTER] Fast-Path Intercept triggered for: What is the project rule
+   regarding the use of npm versus yarn?
+```
+
+The answer rendered in the UI and the thread appeared in the Chat History
+sidebar. **So this confirms more than the port number.** The streaming endpoint,
+the request shape and session persistence all worked, which is exactly what a
+matching port was never sufficient to prove.
+
+**The `OPTIONS ... 200` is the browser's cross-origin preflight passing**, which
+confirms live what was previously only read from `app.py:92` — that CORS is not
+a blocker here.
+
+**Provenance: the terminal output and a screenshot were pasted by the user and
+read; nobody re-ran it inside a session.** It is one query through one endpoint,
+not a suite. It establishes that the two halves talk on 7860; it does not
+establish that every route behaves.
 
 ### What is actually still open
 
@@ -395,11 +425,12 @@ or after any of the fixes.** Three things follow, in increasing order of doubt:
    plumbing reaches `next build` the same way is read-correct and unconfirmed.
    **Cheap settling test, no backend needed:** `docker compose build frontend`,
    then search that image's `.next/static` for `7860`.
-3. **Whether the two halves talk once the ports agree.** A matching port is
-   necessary, not sufficient — the streaming endpoint, request shape and session
-   handling are untested by any of this. **CORS is ruled out:** `app.py:92` sets
-   `allow_origin_regex=".*"` with `allow_methods` and `allow_headers` both
-   `["*"]`, so any origin is accepted.
+3. **Whether the two halves talk *through compose*.** They do talk locally —
+   see the observed run above — but that ran two processes on the host, not two
+   containers with a published port between them. **CORS is ruled out on both
+   paths:** `app.py:92` sets `allow_origin_regex=".*"` with `allow_methods` and
+   `allow_headers` both `["*"]`, and the local run's `OPTIONS ... 200` shows a
+   real browser preflight passing against it.
 
 **Verification is not free but is not expensive either.** The Docker daemon was
 down throughout, and `docker builder prune -a -f` on 2026-08-19 emptied the
