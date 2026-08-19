@@ -211,12 +211,13 @@ The backend is published on `http://localhost:8000`. The container binds port
 `7860`, not `8000`, so `docker-compose.yml:31` maps `8000:7860`. Do not change
 the container side of that mapping without changing `Dockerfile:33` to match.
 
-> [!WARNING]
-> **The frontend still cannot reach the backend through Docker Compose.**
-> Next.js freezes `NEXT_PUBLIC_API_URL` into the browser bundle when
-> `frontend/frontend.Dockerfile:16` runs `next build`, and the variable is unset
-> at that moment. The bundle therefore keeps its `http://localhost:7860`
-> fallback, while Compose publishes only host `8000`. Setting the variable at
-> container start, as `docker-compose.yml:52` does, is too late to change it.
-> Use the local `uvicorn` command above until this is fixed. See
-> [OPEN.md](OPEN.md) item 6, defect 3.
+The frontend's API URL is baked into its browser bundle at build time, so
+`docker-compose.yml:62` passes it as a **build argument**, not an environment
+variable. Changing it requires `docker compose build frontend`, not a restart.
+
+> [!NOTE]
+> **Compose is fixed in source but has never been run end to end.** All three
+> known defects — the published port, two dead volume mounts, and the frozen API
+> URL — are corrected, and the freezing was confirmed by building the frontend
+> and searching the bundle. Nobody has yet executed `docker compose up --build`
+> to confirm the whole stack comes up. See [OPEN.md](OPEN.md) item 6.

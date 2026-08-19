@@ -337,12 +337,12 @@ uv run uvicorn backend.app:app --reload
 # frontend
 cd frontend && npm run dev
 
-# full stack — WARNING: the FRONTEND still cannot reach the backend.
-# The backend itself is now reachable on the host at localhost:8000:
-# docker-compose.yml:31 publishes 8000:7860, and the container side must stay
-# 7860 because Dockerfile:33 binds it. But next build freezes
-# NEXT_PUBLIC_API_URL into the browser bundle, and it is unset at build time,
-# so the bundle keeps its localhost:7860 fallback. See OPEN.md item 6, defect 3.
+# full stack. Fixed in source, but NEVER RUN end to end — see OPEN.md item 6.
+# docker-compose.yml:31 publishes 8000:7860; the container side must stay 7860
+# because Dockerfile:33 binds it. The frontend's API URL is frozen into its
+# browser bundle by next build, so docker-compose.yml:62 passes it as a BUILD
+# ARG. Never move that to `environment:` — it would apply after the freeze and
+# do nothing. Changing it needs `docker compose build frontend`, not a restart.
 docker compose up --build
 
 # evaluation — see the EDD section above before running

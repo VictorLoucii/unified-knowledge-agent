@@ -51,11 +51,18 @@ pnpm install
 
 ### 2. Configure Environment Variables
 
-Create a `.env.local` file in this directory and specify the backend endpoint:
+Create a `.env.local` file in this directory and specify the backend endpoint.
+The variable is read at `src/app/page.tsx`, `src/components/ChatInput.tsx` and
+`src/hooks/useChatStream.ts`, which fall back to `http://localhost:7860` when it
+is unset — so set it to whichever port you started the backend on. The `README`
+at the repository root starts it on 8000:
 
 ```env
-NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
+
+Next.js freezes this value into the browser bundle when you build, so a change
+here needs a rebuild, not just a restart.
 
 ### 3. Start the Development Server
 

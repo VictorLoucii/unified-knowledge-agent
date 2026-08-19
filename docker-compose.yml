@@ -45,11 +45,26 @@ services:
     build:
       context: ./frontend
       dockerfile: frontend.Dockerfile
+      args:
+        # This MUST be a build arg, not an `environment:` entry. `next build`
+        # (frontend.Dockerfile:30) inlines every NEXT_PUBLIC_* value into the
+        # browser bundle, so a value supplied at container start arrives after
+        # the bundle is already frozen and has no effect. Measured locally:
+        # built with no value the bundle carries http://localhost:7860 three
+        # times and localhost:8000 not at all; built with this value it carries
+        # http://localhost:8000 three times and 7860 not at all.
+        #
+        # Host port 8000 matches the backend mapping at :31. Note this address
+        # is resolved by the BROWSER, not by the frontend container, so an image
+        # built this way only works where the backend is reachable on the
+        # viewer's own localhost. Deploying it to a remote host needs a rebuild
+        # with a different value.
+        - NEXT_PUBLIC_API_URL=http://localhost:8000
     restart: unless-stopped
     ports:
       - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
+    # No `environment:` entry for NEXT_PUBLIC_API_URL. One used to sit here and
+    # was inert for the reason given under `args:` above. Do not re-add it.
     depends_on:
       - backend
 

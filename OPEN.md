@@ -373,11 +373,12 @@ does to the evaluation baseline.
 
 ---
 
-## 6. `docker compose up` cannot reach the backend — HOST PATH FIXED, BROWSER PATH STILL BROKEN
+## 6. `docker compose up` cannot reach the backend — ALL THREE DEFECTS FIXED, NOT RUN
 
-**Status 2026-08-19: two of three defects fixed. The frontend still cannot reach
-the backend, for a third reason found after the first fix.** Never affected the
-deployed Space.
+**Status 2026-08-19: all three defects are fixed in source. None of it has been
+confirmed by running `docker compose up --build`, which has never been executed
+in this repository.** Defect 3's mechanism is measured; the other two are
+read-correct only. Never affected the deployed Space.
 
 ### Defect 1, the published port — FIXED, and NOT verified by running it
 
@@ -427,58 +428,79 @@ the local index, which item 2 records as stale. That is a behaviour change, not 
 typo fix. The `volumes:` key is gone from the backend service entirely; a comment
 in its place records why.
 
-### Defect 3, the frontend's API URL is frozen at build time — NOT FIXED
+### Defect 3, the frontend's API URL is frozen at build time — FIXED, and MEASURED
 
-**Found 2026-08-19, after defect 1 was fixed. This is why item 6's original
-headline is still true for the browser.** Fixing the port made the backend
-reachable *from the host* at `localhost:8000`, which it never was. It did not
-make the frontend reach the backend.
+**Found 2026-08-19 after defect 1 was fixed, and fixed the same day. This is the
+one defect in this item confirmed by observation rather than by reading.**
+Fixing the port made the backend reachable *from the host* at `localhost:8000`,
+which it never was. It did not make the frontend reach the backend.
 
-Read, each step:
+**The mechanism, read:**
 
-1. `frontend/frontend.Dockerfile:16` runs `npm run build` — that is `next build`
+1. `frontend/frontend.Dockerfile:30` runs `npm run build` — that is `next build`
    (`frontend/package.json` scripts) — at **image build time**.
-2. At that moment `NEXT_PUBLIC_API_URL` is unset. No environment file exists
-   anywhere under `frontend/`, and `frontend/next.config.ts` sets no `env` key.
+2. `NEXT_PUBLIC_API_URL` was unset at that moment. No environment file exists
+   under `frontend/`, and `frontend/next.config.ts` sets no `env` key.
 3. Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle during
-   `next build`. **This is read from this version's own bundled documentation,
-   not from general knowledge** — `next` is 16.2.2 per `frontend/package.json`,
-   and
+   `next build`. **Read from this version's own bundled documentation, not from
+   general knowledge** — `next` is 16.2.2 per `frontend/package.json`, and
    `frontend/node_modules/next/dist/docs/01-app/02-guides/environment-variables.md:166`
-   states that the values "will be frozen with the value evaluated at build
-   time", naming the single-Docker-image case explicitly. Line 198 repeats it.
-   `frontend/AGENTS.md` warns this Next version departs from common knowledge,
-   which is why the bundled docs were read rather than recalled.
-4. All three call sites are in the client graph, so all three freeze their
+   states the values "will be frozen with the value evaluated at build time",
+   naming the single-Docker-image case explicitly. Line 198 repeats it, and line
+   182 notes that only *dynamic* lookups escape inlining. All three call sites
+   use the static form. `frontend/AGENTS.md` warns this Next version departs
+   from common knowledge, which is why the bundled docs were read rather than
+   recalled.
+4. All three call sites are in the client graph, so all three froze their
    fallback, `http://localhost:7860`: `frontend/src/app/page.tsx:69` and
-   `frontend/src/components/ChatInput.tsx:8` both carry `"use client"` on line 2,
-   and `frontend/src/hooks/useChatStream.ts:5` is a hook imported by that page.
-   All three are static `process.env.NEXT_PUBLIC_API_URL` lookups, which the doc
-   at :182-188 distinguishes from dynamic lookups that are *not* inlined.
-5. `docker-compose.yml:52` sets the variable under `environment:`, which applies
-   at **container start** — after step 1. It never reaches the browser bundle.
+   `frontend/src/components/ChatInput.tsx:8` carry `"use client"` on line 2, and
+   `frontend/src/hooks/useChatStream.ts:5` is a hook imported by that page.
+5. The old `environment:` entry in `docker-compose.yml` applied at **container
+   start** — after step 1. It never reached the browser bundle.
 
-**Consequence:** the browser calls `http://localhost:7860`, and compose publishes
-only host 8000. Nothing listens on host 7860.
+**MEASURED, not inferred.** Two local `next build` runs against
+`frontend/node_modules`, no Docker involved, then a text search of
+`frontend/.next/static`:
 
-**Confidence: high, but READ AND INFERRED, NOT RUN.** Every step above is a file
-that was opened. The inference is that steps 1-5 compose the way the
-documentation describes. Building the image and grepping the bundle for `7860`
-would settle it; that was not done.
+| Build | `http://localhost:7860` | `http://localhost:8000` |
+|---|---|---|
+| No variable set (reproduces the defect) | **3 occurrences** | **0** |
+| `NEXT_PUBLIC_API_URL=http://localhost:8000` set | **0, absent** | **3 occurrences** |
 
-**Two candidate fixes, neither applied.**
+Three occurrences is one per call site. This is a direct observation of the
+frozen string, not a proxy for it.
 
-- **Pass the value in at build time.** Add `args:` under the frontend service's
-  `build:` block and an `ARG`/`ENV` pair before `frontend.Dockerfile:16`.
-  **Buys:** the host port stays 8000, `README.md` stays true, and
-  `docker-compose.yml:52` can then be deleted or kept honestly. **Costs:** three
-  lines across two files, and a rebuild against an empty build cache.
-  **Recommended.**
-- **Publish `"7860:7860"` instead.** **Buys:** one line; the frozen 7860 fallback
-  becomes correct. **Costs:** contradicts `README.md`'s `--port 8000` and
-  `docker-compose.yml:52`, leaving two documents disagreeing. It works by
-  coincidence rather than by design, which is the failure these records exist to
-  prevent.
+**The fix: pass the value in as a build argument.**
+
+- `frontend/frontend.Dockerfile:26-27` add
+  `ARG NEXT_PUBLIC_API_URL=http://localhost:7860` and
+  `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL`, before `RUN npm run build` at
+  `:30`. The `ENV` line is what makes the `ARG` visible to that `RUN` step.
+  **The default is deliberately 7860** — the same fallback the three call sites
+  already hardcode — so a bare `docker build` with no `--build-arg` produces
+  exactly the bundle it produced before. That keeps CLAUDE.md's
+  backward-compatibility rule.
+- `docker-compose.yml:62` supplies `NEXT_PUBLIC_API_URL=http://localhost:8000`
+  under the frontend service's `build.args`, overriding that default.
+- The inert `environment:` entry was **removed**, with a comment at
+  `docker-compose.yml:66-67` saying why, so nobody re-adds it. Same pattern used
+  for the deleted volume mounts in defect 2.
+
+**VERIFICATION STATUS: the mechanism is measured, the Docker wiring is not
+run.** The two builds above prove that a build-time value reaches the bundle and
+a start-time value cannot. **`docker compose up --build` has still never been
+executed**, so that the `args:` block correctly delivers the value into the
+image is read-correct and unconfirmed. The settling test is cheap and does not
+need the backend: `docker compose build frontend`, then search that image's
+`.next/static` for `7860`. Docker Desktop was down.
+
+**One property worth knowing before deploying this image anywhere.** The baked
+address is resolved by the **browser**, not by the frontend container, so
+`http://localhost:8000` only works where the backend is published on the
+viewer's own machine. That is true for local compose and false for a remote
+host, which would need a rebuild with a different `--build-arg`. This costs
+nothing today: the HuggingFace Space does not use this image, and
+`docker-compose.yml` is not part of the deployed path.
 
 ### Adjacent inconsistency, found 2026-08-19, not part of this item
 
@@ -488,14 +510,21 @@ defaults to `http://localhost:7860` at the three sites above, with no
 environment file under `frontend/` to override it. `backend/app.py:269` defaults
 to 7860 when `app.py` is run directly, which is the HuggingFace convention.
 
-**And the documented variable name is wrong.** `frontend/README.md:57` tells the
-reader to set `NEXT_PUBLIC_BACKEND_URL`. No file under `frontend/` reads that
-name — grepped, one hit, the README line itself. The three sites read
-`NEXT_PUBLIC_API_URL`. Following that README therefore sets a variable nothing
-consumes, and the frontend silently keeps its 7860 default.
+**The documented variable name was wrong — FIXED 2026-08-19.** The frontend
+README told the reader to set `NEXT_PUBLIC_BACKEND_URL`. No file under
+`frontend/` read that name; the only hit in the whole directory was the README
+line itself. The three call sites read `NEXT_PUBLIC_API_URL`, so following that
+README set a variable nothing consumed and the frontend silently kept its 7860
+default. The name is corrected, and the section now also names the three
+reading sites, states the 7860 fallback, and warns that the value is frozen at
+build time so a change needs a rebuild.
 
-**All of this is read from source, not run.** Not fixed; these are separate
-defects from the compose mapping.
+**The port mismatch itself is NOT fixed.** It cannot be fixed by a committed
+file: `.gitignore:15` and `:40` exclude `frontend/.env.local`, so the only
+committable options are changing the hardcoded fallback in three source files or
+changing what `README.md` instructs. The first is application logic, which
+CLAUDE.md says not to touch unasked. Left as a separate, recorded defect.
+**Read from source, not run.**
 
 ---
 
