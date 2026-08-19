@@ -373,218 +373,57 @@ does to the evaluation baseline.
 
 ---
 
-## 6. `docker compose up` cannot reach the backend — ALL THREE DEFECTS FIXED, NOT RUN
+## 6. `docker compose up` has never been run
 
-**Status 2026-08-19: all three defects are fixed in source. None of it has been
-confirmed by running `docker compose up --build`, which has never been executed
-in this repository.** Defect 3's mechanism is measured; the other two are
-read-correct only. Never affected the deployed Space.
+**Status 2026-08-19: four defects found, all four fixed in source, none of it
+confirmed by execution.** Fixed in `a147950` (published port, two dead volume
+mounts), `1163357` (the frontend's frozen API URL), and `ff45f62` (local
+development documented on the wrong port). Never affected the deployed Space,
+which uses neither `docker-compose.yml` nor `frontend/frontend.Dockerfile`.
 
-### Defect 1, the published port — FIXED, and NOT verified by running it
+### What is actually still open
 
-The published port was `"8000:8000"` while `Dockerfile:30` is `EXPOSE 7860` and
-`Dockerfile:33` binds `--port 7860`. Nothing listened on container port 8000, so
-the published port reached nothing.
+**`docker compose up --build` has never been executed in this repository, before
+or after any of the fixes.** Three things follow, in increasing order of doubt:
 
-**The fix changed the container side only.** `docker-compose.yml:31` is now
-`"8000:7860"`. The host port stays 8000, so `README.md`'s local `uvicorn`
-command and the compose mapping agree on one number.
+1. **Whether the stack comes up at all.** Nothing about the compose path has
+   ever been observed working.
+2. **Whether the `args:` block delivers the value into the image.** The
+   *freezing* is measured — two local `next build` runs, no Docker, showed
+   `localhost:7860` three times with no variable set and `localhost:8000` three
+   times with it set, one occurrence per call site. That the Docker `args:`
+   plumbing reaches `next build` the same way is read-correct and unconfirmed.
+   **Cheap settling test, no backend needed:** `docker compose build frontend`,
+   then search that image's `.next/static` for `7860`.
+3. **Whether the two halves talk once the ports agree.** A matching port is
+   necessary, not sufficient — the streaming endpoint, request shape and session
+   handling are untested by any of this. **CORS is ruled out:** `app.py:92` sets
+   `allow_origin_regex=".*"` with `allow_methods` and `allow_headers` both
+   `["*"]`, so any origin is accepted.
 
-Publishing `7860:7860` was rejected as a way of fixing defect 1. It would have
-contradicted `README.md`'s `--port 8000`. See defect 3, where it returns as a
-candidate for a different reason.
+**Verification is not free but is not expensive either.** The Docker daemon was
+down throughout, and `docker builder prune -a -f` on 2026-08-19 emptied the
+build cache, so a first build re-downloads everything `Dockerfile:18`'s
+`uv sync --frozen` pulls, including CPU-only PyTorch. A long build is expected
+and is **not** evidence about any of the fixes. Disk is not a constraint.
+Test 2 above avoids all of this by building only the frontend service.
 
-**VERIFICATION STATUS: read-correct, not run.** The YAML parses and
-`services.backend.ports` resolves to `['8000:7860']`, checked with
-`yaml.safe_load`. **`docker compose up --build` has never been executed, before
-or after the fix.** The Docker daemon was down and the build cache had been
-emptied by `docker builder prune -a -f` on 2026-08-19, so a first build must
-re-download everything `Dockerfile:18`'s `uv sync --frozen` pulls, including
-CPU-only PyTorch. A long build is expected and is not evidence about any of
-this.
+### Where the reasoning lives, now that the defects are closed
 
-### Defect 2, two dead volume mounts — FIXED by deletion
+Each fix took a specific shape over a rejected alternative. None of that is
+repeated here; it is recorded where someone changing the file will actually see
+it.
 
-The file used to mount `./chroma_db:/app/chroma_db` and
-`./docstore:/app/docstore` under a comment calling them "CRITICAL for keeping
-your AI's knowledge base". Both sides were wrong.
+| Decision | Recorded in |
+|---|---|
+| Local development on 7860, not the code on 8000 | [DECISIONS.md](DECISIONS.md), "Local development is documented on 7860" |
+| `NEXT_PUBLIC_*` must be a build argument, never `environment:` | `CLAUDE.md` "Frontend rules"; `frontend/frontend.Dockerfile:15-27`; `docker-compose.yml:48-62`, plus `:66-67` |
+| Host 8000 mapping to container 7860, rather than 7860 both sides | `README.md`'s `[!IMPORTANT]` block; `docker-compose.yml:29-31` |
+| Volume mounts deleted rather than repointed | `docker-compose.yml:35-39` |
 
-- **Host side:** neither `./chroma_db` nor `./docstore` exists. The index is at
-  `backend/chroma_db` and `backend/docstore` — read, `ls`.
-- **Container side:** `config.py:84` sets `BASE_DIR` to the parent of `core/`,
-  which is `/app/backend` in the image, so `config.py:85-86` resolve to
-  `/app/backend/chroma_db` and `/app/backend/docstore`. Nothing read
-  `/app/chroma_db`.
-
-They were inert rather than harmful, because `.dockerignore` deliberately keeps
-`backend/chroma_db/` in the build context so `COPY backend/ ./backend/` bakes the
-index into the image — that file states this in its own comment at lines 9-13.
-Their only costs were two empty directories created in the repository root and a
-false comment.
-
-**Deleted rather than repointed.** Repointing them at
-`./backend/chroma_db:/app/backend/chroma_db` would have made the container read
-the local index, which item 2 records as stale. That is a behaviour change, not a
-typo fix. The `volumes:` key is gone from the backend service entirely; a comment
-in its place records why.
-
-### Defect 3, the frontend's API URL is frozen at build time — FIXED, and MEASURED
-
-**Found 2026-08-19 after defect 1 was fixed, and fixed the same day. This is the
-one defect in this item confirmed by observation rather than by reading.**
-Fixing the port made the backend reachable *from the host* at `localhost:8000`,
-which it never was. It did not make the frontend reach the backend.
-
-**The mechanism, read:**
-
-1. `frontend/frontend.Dockerfile:30` runs `npm run build` — that is `next build`
-   (`frontend/package.json` scripts) — at **image build time**.
-2. `NEXT_PUBLIC_API_URL` was unset at that moment. No environment file exists
-   under `frontend/`, and `frontend/next.config.ts` sets no `env` key.
-3. Next.js inlines every `NEXT_PUBLIC_*` value into the browser bundle during
-   `next build`. **Read from this version's own bundled documentation, not from
-   general knowledge** — `next` is 16.2.2 per `frontend/package.json`, and
-   `frontend/node_modules/next/dist/docs/01-app/02-guides/environment-variables.md:166`
-   states the values "will be frozen with the value evaluated at build time",
-   naming the single-Docker-image case explicitly. Line 198 repeats it, and line
-   182 notes that only *dynamic* lookups escape inlining. All three call sites
-   use the static form. `frontend/AGENTS.md` warns this Next version departs
-   from common knowledge, which is why the bundled docs were read rather than
-   recalled.
-4. All three call sites are in the client graph, so all three froze their
-   fallback, `http://localhost:7860`: `frontend/src/app/page.tsx:69` and
-   `frontend/src/components/ChatInput.tsx:8` carry `"use client"` on line 2, and
-   `frontend/src/hooks/useChatStream.ts:5` is a hook imported by that page.
-5. The old `environment:` entry in `docker-compose.yml` applied at **container
-   start** — after step 1. It never reached the browser bundle.
-
-**MEASURED, not inferred.** Two local `next build` runs against
-`frontend/node_modules`, no Docker involved, then a text search of
-`frontend/.next/static`:
-
-| Build | `http://localhost:7860` | `http://localhost:8000` |
-|---|---|---|
-| No variable set (reproduces the defect) | **3 occurrences** | **0** |
-| `NEXT_PUBLIC_API_URL=http://localhost:8000` set | **0, absent** | **3 occurrences** |
-
-Three occurrences is one per call site. This is a direct observation of the
-frozen string, not a proxy for it.
-
-**The fix: pass the value in as a build argument.**
-
-- `frontend/frontend.Dockerfile:26-27` add
-  `ARG NEXT_PUBLIC_API_URL=http://localhost:7860` and
-  `ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL`, before `RUN npm run build` at
-  `:30`. The `ENV` line is what makes the `ARG` visible to that `RUN` step.
-  **The default is deliberately 7860** — the same fallback the three call sites
-  already hardcode — so a bare `docker build` with no `--build-arg` produces
-  exactly the bundle it produced before. That keeps CLAUDE.md's
-  backward-compatibility rule.
-- `docker-compose.yml:62` supplies `NEXT_PUBLIC_API_URL=http://localhost:8000`
-  under the frontend service's `build.args`, overriding that default.
-- The inert `environment:` entry was **removed**, with a comment at
-  `docker-compose.yml:66-67` saying why, so nobody re-adds it. Same pattern used
-  for the deleted volume mounts in defect 2.
-
-**VERIFICATION STATUS: the mechanism is measured, the Docker wiring is not
-run.** The two builds above prove that a build-time value reaches the bundle and
-a start-time value cannot. **`docker compose up --build` has still never been
-executed**, so that the `args:` block correctly delivers the value into the
-image is read-correct and unconfirmed. The settling test is cheap and does not
-need the backend: `docker compose build frontend`, then search that image's
-`.next/static` for `7860`. Docker Desktop was down.
-
-**One property worth knowing before deploying this image anywhere.** The baked
-address is resolved by the **browser**, not by the frontend container, so
-`http://localhost:8000` only works where the backend is published on the
-viewer's own machine. That is true for local compose and false for a remote
-host, which would need a rebuild with a different `--build-arg`. This costs
-nothing today: the HuggingFace Space does not use this image, and
-`docker-compose.yml` is not part of the deployed path.
-
-### Local development pointed at the wrong port — FIXED 2026-08-19
-
-**This was a real, live breakage, not a tidiness issue.** Every documented way
-of starting the backend landed on port 8000, while the browser called 7860.
-Nothing bridged them, so the frontend could not reach the backend on any
-documented local path.
-
-**The three paths, as they were:**
-
-| Path | Backend bound | Browser called | Worked |
-|---|---|---|---|
-| `README.md` — `--port 8000`, explicit | 8000 | 7860 | no |
-| `CLAUDE.md` — no `--port` at all | 8000, uvicorn's default | 7860 | no |
-| `python backend/app.py` — `app.py:269` | 7860 | 7860 | yes, but documented nowhere |
-
-Uvicorn's default is `port: int = 8000`, read in the installed package at
-`.venv/lib/python3.12/site-packages/uvicorn/config.py:183` and `main.py:490`.
-There is no environment file of any kind under `frontend/`, and
-`frontend/next.config.ts` sets no rewrite or proxy, so nothing bridged the gap.
-
-**CORS was never a factor.** `app.py:92` sets `allow_origin_regex=".*"` with
-`allow_methods` and `allow_headers` both `["*"]`. Any origin is accepted. If the
-ports agree, CORS will not be what blocks a request.
-
-### Why the fix was to move the docs to 7860, not the code to 8000
-
-**7860 is a platform constraint, not a preference.** The user's own note at
-`data/Errors_in_AgenticAI_Projects.md:1745` records a **deployment restart
-loop**: HuggingFace Spaces expect traffic on 7860 and the system was mismatched.
-`:1674` records the resolution as "Standardized all infrastructure on port
-7860", and `:1760` records the frontend fallback of `localhost:7860` as a
-deliberate choice "for local dev". That section names `sync_to_hub.yml`,
-`HF_TOKEN`, `useChatStream.ts` and `VERCEL_FRONTEND_URL`, so it describes this
-repository.
-
-The code agrees with the note in five places: `Dockerfile:30` and `:33`,
-`README.md:7`'s `app_port: 7860`, `backend/app.py:269`, and the three frontend
-call sites. **The number 8000 appears in no Python or TypeScript source file at
-all** — grepped repo-wide, excluding `data/`, the records and the virtualenv.
-The only source hits are `search.py:470` and `:472`, which truncate a text block
-at 8000 *characters*.
-
-So `README.md`'s `--port 8000` was the single line out of step, and moving the
-frontend fallback to 8000 would have reintroduced the split against a container
-that must bind 7860.
-
-**The fix, applied:** `README.md` and `CLAUDE.md` both now instruct
-`--port 7860`, and CLAUDE.md states that the flag is required rather than
-optional. **On 7860 no configuration is needed at all** — the fallback already
-points there, so a fresh clone works with no `.env.local` and no environment
-variable. That is why this was fixed in documentation rather than by asking
-every user to create a gitignored file. `.gitignore:15` and `:40` exclude
-`frontend/.env.local`, so a file-based fix could never have reached a clone.
-
-**`frontend/README.md` rewritten to match.** It previously told the reader to
-create `.env.local` — first with `NEXT_PUBLIC_BACKEND_URL`, a name no file under
-`frontend/` reads, and then, briefly, with the right name but port 8000. That
-second error was introduced by commit `1163357` in this same sequence, reasoning
-from `README.md`'s `--port 8000` before the `data/` note was found. The section
-now states that local development needs no configuration, and keeps `.env.local`
-only for pointing at a backend somewhere else.
-
-### Two host ports now coexist deliberately
-
-Local `uvicorn` serves `http://localhost:7860`. Compose serves
-`http://localhost:8000`, because `docker-compose.yml:31` maps host 8000 to
-container 7860. **This looks exactly like the defect that was just fixed and is
-not one.** Only the host side differs; the container side is 7860, which is what
-was standardised. Keeping them distinct also means the local server and the
-Compose stack can run at the same time without colliding on a port.
-
-`README.md` carries an `[!IMPORTANT]` block saying this in as many words, so a
-later reader — including a later session — does not "fix" the two numbers into
-one and break the local path.
-
-### Still not observed
-
-**A matching port is necessary, not sufficient.** Nothing here has been run.
-Whether the frontend and backend actually talk once both are on 7860 — the
-streaming endpoint, the request shape, session handling — is untested by
-anything in this analysis. Nothing was listening on 7860, 8000 or 3000 when the
-check was made. If it still fails with the ports agreeing, that is a different
-defect and is not evidence against the analysis above.
+**Do not re-add an `environment:` entry for `NEXT_PUBLIC_API_URL`, and do not
+unify the two host ports.** Both look like tidying and both reintroduce a fixed
+defect. The comments in `docker-compose.yml` say so at the point of edit.
 
 ---
 

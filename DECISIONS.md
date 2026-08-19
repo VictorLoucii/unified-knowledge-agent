@@ -188,6 +188,50 @@ model download time, and whether all 26 files complete rather than merely
 start — `rag_hydrated` proves "at least one document", and nothing exposes a
 count.
 
+### Local development is documented on 7860, and the port is not ours to pick
+
+**Chosen (2026-08-19):** move `README.md` and `CLAUDE.md` to
+`uvicorn ... --port 7860`, rather than move the frontend's fallback to 8000.
+
+**Rejected:** changing `http://localhost:7860` to `http://localhost:8000` in
+`frontend/src/app/page.tsx`, `frontend/src/components/ChatInput.tsx` and
+`frontend/src/hooks/useChatStream.ts`.
+
+**Why.** 7860 is a platform constraint, not a preference. The user's own note at
+`data/Errors_in_AgenticAI_Projects.md:1745` records a HuggingFace **deployment
+restart loop** caused by a port mismatch, because Spaces expect traffic on 7860;
+`:1674` records the resolution as "Standardized all infrastructure on port
+7860", and `:1760` records the `localhost:7860` frontend fallback as a
+deliberate choice for local development. The container must therefore bind 7860
+whatever the documentation says, so moving the frontend to 8000 would have
+recreated the split rather than closed it.
+
+The code already agreed with the note in five places — `Dockerfile:30` and
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:269`, and the three
+call sites above. **8000 appears in no Python or TypeScript source file
+anywhere in the repository**; grepped repo-wide, the only source hits are
+`search.py:470` and `:472`, which truncate a text block at 8000 *characters*.
+`README.md`'s `--port 8000` was the single line out of step.
+
+**What the choice buys.** On 7860 local development needs no configuration at
+all: the fallback already points there, so a fresh clone works with no
+`.env.local` and no environment variable. A fix that instructed users to create
+`.env.local` could never have reached a clone anyway — `.gitignore:15` and `:40`
+exclude it.
+
+**The consequence to leave alone.** Local `uvicorn` serves `localhost:7860`
+while Compose serves `localhost:8000`, because `docker-compose.yml:31` maps host
+8000 to container 7860. Only the *host* side differs; the container side is what
+was standardised. Keeping them distinct also lets the local server and the
+Compose stack run at the same time without colliding on a port. `README.md`
+carries an `[!IMPORTANT]` block saying so, because two different local URLs look
+exactly like the defect that was just fixed.
+
+**Not verified by running anything.** A matching port is necessary, not
+sufficient. See [OPEN.md](OPEN.md) item 6.
+
+---
+
 ---
 
 ## Guardrails and observability
