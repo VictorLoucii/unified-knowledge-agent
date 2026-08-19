@@ -72,6 +72,11 @@ uv run python -m backend.evals.eval --indices 5,37,42,83
 `backend/evals/latest_run_metrics.json`.** Back that file up before a partial
 run and restore it afterwards, or you will lose the committed baseline.
 
+`--concurrency` caps how many cases run at once (`eval.py:112`, default 10;
+the semaphore is at `eval.py:189`). It changes wall-clock time only, never a
+score. Lower it if you suspect rate limiting — see "Judge noise is real"
+below.
+
 **2. Do not drop below the committed baseline.**
 
 The floor is whatever `backend/evals/latest_run_metrics.json` holds at `HEAD`.
@@ -101,6 +106,36 @@ the system prompt to satisfy a test that no longer describes what you want.
 5. Re-run. The new case passes, every old case still passes, and the scores are
    at or above the committed baseline.
 
+### A fast run means a warm cache, not a working pipeline
+
+`eval.py:31` installs a `SQLiteCache` at `.langchain.db`. That file is about
+97 MB on disk and is gitignored (`.gitignore:28-29`), so a fresh clone starts
+cold and a fully warm run makes no network calls at all. Runtime is therefore
+not evidence about retrieval. Three separate things make a run fast and only
+one of them is the pipeline: the fast-path table answers 53 cases with no
+model call, the cache answers repeats with no network call, and
+`--concurrency` overlaps whatever waiting is left. See
+[DECISIONS.md](DECISIONS.md), "`.langchain.db` was stripped from the history,
+not migrated to LFS", for why the file stays out of Git.
+
+The cache keys on exact prompt text. Any edit to the system prompt, the
+retrieval logic or a model string turns every hit into a miss. The next run is
+then slow whether or not the change was correct. Do not read a slow run as a
+regression, and do not read a fast one as a pass.
+
+Recorded runtimes in this repo are not comparable to each other. The two logs
+dated 2026-07-26 report 27.17 s and 230.68 s on the same runner, at the same
+concurrency, with the same 155 reranked retrievals and a one-case difference
+in the dataset. The slower one is the later one, so a cache that only grows
+does not explain it. The cause is unconfirmed. The one lead: the slow log's
+header records `Span Processor: SimpleSpanProcessor`, which exports every span
+synchronously on the calling thread. The fast log cannot be compared against
+it — that log begins at `🤖 Loading LLM model`, which `config.py` prints after
+the tracing block, so its startup was never captured and its tracing
+configuration is unknown. This pair is therefore not a before/after for
+`batch=True`; do not cite it as one. Treat both numbers as history and do not
+derive an expected runtime from them.
+
 ### Judge noise is real
 
 The judge is an LLM. Cases have flipped verdict across runs on unchanged code —
@@ -108,6 +143,13 @@ index 42 alternated fail/pass/pass/fail. Before chasing a single-case
 difference, check whether the agent's output actually changed. If the case is
 served by the fast-path table and that table is unmodified, the output is
 byte-identical and the difference is the judge.
+
+Rate limiting also presents as a fail, not as an error. `eval.py:155-177`
+retries a failed judge call five times, sleeping 2 s between attempts, then
+falls back to `passed=False` with the reason recorded in the verdict. At the
+default concurrency of 10 an OpenRouter limit therefore shows up as a slow run
+with a few unexplained failures. Grep the output for `LLM Judge evaluation
+failed` before you edit a prompt to chase one.
 
 ---
 
