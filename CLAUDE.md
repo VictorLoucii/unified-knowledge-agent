@@ -126,15 +126,17 @@ regression, and do not read a fast one as a pass.
 Recorded runtimes in this repo are not comparable to each other. The two logs
 dated 2026-07-26 report 27.17 s and 230.68 s on the same runner, at the same
 concurrency, with the same 155 reranked retrievals and a one-case difference
-in the dataset. The slower one is the later one, so a cache that only grows
-does not explain it. The cause is unconfirmed. The one lead: the slow log's
-header records `Span Processor: SimpleSpanProcessor`, which exports every span
-synchronously on the calling thread. The fast log cannot be compared against
-it — that log begins at `🤖 Loading LLM model`, which `config.py` prints after
-the tracing block, so its startup was never captured and its tracing
-configuration is unknown. This pair is therefore not a before/after for
-`batch=True`; do not cite it as one. Treat both numbers as history and do not
-derive an expected runtime from them.
+in the dataset. Only the 230.68 s log is at `HEAD`; `c982350` put it there.
+The 27.17 s log is the 90-case run and is in history only — read it with
+`git show f30ff63:full_evaluation_log.txt`. The slower one is the later one,
+so a cache that only grows does not explain it. The cause is unconfirmed. The
+one lead: the slow log's header records `Span Processor: SimpleSpanProcessor`,
+which exports every span synchronously on the calling thread. The fast log
+cannot be compared against it. That log begins at `🤖 Loading LLM model`,
+which `config.py` prints after the tracing block, so its startup was never
+captured and its tracing configuration is unknown. This pair is therefore not
+a before/after for `batch=True`; do not cite it as one. Treat both numbers as
+history and do not derive an expected runtime from them.
 
 ### Judge noise is real
 
