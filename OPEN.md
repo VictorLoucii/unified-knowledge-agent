@@ -10,37 +10,130 @@ Decisions already taken are in [DECISIONS.md](DECISIONS.md).
 
 ## 1. Index 83 — 'Community Type' no longer retrieves Problem 12
 
-**Status:** diagnosed, cause known, not fixed. Costs one recall point.
+**Status:** re-diagnosed 2026-08-20, not fixed. Costs one recall point. The
+cause recorded here until 2026-08-20 was wrong; see the correction below.
 
-This is the single miss behind the 33/34 recall recorded in
-`latest_run_metrics.json`. It appeared with the 2026-08-17 index rebuild.
+This is the single recall miss behind `latest_run_metrics.json`'s
+`recall_score: 97.058…`, which is 33 of 34. **Read that with the breakdown, not
+alone:** 26 of those 34 come from the fast-path table, so the miss is one of
+**8** genuinely-exercised retrievals, not one of 34. It appeared with the
+2026-08-17 index rebuild.
 
 **Already established:**
 
 - **It is not judge noise and not flaky.** With the cached query expansion
-  dropped before each trial, target 12 was missed in 0 of 5 trials.
-- The chain is: the agent calls the tool with a shortened query,
-  `'Community Type metric'`; the expansion model turns that into
-  `'Social network community measure'` and `'Graph community detection
-  metric'`, which are the wrong domain; eight of the top ten hits then come
-  from `AgenticAI_Interview_Questions_Theory.md`, the file that gained the most
-  new text in the rebuild.
+  dropped before each trial, target 12 failed to appear in all 5 of 5 trials.
+  *Wording corrected 2026-08-20. This read "was missed in 0 of 5 trials", which
+  parses as "never missed" — the opposite of what it records.*
+- **The cause. Confirmed by measurement 2026-08-20.** The agent calls the tool
+  with a shortened query, `'Community Type metric'`; the expansion model turns
+  that into `'Social network community measure'` and `'Graph community detection
+  metric'`, which are the wrong domain. **The correct source file is then never
+  retrieved at all.**
 - **The content is present and reachable.** Called directly with the user's
   full question, the search tool returns Problem 12 at rank 1.
-- **The mechanism is the order of two steps.** `search.py:379` truncates the
-  merged candidate pool to 50. `search.py:399` reranks to 10. The truncation
-  happens *before* the rerank, so a document the reranker would have scored
-  highly can be discarded before it is ever scored.
-- This is why indices 37 and 83 keep trading against each other. Both are RAG
-  cases competing for slots in one truncated pool. The keyword-expansion change
-  swapped them one way; the rebuild swapped them back.
-- One earlier one-off run of the same short query *did* retrieve Problem 12, so
-  the expansion output has changed at least once across a session. Stability
-  over time is **not** established.
 
-**Not tried:** any fix. Giving each expanded query a quota, or reranking before
-truncating, would both address the mechanism. Both are application-logic changes
-to `search.py` and need their own evaluation cycle.
+### Measured 2026-08-20 — the candidate pool, which nobody had looked at
+
+Two local probes against the working index. Two query-expansion calls, no judge
+calls, no evaluation run. The pools were built from the expansions each query
+actually produced:
+
+| | shortened query (fails) | full question (succeeds) |
+|---|---|---|
+| candidate pool, deduped | 97 | 108 |
+| docs containing "community type" | **0** | 2, at positions 37 and 43 |
+| docs from `NEXTIER_Internship_Bugs.md` | **0** | 18 |
+
+The Problem 12 block lives in `NEXTIER_Internship_Bugs.md`. In the failing case
+no document from that file enters the pool. **The failure is retrieval, not
+ranking.**
+
+**One false positive, recorded so nobody re-finds it.** A single document in the
+failing pool matches the string `Problem 12`, at position 35. It is from
+`Unified_Knowledge_Project_Details.md` and matches only because it uses the
+phrase as an example of routing behaviour — `Direct Problem IDs ("Problem 12")`.
+It contains neither "community type" nor "privacy".
+
+### Corrected 2026-08-20 — the recorded mechanism was wrong, and untested
+
+This item previously stated, as established fact:
+
+> **The mechanism is the order of two steps.** `search.py:379` truncates the
+> merged candidate pool to 50. `search.py:399` reranks to 10. The truncation
+> happens *before* the rerank, so a document the reranker would have scored
+> highly can be discarded before it is ever scored.
+
+**Refuted twice over.** In the failing case the document is not in the pool to
+be discarded. In the succeeding case it sits at pool position 37 — inside the
+cap of 50 — so the cap was not excluding it there either.
+
+**How the error survived.** Every piece of evidence in this item was
+output-level: what the tool returned. The mechanism it asserted was pool-level.
+The pool was never inspected until 2026-08-20. A plausible mechanism was
+recorded as fact and stood for weeks without the one measurement that would have
+tested it.
+
+**The ordering defect is real, and is a separate matter.** The pool is 97 and
+the cap is 50, so roughly half the candidates per search are discarded by
+`calculate_relevance_score`, a hand-written keyword scorer, before the
+cross-encoder scores anything. Whether widening that helps is **unknown** — a
+larger pool also gives a small cross-encoder more chances to score an irrelevant
+document highly, and it roughly doubles rerank work per search. A change raising
+the cap to 240 was written and reverted unevaluated on 2026-08-20; it is
+reproducible from this description alone.
+
+**Also unsupported now.** The bullet reading "This is why indices 37 and 83 keep
+trading against each other. Both are RAG cases competing for slots in one
+truncated pool" rested on the refuted mechanism. That the two trade may still be
+true as an observation; the explanation for it is not established.
+
+### Where the cause actually points — `inferred`, not proven
+
+- **Nothing instructs the shortening.** `agents.py:116-119` mandates *that*
+  `search_knowledge_base` is called and says nothing about how to phrase the
+  argument. The shortening is the model filling a gap, so there is no line to
+  delete, only a line to add.
+- **The only phrasing guidance is the tool's own docstring.**
+  `search.py:32-34` describes the tool as being for "specific topics, keywords,
+  errors, code logic, or existence checks" — keyword-shaped. `search.py:38-40`
+  mandates passing the exact phrase, but scoped to Problem IDs and ordinals
+  only. Index 83 is neither.
+- **Three consistent facts, not a proof.** Nothing demonstrates the model
+  shortens *because* of the docstring.
+
+### The fix, and what must be decided with it
+
+**Not tried:** any fix. The candidates previously listed here — a per-query
+quota, or reranking before truncating — both targeted the refuted mechanism.
+
+**The candidate now** is to generalise the verbatim directive at
+`search.py:38-40` beyond Problem IDs. That extends a rule the docstring already
+states rather than adding a mechanism, and it changes retrieval for every query
+rather than for one test case.
+
+**Costs.** A docstring edit changes the tool description in the model's prompt,
+so it invalidates the response cache broadly and the next run is slow whether or
+not the change is right. It touches the tools, so it obliges a full evaluation
+cycle.
+
+**One constraint that must be decided in the same change.** `search.py:47` is
+`query = str(query)[:150].strip()` — every query is silently truncated to 150
+characters before anything else runs. Two of the 94 dataset queries already
+exceed that, the longest at 163. A docstring demanding the full question would
+promise what line 47 quietly undoes.
+
+**Rejected, and recorded so it is not reached for again.** `search.py:75-82`
+already hardcodes two query injections for queries that expand badly. A third
+for Community Type would pass index 83 and would match precedent. It would move
+the score without improving the pipeline, which is the failure `CLAUDE.md`'s
+opening section exists to prevent.
+
+**Verify every `search.py` line number here by grepping its anchor text, not by
+arithmetic.** The first draft of this correction cited four of them from a
+modified working tree and was wrong by exactly 16 after the change was reverted
+— the same failure `CLAUDE.md` records for commit `247dd15`, in a draft written
+about that rule. Caught the same day only because someone re-grepped.
 
 ---
 
