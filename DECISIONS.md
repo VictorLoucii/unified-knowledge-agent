@@ -483,6 +483,32 @@ container could never point the collector somewhere reachable or set it empty
 to opt out. `setdefault` keeps local development working with no configuration
 while letting the environment win.
 
+### The refine cap is 8,000 characters, not 1,000
+
+**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:150`.
+
+**Rejected:** `1000`, matching the message cap at `guardrails.py:13`, so the two
+routes would read consistently.
+
+**Why the rejected option lost.** Consistency was the whole case for `1000`, and
+it rests on a claim about the frontend that is false. `ChatInput.tsx:180` — the
+microphone button — stops recording and refines **without submitting**, so the
+refined text lands in the input box and the user edits it there. A dictation of
+1,400 characters trimmed by hand to 600 sends successfully today; a cap of 1,000
+rejects it before it can be trimmed. `ChatInput.tsx:89-91` reads
+`data.refined_transcript || currentTranscript` with no `response.ok` check, so
+the user is told nothing when that happens — the feature just stops refining.
+
+The second half of the reason: a per-call cap does not bound total spend, because
+nothing bounds call count. There is no rate limiting anywhere in `backend/`. So
+the tighter number buys nothing measurable and costs a path that works.
+
+**Anyone tidying `8000` down to match `guardrails.py:13` is undoing this.** The
+two numbers measure different strings and are not meant to agree — the message
+cap measures what is sent, the transcript cap measures what is dictated before
+editing. The full evidence, both stop paths and where 8,000 comes from, is in
+[OPEN.md](OPEN.md) item 9 under "Why 8,000 and not 1,000".
+
 ---
 
 ## Evaluation

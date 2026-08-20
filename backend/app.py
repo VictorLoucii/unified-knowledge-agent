@@ -1,7 +1,7 @@
 # backend/app.py
 import os
 from contextlib import asynccontextmanager
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import asyncio
 
 # OpenTelemetry & Phoenix tracing is set up in ONE place: config.py:23-44.
@@ -81,7 +81,7 @@ async def lifespan(app: FastAPI):
     print("🛑 Async Database Pool Closed")
 
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)  # see OPEN.md item 9
 
 # [PHASE 6 UPDATE] Secure CORS for Vercel Handshake
 # Reads the frontend URL from environment, defaults to localhost to prevent breaking local dev
@@ -147,7 +147,7 @@ async def chat_stream(request: ChatRequest):
 
 
 class RefineRequest(BaseModel):
-    transcript: str
+    transcript: str = Field(..., max_length=8000)  # see OPEN.md item 9
 
 @app.post("/refine_transcript")
 async def refine_transcript(request: RefineRequest):

@@ -893,7 +893,9 @@ compatibility signal anyone has, and its cost is unknown.
 ## 9. The deployed API is public, unauthenticated, and three of its routes spend credit
 
 **Status:** found 2026-08-19 from the Space's access log. Diagnosed from source.
-**Nothing changed. No decision taken.** This is a product call, not a defect.
+**Options (b) and (d) were applied 2026-08-20 — see "What was done, 2026-08-20"
+below. Options (c) and (e) stay blocked**, on a server-side component the
+frontend does not have. What is left open is a product call, not a defect.
 
 **What the log showed.** Automated scanners probed the Space repeatedly during
 startup: the four common secrets paths (dotenv, its `.local` and `.production`
@@ -904,9 +906,10 @@ session from a container log pasted by the user; I did not read that log.*
 
 ### Read from source, not from the log
 
-- `app.py:84` is `app = FastAPI(lifespan=lifespan)` with no `docs_url`,
-  `redoc_url` or `openapi_url` argument, so FastAPI's defaults apply and
-  `/docs`, `/redoc` and `/openapi.json` are all public.
+- `app.py:84` **was** `app = FastAPI(lifespan=lifespan)` with no `docs_url`,
+  `redoc_url` or `openapi_url` argument, so FastAPI's defaults applied and
+  `/docs`, `/redoc` and `/openapi.json` were all public. **Closed 2026-08-20 by
+  option (d)** — the same line now passes all three as `None`.
 - **There is no authentication and no rate limiting anywhere in `backend/`.** A
   recursive grep over `backend/` for `Depends(`, `APIKeyHeader`, `HTTPBearer`,
   `set_cookie`, `slowapi`, `RateLimit` and `Authorization` returns **zero
@@ -915,7 +918,7 @@ session from a container log pasted by the user; I did not read that log.*
   `/refine_transcript` and `/chat_approve`. None checks anything about the
   caller. The full route table is below.
 - `app.py:90-96` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
-  The comment at `app.py:87` calls this "Secure CORS" and `app.py:92` says it
+  The comment at `app.py:86` calls this "Secure CORS" and `app.py:92` says it
   "Allows any local origin format"; `.*` matches **every** origin, not local
   ones.
 
@@ -945,7 +948,7 @@ caller.**
 |---|---|---|---|
 | `GET /health` | :102 | no | Reports `rag_hydrated`. Harmless. |
 | `POST /chat_stream` | :127 | **yes** | Runs the full graph. **Guarded — see below.** |
-| `POST /refine_transcript` | :152 | **yes** | `fast_llm.ainvoke` at :161. **No guard at all.** |
+| `POST /refine_transcript` | :152 | **yes** | `fast_llm.ainvoke` at :161. **Length cap only**, `app.py:150`, 8,000 characters. No guardrail, no cache. |
 | `GET /` | :172 | no | Serves `static/index.html` if present. |
 | `POST /chat_approve` | :184 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
 | `GET /history` | :209 | no | Lists **every** thread id and title, with `limit`/`offset`. |
@@ -977,11 +980,16 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 - The fast-path table intercepts 53 known questions before any model call.
   *(Taken from CLAUDE.md as a record; the count is not re-derived here.)*
 
-`/refine_transcript` at `app.py:152-168` has **none** of them. No guardrail, no
-length check, no cache. `app.py:149-150` is
+`/refine_transcript` at `app.py:152-168` had **none** of them. No guardrail, no
+length check, no cache. `app.py:149-150` was
 `class RefineRequest(BaseModel): transcript: str` — **no maximum length**. Every
-call reaches the model. It is simultaneously the cheapest route to abuse and the
+call reached the model. It was simultaneously the cheapest route to abuse and the
 only one with no brakes.
+
+**A length cap was added 2026-08-20.** `app.py:150` is now
+`transcript: str = Field(..., max_length=8000)`. It bounds the cost of one model
+call and nothing else. There is still no guardrail and no cache on this route, so
+the asymmetry with `/chat_stream` stands.
 
 **This is the same seam as item 11's note that "the evaluation never exercises
 `chat.py`", seen from the other side.** Protections that live in `chat.py` cover
@@ -1038,19 +1046,21 @@ probed secrets paths, `/api/config` and `POST /api/predict`. `/api/predict` is
 route names. No POST to `/chat_stream`, `/refine_transcript` or `/chat_approve`
 appears.
 
-**The link to `/openapi.json` is real, though.** It returns 200 and publishes
-exactly the route names the scanner was missing.
+**The link to `/openapi.json` was real, though.** It returned 200 and published
+exactly the route names the scanner was missing. **Closed 2026-08-20 by option
+(d).** It now returns 404 — measured against the real `app` object, not assumed.
 
-### Options, none started
+### Options — (b) and (d) applied 2026-08-20; (c) and (e) still blocked
 
 **(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
 next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**(b) A length cap on `RefineRequest.transcript`, `app.py:149-150`.** One line,
-purely additive, breaks no caller. Bounds the cost per call; does not stop
-abuse. `1000` would match `guardrails.py:13` and keep the two routes
-consistent. **Not applied — `CLAUDE.md` forbids changing application logic
-unless asked.**
+**(b) A length cap on `RefineRequest.transcript`, `app.py:149-150`. — APPLIED
+2026-08-20.** One line, purely additive, breaks no caller. Bounds the cost of one
+model call; does not stop abuse. The value is **8,000** characters. It is not the
+`1000` this option used to recommend for symmetry with `guardrails.py:13` — that
+recommendation was refuted from the frontend source, and the refutation is under
+"Why 8,000 and not 1,000" below.
 
 **(c) A shared secret required by the spend routes.** **This does not work as
 stated, and the frontend is why.** Read: every call site is client-side —
@@ -1063,11 +1073,11 @@ holds is readable in devtools by anyone. The only version of (c) that works puts
 a server-side proxy in front — a Next.js route handler that holds the secret
 server-side and forwards. That is a real feature, not a one-line change.
 
-**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`.** One
-line. Obscurity only — `/chat_stream` is not an exotic name. Slightly better
-than it first appears, because the scanner in the log demonstrably did **not**
-have the route names, and `/openapi.json` hands them over. Fixes nothing on its
-own.
+**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`. —
+APPLIED 2026-08-20.** One line. Obscurity only — `/chat_stream` is not an exotic
+name. Slightly better than it first appears, because the scanner in the log
+demonstrably did **not** have the route names, and `/openapi.json` handed them
+over. Fixes nothing on its own.
 
 **(e) Authentication on the three `/history` routes.** **Blocked by the same
 thing as (c).** The frontend calls `/history` from the browser at
@@ -1080,14 +1090,139 @@ need a server-side component the frontend does not currently have. Doing either
 badly breaks the demo, which is worse than the exposure it fixes. **Give them
 their own session with the frontend in scope.**
 
+### What was done, 2026-08-20 — options (b) and (d)
+
+Both edits sit on lines that already existed, and `backend/app.py` has the same
+number of lines before and after. **Every `file:line` citation into that file
+still points where it did.** The 33 `app.py:NNN` references that stood across the
+records before the edit, and the 12 bare `:NNN` references inside this item, were
+re-checked line by line afterwards. One was already wrong and is corrected in the
+same commit: this item cited `app.py:87` for the "Secure CORS" comment, which
+sits at `app.py:86`.
+
+**A grep for that filename now returns 41, not 33, and the eight are additions
+rather than omissions.** They are citations written for the first time by this
+section, by the corrected line above it, and by the `DECISIONS.md` entry in the
+same commit: one to the `pydantic` import, two more to the `FastAPI` line, two
+more to the CORS comment, and four to the capped field — three here and one in
+`DECISIONS.md` — less the single citation lost with the "Not checked" bullet that
+this section answers.
+
+1. **`app.py:84`** now reads
+   `app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)`.
+   **Measured:** `/openapi.json`, `/docs` and `/redoc` each return **404**,
+   requested against the real `app` object.
+2. **`app.py:150`** now reads `transcript: str = Field(..., max_length=8000)`,
+   with `Field` added to the `pydantic` import already on `app.py:4`.
+   **Measured:** a POST of 8,001 characters returns **422** with
+   `string_too_long` and carries no `refined_transcript` key; 8,000 characters
+   validates.
+
+**How those two were measured, and by whom.** Both come from one in-process run
+against the real `app` object, with `TestClient` used *without* its context
+manager so the lifespan never starts — no pool, no ingestion, and no request that
+reaches `fast_llm`. One session ran it; nobody reproduced it independently. The
+run is cheap to repeat if a later session wants its own figure.
+
+**The 422 is invisible to the user, and nothing breaks.** `ChatInput.tsx:89-91`
+reads `data.refined_transcript || currentTranscript` with no `response.ok` check,
+so a rejected transcript falls back to the raw one and the input box still fills.
+The text is merely unrefined.
+
+**What the cap does not do.** `fastapi/routing.py:425` reads the whole body
+before anything validates it, so a large POST is still received and parsed, then
+rejected. The cap bounds the cost of one **model call**, not the bytes the server
+ingests. And it bounds one call only — there is still no rate limit anywhere in
+`backend/`, so total spend scales with request count, which nothing here limits.
+
+**Option (d) costs the local `/docs` page too.** The interactive schema is gone
+in development as well as in the Space. Getting it back is an edit to
+`app.py:84`, not a setting.
+
+**One consequence left alone.** `data/Agentic_AI_Engineer.md:14254` gives
+`http://127.0.0.1:8000/docs` as a local URL, which option (d) turns into a 404.
+`data/` is out of scope here — read as a grep hit, not in context — and this is
+recorded so the next reader knows why that URL stops working.
+
+#### Why 8,000 and not 1,000
+
+`1000` was what this item recommended, for symmetry with `guardrails.py:13`.
+**That recommendation was wrong, and the frontend is why.** There are two ways to
+stop recording and they do not behave alike.
+
+1. `ChatInput.tsx:117-127` — pressing Send while the microphone is live stops,
+   refines, and submits at `:124` with no chance to edit. On this path a
+   transcript over 1,000 characters does produce a message `guardrails.py:13`
+   refuses, so the symmetry argument holds.
+2. `ChatInput.tsx:180` — the microphone button stops and refines **without
+   submitting**. `ChatInput.tsx:92-93` puts the refined text in the input box and
+   the user edits it there. A 1,400-character dictation trimmed by hand to 600
+   sends successfully today. A cap of 1,000 would have rejected it before it
+   could be trimmed, and `ChatInput.tsx:89-91` would have said nothing.
+
+The two limits also measure different strings. `ChatInput.tsx:92-93` prepends
+whatever was already in the box, so even a 900-character transcript can produce a
+message the filter refuses.
+
+**Where 8,000 comes from.** The frontend bounds the transcript nowhere:
+`useVoiceRecording.ts:20` sets `continuous: true`, and the textarea at
+`ChatInput.tsx:156-173` carries no `maxLength`. So the bound cannot be read off
+what the frontend sends. It comes from what a person can dictate and what one
+request may cost. At roughly 700-900 characters a minute of speech — general
+knowledge, not measured here — 8,000 is about ten minutes of unbroken dictation.
+For scale, the longest question in `qa_dataset.json` is 163 characters and the
+median 75, across 94 cases. The worst single request the cap allows is about
+2,000 input tokens.
+
+**No evaluation run was owed for either edit.** `eval.py:22` imports only
+`workflow` from `agents.py`, `eval.py:35` compiles it against `MemorySaver`, and
+`eval.py:44` calls `graph.ainvoke` directly. The suite never imports
+`backend/app.py`, never issues an HTTP request, and never routes through
+`chat.py`, so it exercises neither `/refine_transcript` nor `/chat_stream`.
+
+#### The resume path, settled by probe
+
+The open question was whether `resume_graph_stream` fails safely for a
+`thread_id` with no pending interrupt. It does, in both senses — it does not
+crash, and it does not spend.
+
+**Mechanism, read.** `langgraph` 1.1.3,
+`.venv/lib/python3.12/site-packages/langgraph/pregel/_loop.py`: `:633-644` sets
+`is_resuming` from `bool(checkpoint["channel_versions"])` together with
+`self.input is None`; `:717` takes the resuming branch and bumps `versions_seen`;
+`:759-760` raises `EmptyInputError` when neither a resume nor an input write
+applies.
+
+**Observation, run.** The real `workflow` from `agents.py`, compiled against
+`MemorySaver` — which is what `eval.py:35` does. No server, no database, no HTTP.
+
+- An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
+  input for __start__` and produces zero events. `chat.py:431-436` catches it and
+  yields `{"error": ...}` then `[DONE]`, so the stream terminates cleanly.
+- A thread with `state.next == ()` raises nothing and yields two events,
+  `on_chain_start` and `on_chain_end`. No `on_chat_model_*` event appears, so no
+  model call is made.
+
+The settled-thread probe wrote its state with `as_node="fast_path_node"`, because
+`agents.py:188` edges that node straight to `END` and the write therefore leaves
+nothing to run. **A first attempt wrote the `messages` channel with no `as_node`,
+which re-triggered the entry node and spent one real model call.** Recorded
+because the fault was in the probe's design, not in the code under test, and the
+same trap will catch the next session that fabricates a state this way.
+
+**`/chat_approve` is still a spend route.** A thread that *is* interrupted
+resumes and calls the model for any caller holding its id. Nothing here changed
+that.
+
 ### Not checked
 
 - Whether the HuggingFace Space sits behind any gateway that rate-limits or
   filters before the container sees a request. That could change the whole
   assessment; there is no evidence either way.
-- Whether `resume_graph_stream` fails safely for a `thread_id` with no pending
-  interrupt. `/chat_approve` was read at `app.py:184-203`; the resume path in
-  `chat.py` was not.
+
+*The second bullet that stood here — whether `resume_graph_stream` fails safely
+for a `thread_id` with no pending interrupt — was answered 2026-08-20. See "The
+resume path, settled by probe" above.*
 
 ---
 
