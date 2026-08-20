@@ -957,7 +957,7 @@ length check, no cache. `app.py:149-150` is
 call reaches the model. It is simultaneously the cheapest route to abuse and the
 only one with no brakes.
 
-**This is the same seam as item 10's note that "the evaluation never exercises
+**This is the same seam as item 11's note that "the evaluation never exercises
 `chat.py`", seen from the other side.** Protections that live in `chat.py` cover
 only what routes through `chat.py`.
 
@@ -1065,7 +1065,38 @@ their own session with the frontend in scope.**
 
 ---
 
-## 10. Smaller items
+## 10. Every query is silently truncated to 150 characters
+
+**Status:** found 2026-08-20 while diagnosing item 1. Recorded nowhere before
+that. Latent — it has not been shown to cost a test.
+
+`search.py:47` is `query = str(query)[:150].strip()`. It is the first statement
+in `search_knowledge_base`, so it runs before expansion, before retrieval, and
+before any logging of what was asked. Its comment calls it a guardrail against
+massive injections.
+
+**Nothing reports the truncation.** The line immediately after prints the query
+the tool will use, so the debug output shows the truncated string as if it were
+what arrived. A reader of the log cannot tell a long query was cut.
+
+**Two of the 94 dataset queries already exceed the limit**, the longest at 163
+characters. Measured 2026-08-20 over `qa_dataset.json`. Neither has been traced
+to a failure, so this is a latent defect and not a known cause of one.
+
+**Why it matters now, and to item 1 specifically.** The candidate fix for item 1
+is to make the tool's docstring demand the user's full question rather than a
+keyword fragment. A real user question is longer than a fragment. A docstring
+that demands the whole question would promise exactly what this line quietly
+undoes, and the failure would be silent at both ends. **Whoever takes item 1
+must decide about this line inside the same change.**
+
+**Not established:** whether 150 was chosen for a reason. No record names it, and
+the comment gives a purpose but not a number. Whether any real user query has
+been truncated in production is also unknown — nothing logs it.
+
+---
+
+## 11. Smaller items
 
 - **Index 22 is judge noise, not a regression.** It is served by the unchanged
   fast-path table, so its output is byte-identical between runs, and its

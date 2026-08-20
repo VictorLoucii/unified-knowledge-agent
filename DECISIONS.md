@@ -479,10 +479,17 @@ The rebuild also fixed index 37, which `OPEN.md` had carried as a known failure.
 Net on AI Logic was flat at 90/94; the movement was one genuinely-exercised RAG
 case gained and one lost.
 
-Fixing index 83 properly means changing the order of truncation and reranking,
-which is application logic and needs its own evaluation cycle. Bending
-`search.py` to recover one case inside a rebuild commit would have hidden the
-mechanism. It is written up as `OPEN.md` item 1 instead.
+**Corrected 2026-08-20.** This originally read "Fixing index 83 properly means
+changing the order of truncation and reranking, which is application logic and
+needs its own evaluation cycle." That was measured false. The document index 83
+needs is never retrieved into the candidate pool at all, so no reordering could
+recover it. See `OPEN.md` item 1.
+
+**The decision recorded here is unaffected.** Bending `search.py` to recover one
+case inside a rebuild commit would still have hidden the defect, whatever the
+defect turned out to be — and it turned out not to be the one named above, which
+is the argument for keeping the two changes apart, not against it. It is written
+up as `OPEN.md` item 1 instead.
 
 **Consequence:** `eval.py:232` still gates on `recall_score == 100.0`, so the
 suite reports `PIPELINE FAILED` at this baseline. That is expected until index

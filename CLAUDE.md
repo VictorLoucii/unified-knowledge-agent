@@ -284,6 +284,17 @@ Two behaviours to know before you run ingestion:
   silently became wrong by exactly 7** — found by accident, weeks later. Leave
   citations that describe *deleted* code in the past tense alone; those are
   history and are correct as written.
+- **A record's evidence must sit at the same level as its claim.** If the claim
+  is about what a stage *inside* the pipeline does, output-level evidence cannot
+  support it, however many trials it survives. `OPEN.md` item 1 named a
+  mechanism inside retrieval — that truncation discarded a document before the
+  reranker scored it — and every fact offered for it described what the tool
+  *returned*. Nobody inspected the candidate pool. The claim stood as
+  established fact for weeks and one probe refuted it twice over: in the failing
+  case the document is not in the pool at all, and in the succeeding case it
+  sits inside the cap. Before writing a mechanism into a record, name the thing
+  you would have to measure to be wrong, and measure it. If you cannot, write it
+  as a hypothesis and label it.
 
 ## History rewrites
 
