@@ -402,12 +402,64 @@ rule that exists. This adds one that does not.
 
 ---
 
-## Recorded as a proposal, and deliberately not written as a rule
+### P9 — a role skill points at this contract; it does not restate it
 
-**Add the evaluation command to `permissions.ask`.** It is the most expensive
+- **class:** practice
+- **target:** "The opening message", after the naming rule
+- **status:** `[ ] adopted   [ ] skipped — reason:`
+
+> **A role skill points at this file; it does not restate it.** Rules kept in
+> two places drift, and nothing checks one against the other. A skill describes
+> its role and says to read this contract before the first message. This file
+> holds the rules.
+>
+> A skill is global and a contract is per-project. A skill that names a project
+> path, a baseline or a current focus breaks in the next repository.
+
+**Why this has a subject today, and is not written for a future one.** The
+advisor role is already a skill at `~/.claude/skills/advisor/SKILL.md` — this
+whole workflow has been running on `/advisor` from the start, so the role, its
+read-only boundary and its evidence-labelling rules have never been in a typed
+prompt. The rule above governs that file as it stands.
+
+**Cut from the draft, and why.** The draft opened with a third paragraph
+requiring both sessions to be started from a role skill. There is no executor
+skill, so that paragraph cannot be applied without first creating one — and this
+menu's own preamble promises that every entry is independently applicable. It is
+recorded below as a proposal instead, which is where a thing that is not a
+contract change belongs.
+
+---
+
+## Recorded as proposals, and deliberately not written as rules
+
+Two items that came out of the same review and are **not** changes to this
+contract. Both are the user's to make, outside this repository or outside this
+file. They are recorded so they are not lost and not re-proposed as rules.
+
+**1. Add the evaluation command to `permissions.ask`.** It is the most expensive
 command in this repository and it is not there today.
 
 This is a change to `settings.json`, not to this contract. Two sessions do not
 decide the user's permission settings between themselves, and a rule in this
 file cannot enact one. If it is wanted, the `/update-config` skill is the route
 and the user makes the change.
+
+**2. Create an executor skill, mirroring the advisor's.** There is a
+`~/.claude/skills/advisor/SKILL.md` and no executor equivalent, which is why the
+executor's role has had to be typed each time.
+
+Two constraints carry over from the advisor skill. It holds no project-specific
+content — that file says so outright: "Nothing project-specific — sprint
+numbers, baselines, current focus — belongs here; it goes stale and misleads."
+And it does not copy this contract's message rules; one line pointing here
+instead, per P9.
+
+**A skill, not an agent, and the reason is shape rather than precedent.** An
+agent is spawned *by* a session and reports back to it. These are two terminals
+the user drives, neither of which is subordinate to the other, and the whole
+point of the second one is that it can refuse the first. An agent cannot hold
+that relationship. A skill configures a session the user starts, which is
+exactly what is wanted. Checked 2026-08-20: no `agents` directory exists in this
+repository or under `~/.claude`, and `settings.json` has no `agent` key, so
+nothing on this machine uses the agent mechanism today either.
