@@ -62,6 +62,9 @@ introductions.
 Two lists, not one. The `out` list is the one that does the work. A task with no
 `out` list has not been scoped, it has been named.
 
+Listing the commit subject under `out` is how the user reserves it; otherwise
+the executor writes it and the handback carries it — see "Ending the exchange".
+
 ### acceptance
 
 Each line must be checkable by someone who was not in the conversation. "The
@@ -244,10 +247,33 @@ HANDBACK
   not met:   <acceptance criteria still false>
   remaining: <what is left, or "nothing">
   gate hit:  <the gate reached, or "none">
+  commit:    <hash and subject, as `git log -1` prints it, or "none">
+  sweep:     <the citation forms searched and the count re-checked, or
+              "no tracked file changed line count">
 ```
 
 A handback is sent when the acceptance criteria are all met, when the round
 budget is spent, or when a gate is reached.
+
+**The last two fields are the user's look at the work before it becomes
+permanent.** The executor commits with its own subject and does not stop for it,
+unless the task block lists the subject under `out:`. A commit that has not been
+pushed is not permanent: `git commit --amend` is an ordinary action on it, and
+the push is what the user approves. So the handback carries the subject as
+committed, and the user rejects it there, before the push, if at all.
+
+`sweep:` is there because of a trap this repository has already fallen into. A
+commit that changes a file's line count invalidates every `file:line` citation
+to it, and commit `247dd15` moved eight citations by exactly 7 without anyone
+noticing for weeks. The sweep has two forms to search, `file.py:NNN` and bare
+`:NNN` in a table, and a sweep that names only one missed the other. The field
+makes the executor say which forms it searched, so the user can tell in one
+line. `git log -1` and a `grep` check both fields; neither is a claim the user
+has to take on trust.
+
+On 2026-08-20 a task stopped three times for the user. One stop was the commit
+subject, and the user's only job at it was to ask which two forms the sweep had
+searched. These two fields carry that answer without the stop.
 
 Questions that are not gates — which option is better, is this citation right,
 does this risk matter — are settled between the sessions and do not reach the
