@@ -8,54 +8,32 @@ Decisions already taken are in [DECISIONS.md](DECISIONS.md).
 
 ---
 
-## 1. Index 83 — 'Community Type' no longer retrieves Problem 12
+## 1. Index 83 — 'Community Type' — FIXED 2026-08-20
 
-**Status:** re-diagnosed 2026-08-20, not fixed. Costs one recall point. The
-cause recorded here until 2026-08-20 was wrong; see the correction below.
+**Status: fixed and measured.** The fix is the generalised verbatim directive at
+`search.py:38-44`. Recall went from 33/34 to **34/34** and the AI Logic score
+held at 90/94, so the change gained a point without costing one.
 
-This is the single recall miss behind `latest_run_metrics.json`'s
-`recall_score: 97.058…`, which is 33 of 34. **Read that with the breakdown, not
-alone:** 26 of those 34 come from the fast-path table, so the miss is one of
-**8** genuinely-exercised retrievals, not one of 34. It appeared with the
-2026-08-17 index rebuild.
+This item is kept at length, and not deleted, because **the diagnosis was wrong
+twice before the fix worked.** That sequence is the useful part, not the result.
 
-**Already established:**
+### The case-level timeline — read, not inferred
 
-- **It is not judge noise and not flaky.** With the cached query expansion
-  dropped before each trial, target 12 failed to appear in all 5 of 5 trials.
-  *Wording corrected 2026-08-20. This read "was missed in 0 of 5 trials", which
-  parses as "never missed" — the opposite of what it records.*
-- **The cause. Confirmed by measurement 2026-08-20.** The agent calls the tool
-  with a shortened query, `'Community Type metric'`; the expansion model turns
-  that into `'Social network community measure'` and `'Graph community detection
-  metric'`, which are the wrong domain. **The correct source file is then never
-  retrieved at all.**
-- **The content is present and reachable.** Called directly with the user's
-  full question, the search tool returns Problem 12 at rank 1.
+The same query, byte-identical, with the same `target_problem_id` of 12:
 
-### Measured 2026-08-20 — the candidate pool, which nobody had looked at
+| When | Dataset | Recall | This case |
+|---|---|---|---|
+| 2026-07-26 (`f30ff63`) | 90 cases, index **82** | 34/34 | passed |
+| after the 2026-08-17 index rebuild | 94 cases, index **83** | 33/34 | failed |
+| 2026-08-20, after this fix | 94 cases, index **83** | 34/34 | passed |
 
-Two local probes against the working index. Two query-expansion calls, no judge
-calls, no evaluation run. The pools were built from the expansions each query
-actually produced:
+Read from `git show f30ff63:backend/evals/qa_dataset.json` and the copy at
+`HEAD`. So this is not a figure that happens to match twice — **the fix restores
+the same case that the rebuild broke.**
 
-| | shortened query (fails) | full question (succeeds) |
-|---|---|---|
-| candidate pool, deduped | 97 | 108 |
-| docs containing "community type" | **0** | 2, at positions 37 and 43 |
-| docs from `NEXTIER_Internship_Bugs.md` | **0** | 18 |
+### Three measurements, in order. Two of them refuted a recorded cause.
 
-The Problem 12 block lives in `NEXTIER_Internship_Bugs.md`. In the failing case
-no document from that file enters the pool. **The failure is retrieval, not
-ranking.**
-
-**One false positive, recorded so nobody re-finds it.** A single document in the
-failing pool matches the string `Problem 12`, at position 35. It is from
-`Unified_Knowledge_Project_Details.md` and matches only because it uses the
-phrase as an example of routing behaviour — `Direct Problem IDs ("Problem 12")`.
-It contains neither "community type" nor "privacy".
-
-### Corrected 2026-08-20 — the recorded mechanism was wrong, and untested
+**1. The recorded mechanism was refuted by measuring the candidate pool.**
 
 This item previously stated, as established fact:
 
@@ -64,76 +42,124 @@ This item previously stated, as established fact:
 > happens *before* the rerank, so a document the reranker would have scored
 > highly can be discarded before it is ever scored.
 
+*(That quotation is left exactly as it was written. Its line numbers were
+correct when it was written and are now `:390` and `:410`; correcting numbers
+inside a quotation would make the quotation false.)*
+
 **Refuted twice over.** In the failing case the document is not in the pool to
-be discarded. In the succeeding case it sits at pool position 37 — inside the
-cap of 50 — so the cap was not excluding it there either.
+be discarded. In the succeeding case it sat at pool position 37 — inside the cap
+of 50 — so the cap was not excluding it there either.
 
-**How the error survived.** Every piece of evidence in this item was
-output-level: what the tool returned. The mechanism it asserted was pool-level.
-The pool was never inspected until 2026-08-20. A plausible mechanism was
-recorded as fact and stood for weeks without the one measurement that would have
-tested it.
+| | shortened query (failed) | full question (succeeded) |
+|---|---|---|
+| candidate pool, deduped | 97 | 108 |
+| docs containing "community type" | **0** | 2, at positions 37 and 43 |
+| docs from `NEXTIER_Internship_Bugs.md` | **0** | 18 |
 
-**The ordering defect is real, and is a separate matter.** The pool is 97 and
-the cap is 50, so roughly half the candidates per search are discarded by
-`calculate_relevance_score`, a hand-written keyword scorer, before the
-cross-encoder scores anything. Whether widening that helps is **unknown** — a
-larger pool also gives a small cross-encoder more chances to score an irrelevant
-document highly, and it roughly doubles rerank work per search. A change raising
-the cap to 240 was written and reverted unevaluated on 2026-08-20; it is
-reproducible from this description alone.
+**How that error survived.** Every piece of evidence offered for it was
+output-level — what the tool returned. The mechanism it asserted was pool-level.
+Nobody inspected the pool for weeks. `CLAUDE.md` now carries the standing rule
+this produced: a record's evidence must sit at the same level as its claim.
 
-**Also unsupported now.** The bullet reading "This is why indices 37 and 83 keep
-trading against each other. Both are RAG cases competing for slots in one
-truncated pool" rested on the refuted mechanism. That the two trade may still be
-true as an observation; the explanation for it is not established.
+**2. The replacement theory was weakened by measuring the tool argument.**
 
-### Where the cause actually points — `inferred`, not proven
+The replacement theory was that the tool's docstring is keyword-shaped —
+`search.py:32-34` describes it as being for "specific topics, keywords, errors,
+code logic, or existence checks" — and that the model fills the gap by
+shortening. It was labelled `inferred`.
 
-- **Nothing instructs the shortening.** `agents.py:116-119` mandates *that*
-  `search_knowledge_base` is called and says nothing about how to phrase the
-  argument. The shortening is the model filling a gap, so there is no line to
-  delete, only a line to add.
-- **The only phrasing guidance is the tool's own docstring.**
-  `search.py:32-34` describes the tool as being for "specific topics, keywords,
-  errors, code logic, or existence checks" — keyword-shaped. `search.py:38-40`
-  mandates passing the exact phrase, but scoped to Problem IDs and ordinals
-  only. Index 83 is neither.
-- **Three consistent facts, not a proof.** Nothing demonstrates the model
-  shortens *because* of the docstring.
+**It is weaker than inferred.** Three cases were probed at HEAD with the
+docstring untouched, each by one graph invocation with no response cache
+installed, so the argument was chosen live:
 
-### The fix, and what must be decided with it
+| Index | What the model sent | Verbatim? |
+|---|---|---|
+| 42 | `What is the primary purpose of \`pip\` in Python?` (47 chars) | **yes** |
+| 93 | the full 87-character question | **yes** |
+| 83 | `Community Type metric` (21 chars, from 76) | no |
 
-**Not tried:** any fix. The candidates previously listed here — a per-query
-quota, or reranking before truncating — both targeted the refuted mechanism.
+**The model does not systematically shorten.** With the same docstring and the
+same model, two of three sampled queries arrived whole. Keyword-shaped guidance
+cannot be what causes shortening if most queries are not shortened. **Nothing
+measured explains why 83 was the exception.** Three cases is a small sample and
+nothing here generalises past it.
 
-**The candidate now** is to generalise the verbatim directive at
-`search.py:38-40` beyond Problem IDs. That extends a rule the docstring already
-states rather than adding a mechanism, and it changes retrieval for every query
-rather than for one test case.
+*A hypothesis, labelled as one:* 83 is the only one of the three whose question
+wraps a quoted term in conversational framing. The one piece of evidence is that
+the full question's expansion **keeps** the quotes — `'"Community Type" metric'`
+— while the fragment's expansion loses them and drifts to `'Graph community
+detection metric'` and `'Social network community measure'`. The framing is
+unchanged between the failing and succeeding runs, so it cannot be sufficient on
+its own; a directive overrides it.
 
-**Costs.** A docstring edit changes the tool description in the model's prompt,
-so it invalidates the response cache broadly and the next run is slow whether or
-not the change is right. It touches the tools, so it obliges a full evaluation
-cycle.
+**3. The fix works, and its mechanism is still a hypothesis.**
 
-**One constraint that must be decided in the same change.** `search.py:47` is
-`query = str(query)[:150].strip()` — every query is silently truncated to 150
-characters before anything else runs. Two of the 94 dataset queries already
-exceed that, the longest at 163. A docstring demanding the full question would
-promise what line 47 quietly undoes.
+  before  argument 21 chars, `RETRIEVED_PROBLEM_IDS: []`, answered from general
+          knowledge via the disclaimer at `agents.py:119`
+  after   argument 76 chars and verbatim, `RETRIEVED_PROBLEM_IDS: ['12', '4',
+          'Statement']`, answer built from retrieval
 
-**Rejected, and recorded so it is not reached for again.** `search.py:75-82`
-already hardcodes two query injections for queries that expand badly. A third
-for Community Type would pass index 83 and would match precedent. It would move
-the score without improving the pipeline, which is the failure `CLAUDE.md`'s
-opening section exists to prevent.
+**Why the model complied where it previously did not is not established.** An
+explicit directive raised compliance in the one case that needed it. That is
+what was measured. It is not a mechanism, and it must not be written up as one —
+which is the mistake this item already made once.
 
-**Verify every `search.py` line number here by grepping its anchor text, not by
-arithmetic.** The first draft of this correction cited four of them from a
-modified working tree and was wrong by exactly 16 after the change was reverted
-— the same failure `CLAUDE.md` records for commit `247dd15`, in a draft written
-about that rule. Caught the same day only because someone re-grepped.
+### The measured result, with its headroom stated
+
+| | floor, at HEAD | after |
+|---|---|---|
+| headline recall | 33/34 | **34/34** |
+| headline AI Logic | 90/94 | 90/94 |
+| 8-case recall | 7/8 | **8/8** |
+| 41-case AI Logic | 38/41 | **38/41** |
+
+**The 41-case figure held with zero headroom, and that matters more than the
+pass.** The failing set inside the 41 moved from `{42, 83, 93}` to
+`{37, 42, 93}` — one case gained, one lost, cancelling. Had 37 not flipped the
+figure would read 39/41; had 37 flipped the other way at the floor, the floor
+would have been 39/41 and the change would now read as a regression. The same
+change and the same measurements, with the verdict decided by a case that is
+documented as unstable.
+
+**Index 37 is judge variance, and the captured reasons are the evidence.** Same
+case, same named content, opposite verdicts:
+
+- floor, PASS: "...the 'Yellow Card' Protocol and recommendations for handling
+  the error are **extra context that does not contradict** the expected output."
+- after, FAIL: "The agent's output **included additional information** about the
+  'Yellow Card' Protocol ... which were not part of the Expected Output."
+
+**The limit on that claim.** 37 is inside the 41, so its agent call was a cache
+miss and its output is **not** guaranteed byte-identical between the two runs.
+This is evidence of judge variance on the same substance. It is not proof of a
+flip on identical text.
+
+This item previously said 37 and 83 "keep trading against each other" and
+attributed it to the refuted pool mechanism. **They traded again here.** The
+observation stands; the old explanation remains refuted and the new one is the
+judge, for 37 specifically, on the evidence above.
+
+### Rejected, and recorded so it is not reached for again
+
+`search.py:86-93` already hardcodes two query injections for queries that expand
+badly. A third for Community Type would have passed index 83 and would have
+matched precedent. It would have moved the score without improving the pipeline,
+which is the failure `CLAUDE.md`'s opening section exists to prevent.
+
+### Still not established
+
+- Why the model shortened index 83 and not 42 or 93.
+- Why an explicit directive changed that.
+- Whether the docstring change altered the argument for any case other than 83.
+  **The seven passing recall targets were never probed.** They were not needed —
+  recall rose, so there was no lost point to attribute — but if a future change
+  drops one, their pre-change arguments are still measurable at any commit.
+- The pool-ordering defect at `search.py:390` is untouched and still real: the
+  pool is 97 and the cap is 50, so roughly half the candidates are discarded by
+  `calculate_relevance_score`, a hand-written keyword scorer, before the
+  cross-encoder scores anything. Whether widening it helps is **unknown**. A
+  change raising the cap to 240 was written and reverted unevaluated on
+  2026-08-20.
 
 ---
 
@@ -560,7 +586,7 @@ The silent part is fixed; the exposure itself is not.
 
 On 2026-08-18 a question through the deployed frontend hit
 `openai.APIError: google/gemini-2.5-flash is temporarily rate-limited upstream`
-at `search.py:63`. `search.py:65-69` caught it, logged it, and set
+at `search.py:74`. `search.py:76-80` caught it, logged it, and set
 `search_variants = []`, so the tool searched with the user's original phrase and
 the answer was still correct. That path degraded gracefully and worked as
 designed.
@@ -688,7 +714,7 @@ change. See item 8**, which also records why nothing broke when the key was
 added.
 
 - **Give `expansion_llm` its own fallback** (`search.py:15-23`) on a different
-  provider. The constraint below does not apply to it: `search.py:63` calls
+  provider. The constraint below does not apply to it: `search.py:74` calls
   `ainvoke` on a plain prompt and parses `.content` as text, so it never calls a
   tool and never touches the approval panel. But this feeds retrieval, so it is
   under the EDD rules. Low value — the current path already produced a correct
@@ -1065,34 +1091,40 @@ their own session with the frontend in scope.**
 
 ---
 
-## 10. Every query is silently truncated to 150 characters
+## 10. Every query was silently truncated to 150 characters — FIXED 2026-08-20
 
-**Status:** found 2026-08-20 while diagnosing item 1. Recorded nowhere before
-that. Latent — it has not been shown to cost a test.
+**Status: fixed**, in the same change as item 1, because item 1's fix would have
+promised exactly what this line quietly undid.
 
-`search.py:47` is `query = str(query)[:150].strip()`. It is the first statement
-in `search_knowledge_base`, so it runs before expansion, before retrieval, and
-before any logging of what was asked. Its comment calls it a guardrail against
-massive injections.
+`search.py:47` was `query = str(query)[:150].strip()`, the first statement in
+`search_knowledge_base`. It ran before expansion, before retrieval, and before
+the debug line that prints the query — so the log showed the truncated string as
+if it were what arrived, and a reader could not tell a long query had been cut.
 
-**Nothing reports the truncation.** The line immediately after prints the query
-the tool will use, so the debug output shows the truncated string as if it were
-what arrived. A reader of the log cannot tell a long query was cut.
+**What replaced it**, at `search.py:50-58`: the cap is now 1,000 and a `✂️` line
+prints when the cut fires, immediately before the existing query print.
 
-**Two of the 94 dataset queries already exceed the limit**, the longest at 163
-characters. Measured 2026-08-20 over `qa_dataset.json`. Neither has been traced
-to a failure, so this is a latent defect and not a known cause of one.
+**Why 1,000, and the caveat that belongs with it.** `guardrails.py:13` already
+refuses any user message over 1,000 characters, so this imports a bound the
+product enforces rather than inventing a number. **That guard runs on the
+`chat.py` path only.** `eval.py` invokes the compiled graph directly and never
+reaches it — see item 11 — so on the suite's path this line is the only bound
+there is. It is a bound the product enforces on one of its two paths, not a
+bound the suite enforces.
 
-**Why it matters now, and to item 1 specifically.** The candidate fix for item 1
-is to make the tool's docstring demand the user's full question rather than a
-keyword fragment. A real user question is longer than a fragment. A docstring
-that demands the whole question would promise exactly what this line quietly
-undoes, and the failure would be silent at both ends. **Whoever takes item 1
-must decide about this line inside the same change.**
+**The suite could not have detected either half of this fix, and that is worth
+stating plainly.** The longest query that reaches the tool in the whole dataset
+is 144 characters, at index 60. The only two queries over 150 — index 48 at 163
+and index 50 at 152 — are both fast-path intercepted, so neither ever reaches
+`search_knowledge_base`. Measured 2026-08-20. **The cap change cannot move
+either score.** It was made for real users, not for the test, and a later reader
+should not mistake an unmeasurable change for an unmeasured one.
 
-**Not established:** whether 150 was chosen for a reason. No record names it, and
-the comment gives a purpose but not a number. Whether any real user query has
-been truncated in production is also unknown — nothing logs it.
+**Still not established:** whether 150 was chosen for a reason. No record names
+it, and the original comment gave a purpose but not a number. That comment is
+preserved and extended rather than replaced. Whether any real user query was
+ever truncated in production is also unknown — nothing logged it, which was the
+defect.
 
 ---
 
@@ -1111,3 +1143,12 @@ been truncated in production is also unknown — nothing logs it.
 - **The evaluation never exercises `chat.py`.** `eval.py` invokes the compiled
   graph directly, so the input guardrail, the output masking and the semantic
   cache are all untested by the suite.
+- **The runtime line is printed twice on a pass and once on a fail, and that is
+  a useful accident.** `eval.py:246-247` and `eval.py:251-252` are the same
+  `end_time` / `⏱️ Total Evaluation Time` pair, with `sys.exit(1)` at
+  `eval.py:249` between them. A failing run exits before the second. So the
+  count of that line is a gate signature that survives in any archived log,
+  independent of whether the status line was captured. Confirmed on two logs on
+  2026-08-20: `f30ff63:full_evaluation_log.txt` and the copy at `HEAD` both
+  print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
+  the duplicate away is removing a diagnostic**; say so in the commit.

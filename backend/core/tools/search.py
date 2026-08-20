@@ -35,16 +35,27 @@ async def search_knowledge_base(query: str) -> str:
 
     This is the ONLY tool that can see the full content of the logs.
 
-    CRITICAL: If the user asks for a specific Problem ID (e.g., 'Problem 26'),
-    OR asks for ordinal positions like 'the first problem' or 'the last problem',
-    you MUST use this tool and pass that exact phrase as the query.
+    CRITICAL: Pass the user's question to this tool word for word, exactly as
+    they wrote it. Do NOT shorten it into keywords and do NOT rephrase it. The
+    tool performs its own keyword expansion on what you send, so a fragment
+    gives it less to work with, not more.
+    This applies to every query, including a specific Problem ID (e.g.
+    'Problem 26') and ordinal positions like 'the first problem' or 'the last
+    problem' — those exact phrases must survive into the query you pass.
 
     CRITICAL FORMATTING: When the tool returns a specific problem block, 
     you must output the text EXACTLY as is, character-for-character, without summarizing. 
     (EXCEPTION: If answering a meta-query about your capabilities per Directive 11, you MUST prepend your conversational explanation FIRST, before the exact text).
     """
-    # Guardrail: Truncate and strip query to prevent massive injections
-    query = str(query)[:150].strip()
+    # Guardrail: Truncate and strip query to prevent massive injections.
+    # 1000 matches the cap check_input_guardrail applies at guardrails.py:13.
+    # That guard runs on the chat.py path only — eval.py invokes the compiled
+    # graph directly and never reaches it — so on the suite's path this line is
+    # the only bound there is.
+    _raw_query = str(query)
+    query = _raw_query[:1000].strip()
+    if len(_raw_query) > 1000:
+        print(f"✂️ [TOOL CALL] query truncated from {len(_raw_query)} to 1000 chars")
 
     print(f"\n📥 [TOOL CALL] search_knowledge_base triggered with query: '{query}'")
 

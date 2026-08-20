@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Evaluated — 97.1% Search Recall@k (33/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; vector retrieval measured on its own scores 87.5% (7/8). The single recall miss is a known, diagnosed regression from the 2026-08-17 index rebuild — see [OPEN.md](OPEN.md).
+**Current Status:** Evaluated — 100% Search Recall@k (34/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; measured on its own, that pipeline scores 8/8 on recall and 38/41 on AI Logic. The recall regression introduced by the 2026-08-17 index rebuild was fixed on 2026-08-20 — see [OPEN.md](OPEN.md) item 1.
 
 ---
 

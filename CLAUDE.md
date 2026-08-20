@@ -21,8 +21,8 @@ Measured consequence, as of the last full run:
 
 | Metric | Headline | From the table | Genuinely exercised |
 |---|---|---|---|
-| AI Logic Score | 90/94 | 53 cases | **41 cases** |
-| Recall@k | 33/34 | 26 cases | **7 of 8 cases** |
+| AI Logic Score | 90/94 | 53 cases | **41 cases, 38 passing** |
+| Recall@k | 34/34 | 26 cases | **8 of 8 cases** |
 
 So the Recall@k headline rests on 8 vector retrievals, not 34. The table is a
 legitimate O(1) cache in the product. It is not a measurement of the RAG
@@ -30,8 +30,23 @@ pipeline. **When you change retrieval, report the 41-case and 8-case figures
 alongside the headline, or you will report a change that did not happen.**
 
 The 8 genuinely-exercised recall cases are indices **6, 46, 77, 78, 79, 80, 81,
-83**. `--indices` is 1-based (`eval.py:124` does `dataset[i-1]`). Index 83 is
-the current miss; see [OPEN.md](OPEN.md) item 1.
+83**. `--indices` is 1-based (`eval.py:124` does `dataset[i-1]`). Index 83 was
+the miss until 2026-08-20 and is fixed; see [OPEN.md](OPEN.md) item 1.
+
+**The 41 indices are derivable, not guessable.** Import `FAST_PATH_INTERCEPTS`
+and test each dataset query for a substring key, which is the same match
+`semantic_router.py:9` performs. Two sessions derived the same list
+independently on 2026-08-20:
+
+```
+1,3,4,5,6,27,28,29,30,31,36,37,42,44,45,46,51,57,58,59,60,62,63,64,65,66,67,68,
+71,72,73,74,77,78,79,80,81,83,92,93,94
+```
+
+`eval.py:130` sets `total_llm` from the **sliced** dataset, so an `--indices`
+run over those 41 prints the 41-case figure directly rather than requiring it to
+be derived from the headline. In such a run `total_recall_targets` is 8, so the
+printed recall is the 8-case figure.
 
 Note also that the intercept keys match the eval's queries verbatim, so the
 table helps the score far more than it helps a real user, who will phrase the
@@ -117,6 +132,17 @@ model call, the cache answers repeats with no network call, and
 `--concurrency` overlaps whatever waiting is left. See
 [DECISIONS.md](DECISIONS.md), "`.langchain.db` was stripped from the history,
 not migrated to LFS", for why the file stays out of Git.
+
+**The cache is never invalidated, so no measurement made against it is
+perishable.** `SQLAlchemyCache.lookup` is a keyed `SELECT` on the exact prompt
+text and the llm string; `update` only inserts; `clear` is the sole destructive
+path and nothing in `backend/` calls it. So an edit that changes a prompt does
+not destroy the old rows — it stops matching them, and reverting the file makes
+them match again. A pre-change figure can be re-measured at any time for the
+cost of a `git checkout` of one file. **Do not argue that a measurement must be
+taken before an edit because the edit would destroy it.** That claim was made on
+2026-08-20, accepted by two sessions, and used to justify spending twice before
+anyone opened the library.
 
 The cache keys on exact prompt text. Any edit to the system prompt, the
 retrieval logic or a model string turns every hit into a miss. The next run is

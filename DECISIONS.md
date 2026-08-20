@@ -54,7 +54,7 @@ that reads "the fix was to add flexDirection: row" loses all trace of which
 problem it belongs to. Putting `# Problem 12` into `page_content` makes the id
 both searchable and recoverable — the recall marker in `search.py` is derived
 by reading the header back out of retrieved chunks. This is why recall works at
-all, and it is why `search.py:229` can de-duplicate by exact `page_content`.
+all, and it is why `search.py:240` can de-duplicate by exact `page_content`.
 
 ### Keyword-style query expansion, not natural-language sentences
 
@@ -78,14 +78,73 @@ recall, 33/34 → 34/34, which is what opens the suite's gate.
 swapped the pair back: index 37 now passes and index 83 now misses. Recall
 returned to 33/34. The decision above still stands — keyword expansion beat
 sentences on its own merits — but the two cases were never independent. They
-compete for slots in one candidate pool that `search.py:379` truncates *before*
-`search.py:399` reranks it, so whichever change lands last decides the winner.
+compete for slots in one candidate pool that `search.py:390` truncates *before*
+`search.py:410` reranks it, so whichever change lands last decides the winner.
 That mechanism, not the expansion style, is the thing to fix. See
 [OPEN.md](OPEN.md) item 1.
+
+**Update, 2026-08-20 — the mechanism named in the paragraph above was refuted,
+and index 83 is fixed.** Measuring the candidate pool showed that the document
+index 83 needs never enters it, so truncation order was never what excluded it.
+The fix was the docstring directive at `search.py:38-44`, not a change to the
+pool. Recall is 34/34 again and net logic is again flat at 90/94, because 37 and
+83 traded once more — this time with the judge's own reasons captured on both
+sides, which is what identifies 37 as judge variance rather than retrieval.
+**The observation that the two trade has survived; every explanation offered for
+it so far has not.** See [OPEN.md](OPEN.md) item 1.
 
 **Also ruled out in the same investigation:** the header relevance boost, which
 was changed from +200 to +30. Tested on its own, restoring it to 200 fixed
 neither failing case. It stays at 30.
+
+### The tool docstring demands the user's whole question, not a keyword fragment
+
+**Chosen, 2026-08-20:** `search.py:38-44` instructs the model to pass the user's
+question word for word, and keeps the Problem ID and ordinal examples verbatim
+inside the generalised rule.
+
+**Rejected:** a third hardcoded query injection at `search.py:86-93`. Two
+already exist there, so a `Community Type` entry would have passed index 83 and
+would have matched precedent. It would have moved the score without improving
+the pipeline, which is the failure `CLAUDE.md`'s opening section exists to
+prevent.
+
+**Why the examples had to survive the generalisation.** They are load-bearing in
+a way their old wording did not advertise. `search.py:62` matches the problem
+regex against the query and skips expansion entirely on a hit, and
+`search.py:120-121` tests the four literal strings `"first problem"`,
+`"oldest problem"`, `"last problem"` and `"latest problem"` as substrings. A
+paraphrase that dropped those phrases would silently re-enable expansion for the
+queries the original directive existed to protect, and would break the ordinal
+interceptor outright.
+
+**What is *not* claimed.** Measured on three cases at HEAD before the change,
+the model already passed the user's whole question verbatim for two of them.
+So the docstring being keyword-shaped is **not** established as the cause of the
+shortening, and why an explicit directive changed the remaining case is a
+hypothesis. See [OPEN.md](OPEN.md) item 1.
+
+### The query cap is 1,000, matching the input guardrail
+
+**Chosen, 2026-08-20:** `search.py:50-58` caps the query at 1,000 characters and
+prints a `✂️` line when the cut fires.
+
+**Rejected:** keeping the previous cap of 150 and adding only the log line; and
+picking a new number on judgement.
+
+**Why 1,000.** `guardrails.py:13` already refuses any user message longer than
+that, so the cap imports a bound the product enforces instead of inventing one.
+The caveat travels with it: that guard runs on the `chat.py` path only, and
+`eval.py` invokes the compiled graph directly, so on the suite's path this line
+is the only bound there is.
+
+**Why it was decided inside the same change.** A docstring demanding the whole
+question would have promised exactly what a 150-character cut quietly undid, and
+nothing logged the cut, so the failure would have been silent at both ends.
+
+**The suite cannot measure it.** No query reaching the tool exceeds 144
+characters, and the only two dataset queries over 150 are fast-path intercepted.
+The change was made for real users, not for the test.
 
 ---
 
@@ -210,7 +269,7 @@ The code already agreed with the note in five places — `Dockerfile:30` and
 `:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:269`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
-`search.py:470` and `:472`, which truncate a text block at 8000 *characters*.
+`search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
 `README.md`'s `--port 8000` was the single line out of step.
 
 **What the choice buys.** On 7860 local development needs no configuration at
@@ -471,7 +530,7 @@ does require a full run.
 
 **Why:** the pre-rebuild index held roughly five copies of everything — 8,404
 distinct chunks stored 5 times each, 85,008 child chunks against 17,954 after.
-`search.py:379` truncates the candidate pool to 50 before reranking, so a pool
+`search.py:390` truncates the candidate pool to 50 before reranking, so a pool
 of 50 held about 10 distinct documents. That is a worse defect than one recall
 point, and it was invisible in the score.
 
@@ -484,6 +543,14 @@ changing the order of truncation and reranking, which is application logic and
 needs its own evaluation cycle." That was measured false. The document index 83
 needs is never retrieved into the candidate pool at all, so no reordering could
 recover it. See `OPEN.md` item 1.
+
+**Update, 2026-08-20 — the point was recovered, so the heading is now history.**
+The baseline is 34/34 again. **The decision recorded here still stands:** taking
+the rebuild and accepting a one-point cost was right, because five copies of
+every chunk was the worse defect and the score could not see it. What has
+changed is only that the cost has since been paid back, by the docstring
+directive at `search.py:38-44` rather than by anything in this entry. The two
+rejected alternatives were also never reached for.
 
 **The decision recorded here is unaffected.** Bending `search.py` to recover one
 case inside a rebuild commit would still have hidden the defect, whatever the
