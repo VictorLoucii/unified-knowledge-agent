@@ -95,7 +95,14 @@ Both sessions follow these. They are not optional.
 
 ### The opening message
 
-Each session sends one opening message before any work, stating three things:
+**Establish the address first, and never carry one over.** A session's peer name
+changes when that session restarts. Read the reply address off the `from-name`
+attribute of an inbound message — that is the only address known to be current.
+Whoever speaks first identifies themselves; the other side reads the envelope
+rather than remembering. An address held from an earlier session will bounce.
+
+Each session then sends one opening message before any work, stating three
+things:
 
 ```
 SESSION <role>            implementer | advisor
