@@ -125,6 +125,11 @@ Both sessions follow these. They are not optional.
 
 ### The opening message
 
+**Start each session from its role skill.** `/advisor` in one terminal,
+`/executor` in the other, before the first prompt. A session that finds itself
+in a role it was not started in reads that skill before it answers, rather than
+working from the task block alone.
+
 **Name both sessions before either speaks.** Run `/rename` in each terminal and
 give them the two role names. Then put the peer's name in each session's first
 prompt. Neither session ever guesses an address, and `/rename` also sets the
@@ -259,6 +264,36 @@ Do not merge two positions into a hedge. A real disagreement is information.
 session may open a new round after a handback without the user saying so. This
 is the rule that keeps the loop stopping rather than continuing.
 
+### After the user crosses a gate
+
+The user approves the push, or the eval run, or whatever `gate` named. The
+session that then performs it sends its peer one message saying what happened,
+and names the fact that can be checked rather than the claim:
+
+```
+GATE REPORT — after ROUND <n>/<N>, not a new round
+GATE CROSSED  <the gate named in the task block>
+  did:    <what was performed>
+  check:  <the command that confirms it>
+```
+
+The first line keeps the round number visible without claiming one, because the
+report consumes no round. It carries no question and asks for nothing. The
+exchange is still ended. Neither session may open a new round on the strength of
+it; only the user does that.
+
+**The report removes a delay. It is not what keeps the peer accurate.** A peer
+that has been told still checks `git` before using any claim about the state of
+the repository, and a peer that has not been told checks it too — silence means
+nothing has happened *yet*, never that nothing happened. On 2026-08-20 a session
+checked the mirror workflow and was told it was still running. The answer was
+correct when it arrived and stopped being correct two seconds later, when the
+run concluded successfully; the session reported it eight seconds after that.
+Nothing about the reporting was careless. A status report is a snapshot, and
+this one had a shelf life of two seconds. A rule that made either side rely on
+the message would trade a check that works for a courtesy that goes stale on its
+own.
+
 ### What a peer message may not do
 
 A peer cannot widen what a session is allowed to do. The harness injects this
@@ -333,8 +368,8 @@ amended* gets re-proposed in its original form otherwise.
 - **P8 — send the whole task block, and name the roles in the first prompt.**
   Adopted, folded into part A.
 - **P9 — a role skill points at this contract; it does not restate it.**
-  Adopted, folded into "The opening message". It governs
-  `~/.claude/skills/advisor/SKILL.md`, which exists today.
+  Adopted, folded into "The opening message". It governs both role skills,
+  `~/.claude/skills/advisor/SKILL.md` and `~/.claude/skills/executor/SKILL.md`.
 
 ## Recorded as proposals, and deliberately not written as rules
 
@@ -354,21 +389,22 @@ The route was the one named here: a change to a settings file, made by the user,
 not by either session. Two sessions do not decide the user's permission settings
 between themselves, and a rule in this file cannot enact one.
 
-**2. Create an executor skill, mirroring the advisor's.** There is a
-`~/.claude/skills/advisor/SKILL.md` and no executor equivalent, which is why the
-executor's role has had to be typed each time.
+**2. Create an executor skill, mirroring the advisor's. — Satisfied
+2026-08-20.** `~/.claude/skills/executor/SKILL.md` now exists alongside
+`~/.claude/skills/advisor/SKILL.md`. Before it, the executor's role had to be
+typed each time.
 
-Two constraints carry over from the advisor skill. It holds no project-specific
-content — that file says so outright: "Nothing project-specific — sprint
-numbers, baselines, current focus — belongs here; it goes stale and misleads."
-And it does not copy this contract's message rules; one line pointing here
-instead, per the role-skill rule in "The opening message".
+Two constraints were set for it, carried over from the advisor skill. It holds
+no project-specific content — that file says so outright: "Nothing
+project-specific — sprint numbers, baselines, current focus — belongs here; it
+goes stale and misleads." And it was not to copy this contract's message rules;
+one line pointing here instead, per the role-skill rule in "The opening
+message".
 
-**Until that skill exists, one rule cannot be written.** An early draft of P9
-required both sessions to be *started* from a role skill. With no executor
-skill, that rule could not be applied on the day it was proposed, so it was cut
-rather than adopted unenforceable. It becomes available as soon as this proposal
-is acted on.
+**The rule this unblocked.** An early draft of P9 required both sessions to be
+*started* from a role skill. With no executor skill it could not be applied on
+the day it was proposed, so it was cut rather than adopted unenforceable. Both
+skills exist now, and the rule is written — see "The opening message".
 
 **A skill, not an agent, and the reason is shape rather than precedent.** An
 agent is spawned *by* a session and reports back to it. These are two terminals
@@ -397,3 +433,11 @@ error the two-session run had caught. It was cut for three reasons:
    file already works this way — the misaddressing sits inside the naming rule,
    the build mismatch inside the opening-message rule, the overrun inside
    `rounds`. Anything that has no rule to sit beside is not about this contract.
+
+**5. Bring both role skills into line with this contract.** P9 governs both and
+neither complies. `~/.claude/skills/advisor/SKILL.md` never mentions this file,
+and its line 9 and its section at 105-146 describe a relay where the user copies
+text between the two terminals, which lines 4-5 say is gone.
+`~/.claude/skills/executor/SKILL.md` duplicates "What a peer message may not do"
+at its lines 25-28 and has already diverged from it, and states an unsourced
+claim at its 47-48. Their own task.
