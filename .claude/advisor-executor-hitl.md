@@ -11,6 +11,12 @@ bounds up front, so both sessions stop in the right place without being told.
 This file is a contract, not code. Nothing enforces it. It works because both
 sessions read it and the user can see when it was ignored.
 
+On 2026-08-20 nine rules were added to this file. Three drafting errors were
+caught while adopting them, each by the session that had not written it: a
+figure that was wrong, a rule that contradicted another rule in this same file,
+and a claim neither session could support. **That is what the second session is
+for.**
+
 ---
 
 ## Part A — the task block
@@ -32,6 +38,24 @@ gate:     none | push | eval | judgement
 records:  none | <which of CLAUDE.md, DECISIONS.md, OPEN.md, README.md>
 rounds:   <N>
 ```
+
+**Send the whole block, to both sessions, before either starts.** A partial
+block is worse than none, because both sides act as though it were complete. On
+2026-08-20 the advisor received `gate: eval` alone, with no `scope`,
+`acceptance`, `records` or `rounds`; the executor received prose and never saw
+the acceptance criteria at all. Two rounds went on reconstructing them.
+
+Each session's first prompt then carries three more lines:
+
+```
+role   advisor | executor
+peer   <the other session's name, after both are renamed>
+opens  you speak first | wait for your peer
+```
+
+**The advisor opens.** It reads the repository and holds findings before the
+executor changes anything, so the first exchange carries evidence rather than
+introductions.
 
 ### scope
 
@@ -61,7 +85,7 @@ the executing session stops there deliberately rather than by accident.
 **Naming a gate does not create one.** This field is a declaration of intent. It
 does not configure anything, and the session's real behaviour comes from its
 permission mode and its settings files. Whether a gate actually holds depends on
-which mode the session is running in — see `mode` in part B.
+both — see "The opening message" in part B.
 
 ### records
 
@@ -87,6 +111,12 @@ The gates bound cost. The round budget bounds *time and attention*, which no
 permission rule covers. A documentation task can loop indefinitely without ever
 touching a gate.
 
+**Name the overrun when it happens.** A budget silently extended is not a
+budget. On 2026-08-20 a task declared `rounds: 6` and ran to 32. Every round
+produced something, which is exactly why nobody stopped. When the budget is
+spent, both sessions say so in their own terminal, whatever state the work is
+in.
+
 ---
 
 ## Part B — the message rules
@@ -95,20 +125,46 @@ Both sessions follow these. They are not optional.
 
 ### The opening message
 
-**Establish the address first, and never carry one over.** A session's peer name
-changes when that session restarts. Read the reply address off the `from-name`
-attribute of an inbound message — that is the only address known to be current.
-Whoever speaks first identifies themselves; the other side reads the envelope
-rather than remembering. An address held from an earlier session will bounce.
+**Name both sessions before either speaks.** Run `/rename` in each terminal and
+give them the two role names. Then put the peer's name in each session's first
+prompt. Neither session ever guesses an address, and `/rename` also sets the
+terminal title, so the tab tells the user which window they are in.
+
+Auto-generated session names are actively dangerous. A session named
+`remove-hand-relay-advisor` was the *executor*; the name came from an early
+prompt, not from its role. An advisor searching for a role-shaped name sent two
+task messages to unrelated live sessions before finding it.
+
+A session's peer name also changes when that session restarts, so an address
+held from an earlier session will bounce. If an address is still unknown, read
+it off the `from-name` attribute of an inbound message. That is the fallback,
+not the method.
+
+**A role skill points at this file; it does not restate it.** Rules kept in two
+places drift, and nothing checks one against the other. A skill describes its
+role and says to read this contract before the first message. This file holds
+the rules.
+
+A skill is global and a contract is per-project. A skill that names a project
+path, a baseline or a current focus breaks in the next repository.
 
 Each session then sends one opening message before any work, stating three
 things:
 
 ```
 SESSION <role>            executor | advisor
-build   <version>         output of `claude --version` in that session
+build   <version>         the `version` field of this session's entry in
+                          ~/.claude/sessions/*.json — NOT `claude --version`
 mode    <permission-mode> the mode it is actually running in
 ```
+
+**Why the registry and not `claude --version`.** `claude --version` reports the
+binary on disk. A session that has been running since before an upgrade reports
+a build it is not running. On 2026-08-20 the executor session's registry entry
+read 2.1.235 while `claude --version`, run inside that same session, read
+2.1.237 — one session disagreeing with its own binary. The registry records the
+version the process actually started with. Match your session by `sessionId`, or
+by `pid` against `ps`.
 
 **Why the build belongs here and not in the task block.** It does not change per
 task. It changes per session. Stating it once per session is accurate; repeating
@@ -118,15 +174,36 @@ restated goes stale without anyone noticing.
 The two sides have already been found running different builds. A flag confirmed
 on one side is not confirmed on the other until someone checks.
 
-**Why the mode belongs here.** The `gate` field declares intent. The mode decides
-whether the gate holds. If a session reports a mode where unmatched commands run
-unasked, then the named gate is not trusted for that session, and the round
+**Why the mode belongs here.** The `gate` field declares intent. The mode and
+the settings files together decide whether the gate holds. If a session reports
+a mode where unmatched commands run unasked, then the named gate is not trusted
+for that session unless a settings file catches the command, and the round
 budget is the only bound left. Say so in the opening message rather than
 discovering it later.
 
 **Check the mode, do not assume it.** The user's global settings set
 `defaultMode` to `auto`, so a session starts there unless something changed it,
 and switching mode inside a session does not carry to the next one.
+
+**The permission mode is not what costs the user clicks. The allowlist is.**
+Read `permissions.allow` in the settings files before blaming the mode. A
+session with a nearly-empty allowlist prompts for `git status`, `grep`, `sed`
+and `wc` — which is most of what a read-only advisor does.
+
+The fix is read-only commands in `permissions.allow` and expensive ones in
+`permissions.ask`. The gates stay real and the noise stops. **That change is the
+user's to make, not ours** — see "Recorded as proposals" below, and "What a peer
+message may not do".
+
+Tell the user that `/fewer-permission-prompts` exists; do not run it for them.
+It ranks the read-only calls in their transcripts, and then writes the result
+into `.claude/settings.json` itself. That last step is a settings edit, so it
+belongs to whoever owns the settings, which is not either session.
+
+Say what it does not do, or the recommendation above arrives half-done and
+looks whole. Its own instructions bar it from writing `permissions.ask`, so it
+covers the read-only half and none of the expensive half. The commands that
+need a gate still have to be added by hand.
 
 ### Every message
 
@@ -139,6 +216,18 @@ ROUND <n>/<N>
 Neither side can be trusted to count from memory across a long exchange. Putting
 the count in the text makes it visible to the user, who is the only participant
 who can see both transcripts.
+
+### Notifications
+
+Every notification names its session.
+
+```
+executor: waiting on a commit subject
+advisor: findings ready, 3 open questions
+```
+
+A notification that says only "Task Complete" tells the user something stopped,
+not where to go. With two sessions running, that is the whole question.
 
 ### Ending the exchange
 
@@ -154,6 +243,17 @@ HANDBACK
 
 A handback is sent when the acceptance criteria are all met, when the round
 budget is spent, or when a gate is reached.
+
+Questions that are not gates — which option is better, is this citation right,
+does this risk matter — are settled between the sessions and do not reach the
+user.
+
+**When a gate is reached, hand the user a recommendation, not a question.** The
+two sessions state their positions to each other first. The user then gets "we
+both recommend X" or "we disagree, here are two positions". That turns the
+user's job from deciding into approving, without removing them from the gate.
+
+Do not merge two positions into a hedge. A real disagreement is information.
 
 **Only the user closes a task.** A handback reports; it does not decide. Neither
 session may open a new round after a handback without the user saying so. This
@@ -181,269 +281,78 @@ makes the bounds legible so that ignoring them is visible in the transcript.
 
 ---
 
-# Proposed, not yet adopted
+# Adopted 2026-08-20
 
-Drafted 2026-08-20 by the advisor session, reviewed by the executor session,
-after the two-session run that produced commit `0804bc6`. **Nothing below is in
-force.** The contract above is, and it works as written.
+Nine patches were drafted by the advisor session on 2026-08-20, after the
+two-session run that produced commit `0804bc6`, and were decided the same day by
+the advisor and executor sessions together. **All nine are adopted, and all nine
+are folded into the contract above.**
 
-Take these one at a time. Each entry is independently applicable — none depends
-on another. Mark each `adopted` or `skipped`, and **write the reason on a skip**,
-because a rule rejected without a reason gets re-proposed by the next session
-that hits the same problem.
+The rule text lives in the contract. This list records what was decided, not a
+second copy of the rules — a rule kept in two places drifts, and nothing checks
+one against the other. The drafts, their evidence classes and the argument over
+each are in the history of this file.
 
-Every entry carries an evidence class. `fact` means a measured or observed
-failure sits behind it, named in the entry. `practice` means it is an opinion
-about how the two sessions should work, and it should be judged as one.
+Five of the nine were changed before folding — three corrected, two with their
+evidence replaced. Each change is named below, because a patch adopted *as
+amended* gets re-proposed in its original form otherwise.
 
----
-
-### P1 — name both sessions before either speaks
-
-- **class:** fact
-- **target:** "The opening message", replacing the paragraph beginning
-  "**Establish the address first, and never carry one over.**"
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> **Name both sessions before either speaks.** Run `/rename` in each terminal
-> and give them the two role names. Then put the peer's name in each session's
-> first prompt. Neither session ever guesses an address, and `/rename` also sets
-> the terminal title, so the tab tells the user which window they are in.
->
-> Auto-generated session names are actively dangerous. A session named
-> `remove-hand-relay-advisor` was the *executor*; the name came from an early
-> prompt, not from its role. An advisor searching for a role-shaped name sent
-> two task messages to an unrelated live session before finding it.
->
-> If an address is still unknown, read it off the `from-name` of an inbound
-> message. That is the fallback, not the method.
-
-**Note for whoever adopts this.** The session registry at
-`~/.claude/sessions/*.json` maps a name to a `sessionId`, and reading it is how
-the misaddressing was actually diagnosed. That is a diagnostic, not the method —
-the method is to name both sessions up front so the question never arises.
-
----
-
-### P2 — read the build from the registry, not from `claude --version`
-
-- **class:** fact
-- **target:** "The opening message", replacing the `build <version>` line and
-  the paragraph beginning "**Why the build belongs here**"
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> ```
-> build   <version>   the `version` field of this session's entry in
->                     ~/.claude/sessions/*.json — NOT `claude --version`
-> ```
->
-> `claude --version` reports the binary on disk. A session that has been running
-> since before an upgrade reports a build it is not running. Both sessions did
-> this on 2026-08-20 and both reported 2.1.237; one was running 2.1.235. The
-> registry records the version the process actually started with.
->
-> Match your session by `sessionId`, or by `pid` against `ps`.
-
-**This one contradicts the file it is patching.** The current text names
-`claude --version` as the method. Adopting P2 without deleting that line leaves
-two methods in one document, and the wrong one reads as authoritative because it
-is in the code block.
-
----
-
-### P3 — hand the user a recommendation, not a question
-
-- **class:** practice
-- **target:** "Ending the exchange", after the `HANDBACK` block
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> Questions that are not gates — which option is better, is this citation right,
-> does this risk matter — are settled between the sessions and do not reach the
-> user.
->
-> **When a gate is reached, hand the user a recommendation, not a question.**
-> The two sessions state their positions to each other first. The user then gets
-> "we both recommend X" or "we disagree, here are two positions". That turns the
-> user's job from deciding into approving, without removing them from the gate.
->
-> Do not merge two positions into a hedge. A real disagreement is information.
-
-**Why the first sentence is here.** The file currently answers half of the
-question a user actually asks — whether they need to sit and watch. `gate` says
-what stops for them and "What a peer message may not do" says a peer cannot
-grant it. Neither says what the sessions *may* settle alone, so a user reading
-for permission finds only prohibitions.
-
-**Earned on 2026-08-20.** The commit subject for `0804bc6` went through this
-shape twice. The executor proposed one subject, the advisor argued for another,
-the executor moved, then proposed a third, and moved again on a second argument.
-Neither hedged, and the user received a single recommendation with its one
-stated cost.
-
----
-
-### P4 — every notification names its session
-
-- **class:** fact
-- **target:** a new short section in Part B, after "Every message"
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> ### Notifications
->
-> Every notification names its session.
->
-> ```
-> executor: waiting on a commit subject
-> advisor: findings ready, 3 open questions
-> ```
->
-> A notification that says only "Task Complete" tells the user something
-> stopped, not where to go. With two sessions running, that is the whole
-> question.
-
----
-
-### P5 — name the overrun when it happens
-
-- **class:** fact
-- **target:** the `rounds` section in Part A
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> **Name the overrun when it happens.** A budget silently extended is not a
-> budget. On 2026-08-20 a task declared `rounds: 6` and ran to 27, extended
-> fifteen times without either session saying so. Every round produced
-> something, which is exactly why nobody stopped. When the budget is spent, both
-> sessions say so in their own terminal, whatever state the work is in.
-
----
-
-### P6 — read the allowlist before blaming the mode
-
-- **class:** fact
-- **target:** the `mode` discussion in "The opening message"
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> **The permission mode is not what costs the user clicks. The allowlist is.**
-> Read `permissions.allow` in the settings files before blaming the mode. A
-> session with a nearly-empty allowlist prompts for `git status`, `grep`, `sed`
-> and `wc` — which is most of what a read-only advisor does.
->
-> Put read-only commands in `permissions.allow` and expensive ones in
-> `permissions.ask`. The gates stay real and the noise stops.
->
-> The `/fewer-permission-prompts` skill scans transcripts and proposes an
-> allowlist. Run it and read what it proposes rather than writing one by hand.
-
-**Cut from the draft, deliberately.** An earlier version listed what
-`permissions.ask` currently holds in this repository. An inventory of a settings
-file inside a contract file goes stale silently, and no `/close-out` check would
-ever catch it. Say where to look, not what is currently there.
-
----
-
-### P7 — say what the second session is for
-
-- **class:** fact
-- **target:** the top of the file, next to "It works because both sessions read
-  it and the user can see when it was ignored."
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> On 2026-08-20, five errors were caught before they reached a record. Three of
-> the five were caught by the other session. **That is what the second session
-> is for.**
-
-**This is the residue of a section that was cut.** The draft proposed a closing
-post-mortem, "What this format has already cost", listing all five. It was cut
-for three reasons, recorded here so it is not re-proposed:
-
-1. **A contract is not a record.** This repository's records are post-mortems;
-   this file is not one. Its value is that both sessions read it, and a
-   post-mortem is the most skippable thing that could be added to it.
-2. **It pushes every rule further from the top.** The file is 180 lines. A
-   section at the end costs the reader of the rules above it.
-3. **Three of the five were already stated at the rule they justify** — the
-   misaddressing in P1, the build in P2, the overrun in P5. The file already
-   works this way: "The two sides have already been found running different
-   builds" sits inside the `mode` discussion, not in an appendix.
-
-The remaining two — a perishability claim accepted by both sessions before
-anyone read the library, and a line count labelled by eye and wrong by two — are
-not about this contract at all. They are verification discipline, and
-`CLAUDE.md` carries both.
-
----
-
-### P8 — send the whole task block, and name the roles in the first prompt
-
-- **class:** fact
-- **target:** "Part A — the task block", after the code block
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> **Send the whole block, to both sessions, before either starts.** A partial
-> block is worse than none, because both sides act as though it were complete.
-> On 2026-08-20 the advisor received `gate: eval` alone, with no `scope`,
-> `acceptance`, `records` or `rounds`; the executor received prose and never saw
-> the acceptance criteria at all. Two rounds went on reconstructing them.
->
-> Each session's first prompt then carries three more lines:
->
-> ```
-> role   advisor | executor
-> peer   <the other session's name, after both are renamed>
-> opens  you speak first | wait for your peer
-> ```
->
-> **The advisor opens.** It reads the repository and holds findings before the
-> executor changes anything, so the first exchange carries evidence rather than
-> introductions.
-
-**The largest real gap in the current file.** Everything else here sharpens a
-rule that exists. This adds one that does not.
-
----
-
-### P9 — a role skill points at this contract; it does not restate it
-
-- **class:** practice
-- **target:** "The opening message", after the naming rule
-- **status:** `[ ] adopted   [ ] skipped — reason:`
-
-> **A role skill points at this file; it does not restate it.** Rules kept in
-> two places drift, and nothing checks one against the other. A skill describes
-> its role and says to read this contract before the first message. This file
-> holds the rules.
->
-> A skill is global and a contract is per-project. A skill that names a project
-> path, a baseline or a current focus breaks in the next repository.
-
-**Why this has a subject today, and is not written for a future one.** The
-advisor role is already a skill at `~/.claude/skills/advisor/SKILL.md` — this
-whole workflow has been running on `/advisor` from the start, so the role, its
-read-only boundary and its evidence-labelling rules have never been in a typed
-prompt. The rule above governs that file as it stands.
-
-**Cut from the draft, and why.** The draft opened with a third paragraph
-requiring both sessions to be started from a role skill. There is no executor
-skill, so that paragraph cannot be applied without first creating one — and this
-menu's own preamble promises that every entry is independently applicable. It is
-recorded below as a proposal instead, which is where a thing that is not a
-contract change belongs.
-
----
+- **P1 — name both sessions before either speaks.** Adopted, folded into "The
+  opening message". Corrected: the two misaddressed task messages went to two
+  unrelated sessions, not to one.
+- **P2 — read the build from the registry, not from `claude --version`.**
+  Adopted, folded into "The opening message", and the `claude --version` line it
+  contradicted is deleted. Its evidence was replaced with a stronger measurement
+  taken on the day of adoption: one session's registry entry read 2.1.235 while
+  `claude --version`, run inside that same session, read 2.1.237. The draft also
+  said to delete the paragraph beginning "Why the build belongs here and not in
+  the task block". It was kept, deliberately: it answers why the field is in the
+  opening message at all, says nothing about how to read the value, and so
+  contradicts nothing P2 adds.
+- **P3 — hand the user a recommendation, not a question.** Adopted, folded into
+  "Ending the exchange".
+- **P4 — every notification names its session.** Adopted as "Notifications" in
+  part B. The matching change to the user's global instructions was out of scope
+  for this task and is the user's to make.
+- **P5 — name the overrun when it happens.** Adopted, folded into `rounds`.
+  Corrected: the overrun ran to 32 rounds against a declared budget of 6, not to
+  27. The draft's own figure had gone stale before it was adopted, which is the
+  failure P5 exists to name. The claim that the budget was "extended fifteen
+  times" is dropped — round markers do not yield a count of extensions, and
+  neither session could measure one.
+- **P6 — read the allowlist before blaming the mode.** Adopted, folded into the
+  `mode` discussion. Corrected: as drafted it told the two sessions to edit the
+  settings files, which "What a peer message may not do" forbids and which
+  recorded proposal 1 reserves to the user. The sentence is addressed to the
+  user instead. The diagnosis stays with the sessions; the change does not.
+- **P7 — say what the second session is for.** Adopted at the top of the file,
+  with its evidence replaced. The drafted tally — five errors, three caught by
+  the peer — was a count neither session had made, so it was not folded. The
+  three errors it now names are P5's stale figure, P6's contradiction, and this
+  entry's own tally.
+- **P8 — send the whole task block, and name the roles in the first prompt.**
+  Adopted, folded into part A.
+- **P9 — a role skill points at this contract; it does not restate it.**
+  Adopted, folded into "The opening message". It governs
+  `~/.claude/skills/advisor/SKILL.md`, which exists today.
 
 ## Recorded as proposals, and deliberately not written as rules
 
-Two items that came out of the same review and are **not** changes to this
-contract. Both are the user's to make, outside this repository or outside this
-file. They are recorded so they are not lost and not re-proposed as rules.
+Items that came out of the same review and are **not** changes to this contract.
+Some are the user's to make, outside this file. The rest record something
+deliberately *not* written here, and why. They are kept so they are not lost and
+not re-proposed as rules — including the two that are already settled, because a
+settled item with no record gets raised again by the next session that notices
+the same gap.
 
-**1. Add the evaluation command to `permissions.ask`.** It is the most expensive
-command in this repository and it is not there today.
+**1. Add the evaluation command to `permissions.ask`. — Satisfied 2026-08-20.**
+`.claude/settings.local.json` now carries `Bash(uv run python -m
+backend.evals.eval*)` under `permissions.ask`. It is the most expensive command
+in this repository, and when this was first written it was in no settings file.
 
-This is a change to `settings.json`, not to this contract. Two sessions do not
-decide the user's permission settings between themselves, and a rule in this
-file cannot enact one. If it is wanted, the `/update-config` skill is the route
-and the user makes the change.
+The route was the one named here: a change to a settings file, made by the user,
+not by either session. Two sessions do not decide the user's permission settings
+between themselves, and a rule in this file cannot enact one.
 
 **2. Create an executor skill, mirroring the advisor's.** There is a
 `~/.claude/skills/advisor/SKILL.md` and no executor equivalent, which is why the
@@ -453,7 +362,13 @@ Two constraints carry over from the advisor skill. It holds no project-specific
 content — that file says so outright: "Nothing project-specific — sprint
 numbers, baselines, current focus — belongs here; it goes stale and misleads."
 And it does not copy this contract's message rules; one line pointing here
-instead, per P9.
+instead, per the role-skill rule in "The opening message".
+
+**Until that skill exists, one rule cannot be written.** An early draft of P9
+required both sessions to be *started* from a role skill. With no executor
+skill, that rule could not be applied on the day it was proposed, so it was cut
+rather than adopted unenforceable. It becomes available as soon as this proposal
+is acted on.
 
 **A skill, not an agent, and the reason is shape rather than precedent.** An
 agent is spawned *by* a session and reports back to it. These are two terminals
@@ -463,3 +378,22 @@ that relationship. A skill configures a session the user starts, which is
 exactly what is wanted. Checked 2026-08-20: no `agents` directory exists in this
 repository or under `~/.claude`, and `settings.json` has no `agent` key, so
 nothing on this machine uses the agent mechanism today either.
+
+**3. Do not put an inventory of a settings file in this contract.** An early
+draft of P6 listed what `permissions.ask` held at the time. An inventory inside
+a contract goes stale silently, and no `/close-out` check would ever catch it.
+Say where to look, not what is currently there.
+
+**4. Do not add a post-mortem section to this file.** An early draft of P7
+proposed a closing section, "What this format has already cost", listing every
+error the two-session run had caught. It was cut for three reasons:
+
+1. **A contract is not a record.** This repository's records are post-mortems;
+   this file is not one. Its value is that both sessions read it, and a
+   post-mortem is the most skippable thing that could be added to it.
+2. **It pushes every rule further from the top.** A section at the end costs the
+   reader of every rule above it.
+3. **The evidence belongs at the rule it justifies, not in an appendix.** The
+   file already works this way — the misaddressing sits inside the naming rule,
+   the build mismatch inside the opening-message rule, the overrun inside
+   `rounds`. Anything that has no rule to sit beside is not about this contract.
