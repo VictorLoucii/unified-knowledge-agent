@@ -312,21 +312,16 @@ Two behaviours to know before you run ingestion:
   the requested change, and read the diff before committing.
 - **A commit that changes a file's line count invalidates every citation to
   it.** `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
-  `file:line`. After such a commit, grep all four for that filename and re-check
-  each hit against the file. **That grep is necessary and not sufficient, and it
-  fails in two ways.** Some citations carry no filename at all — `| :102 |` in
-  OPEN.md item 9's route table, and `at :210` in the prose below it — so no grep
-  for the filename finds them; on 2026-08-21 there were 12 such refs into
-  `app.py`, against 44 the filename grep did find. And a range citation is found
-  but half-checked: the grep highlights the start, so an end that moved while the
-  start did not slips past. The `/health` range in OPEN.md failed exactly that
-  way on 2026-08-21 — its start stayed put and its end moved by one — and one
-  session filed it as safe while the other caught it. **Search the bare form
-  separately, and check both ends of every range.** Commit `247dd15` replaced a
-  10-line block in `app.py` with a 17-line comment, and **eight citations across
-  two records silently became wrong by exactly 7** — found by accident, weeks
-  later. Leave citations that describe *deleted* code in the past tense alone;
-  those are history and are correct as written.
+  `file:line`. After such a commit, run `/citation-sweep`. A grep for the
+  filename is necessary and not sufficient, for two reasons. Some citations are
+  bare — `| :102 |`, `at :210` — and on 2026-08-21 there were 12 such refs into
+  `app.py` against 44 the filename grep found. And a range is only half-checked
+  by its start: the `/health` range in OPEN.md moved its end by one that same
+  day, and one session filed it as safe while the other caught it. Commit
+  `247dd15` replaced a 10-line block in `app.py` with a 17-line comment, and
+  eight citations across two records became wrong by exactly 7 — found by
+  accident, weeks later. Leave past-tense citations to deleted code alone; they
+  are history and are correct as written.
 - **A record's evidence must sit at the same level as its claim.** If the claim
   is about what a stage *inside* the pipeline does, output-level evidence cannot
   support it, however many trials it survives. `OPEN.md` item 1 named a
@@ -364,27 +359,6 @@ and inspect `git log` there before pushing anything.
 Never hardcode API keys, passwords or credentials — read them from the
 environment. Never open, read or request the real `.env`; use `.env.example`
 to check variable names and schemas.
-
-## Frontend rules
-
-- Do not change styles, layout or design unless asked.
-- All UI changes must work on mobile, tablet and desktop.
-- **Golden rule of hooks.** Declare hooks at the top level of the component
-  that consumes their values. Never declare a hook inside a child when the
-  parent needs the data.
-- This is Next.js, not React Native. `frontend/AGENTS.md` warns that this
-  Next.js version has breaking changes against common knowledge — read the
-  relevant guide under `node_modules/next/dist/docs/` before writing frontend
-  code.
-- **`NEXT_PUBLIC_*` is frozen at build time.** `next build` inlines every
-  `NEXT_PUBLIC_*` value into the browser bundle, so supplying one at container
-  start does nothing at all. Pass it as a Docker build argument instead — see
-  `frontend/frontend.Dockerfile` and the `args:` block in `docker-compose.yml`.
-  **Confirm it by searching `.next/static` for the value; do not reason about
-  it.** Building once with the variable set and once without, then grepping, is
-  a few seconds' work and settles the question outright.
-  Local development needs none of this: start the backend on port 7860 and the
-  fallback the three call sites already hardcode is correct.
 
 ---
 

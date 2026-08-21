@@ -755,3 +755,58 @@ conceptual explanations" and the judge then failed the agent for doing exactly
 that. The neighbouring case already carried the "additional context must not
 fail the test" convention and passed on identical behaviour, so this was
 consistency with an existing pattern rather than score tuning.
+
+## Records
+
+### The citation-sweep rule kept its evidence in the root; only the procedure moved
+
+Part of the goal "shrink `CLAUDE.md` without losing what it knows". Done
+2026-08-21 against `3a07f52`, where the root was 434 lines (`wc -l`). After
+the change the root is 408 lines (`wc -l`).
+
+**Chosen:** the root keeps a standing rule of 12 lines: the trigger, both
+reasons a filename grep is insufficient, every measurement and date the old
+17-line bullet carried, and a pointer to `/citation-sweep`. The new skill
+`.claude/skills/citation-sweep/SKILL.md` holds the four-step procedure only,
+and repeats no measurement or date. The "## Frontend rules" section moved
+verbatim to `frontend/CLAUDE.md`, above its `@AGENTS.md` import.
+
+**Rejected:** the root keeps one line and the skill carries the procedure with
+the evidence beside each step (`247dd15` by 7; 12 bare refs against 44; the
+range end that moved). It would have saved about 8 more root lines.
+
+**Why:** the goal forbids moving a measurement or a reason out of the file that
+loads every turn. A skill body loads only when invoked. A session that commits
+a line-count change without invoking the skill sees the root rule and the
+skill's one-line description, nothing more; under the rejected shape it would
+have no reason to distrust its own grep, which is exactly how `247dd15` moved
+eight citations unnoticed. Under the chosen shape the root still says why the
+grep fails, and `.claude/advisor-executor-hitl.md:100` ("`CLAUDE.md` sets out
+both") stays true.
+
+Where each removed range went. Line numbers on the left are `CLAUDE.md` at
+`3a07f52`; on the right, the files at the commit that records this entry.
+
+| At `3a07f52` | Content | Now |
+|---|---|---|
+| `CLAUDE.md:368-388` (21 lines) | "## Frontend rules", verbatim | `frontend/CLAUDE.md:1-21` |
+| `CLAUDE.md:389` | the `---` separator | `CLAUDE.md:363`, unchanged, now between "## Secrets" and "## Commands" |
+| `CLAUDE.md:313-329` (17 lines), the rule and its evidence | reworded, every measurement kept | `CLAUDE.md:313-324` (12 lines) |
+| `CLAUDE.md:313-329`, the procedure | grep the filename; search bare `:NNN` separately; check both ends of a range; leave past-tense citations alone | `.claude/skills/citation-sweep/SKILL.md:16-29` |
+
+Every measurement, date and hash from the old bullet, and its single home now:
+
+| Item | Now |
+|---|---|
+| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:317` |
+| their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:20-21` |
+| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:317-318` |
+| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:319-320` |
+| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:320-323` |
+| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:323-324` and `SKILL.md:27-29` |
+
+`OPEN.md:669` cited `CLAUDE.md` "Frontend rules" by title and now names
+`frontend/CLAUDE.md`. The other four title references into the root
+(`OPEN.md:147`, `OPEN.md:925`, `DECISIONS.md:109`, `DECISIONS.md:716`) point at
+sections that did not move. No `CLAUDE.md:NNN`, bare `:NNN` or range citation
+into the root existed in the four records before or after (grep, 0).

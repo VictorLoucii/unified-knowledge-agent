@@ -666,7 +666,7 @@ it.
 | Decision | Recorded in |
 |---|---|
 | Local development on 7860, not the code on 8000 | [DECISIONS.md](DECISIONS.md), "Local development is documented on 7860" |
-| `NEXT_PUBLIC_*` must be a build argument, never `environment:` | `CLAUDE.md` "Frontend rules"; `frontend/frontend.Dockerfile:15-27`; `docker-compose.yml:48-62`, plus `:66-67` |
+| `NEXT_PUBLIC_*` must be a build argument, never `environment:` | `frontend/CLAUDE.md` "Frontend rules"; `frontend/frontend.Dockerfile:15-27`; `docker-compose.yml:48-62`, plus `:66-67` |
 | Host 8000 mapping to container 7860, rather than 7860 both sides | `README.md`'s `[!IMPORTANT]` block; `docker-compose.yml:29-31` |
 | Volume mounts deleted rather than repointed | `docker-compose.yml:35-39` |
 
