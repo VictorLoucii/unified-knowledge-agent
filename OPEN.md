@@ -481,6 +481,14 @@ above closes coverage by counting log lines, and that is still the only way.
   [00:00<00:00, ...]` line is a load from disk, no download progress appears,
   and the log carries no per-line timestamps, so neither duration can be read
   off it.
+  **A second log fails identically — checked 2026-08-21.** The container that
+  came up for that day's deploy printed `Loading weights: 100%|██████████|
+  103/103 [00:00<00:00, 4994.20it/s]` and carried one header timestamp with
+  nothing per line. *Stated: the advisory session read a log the user pasted;
+  nobody probed the container.* **Two logs checked, neither settles it, and a
+  third will not either — the log format is the obstacle, not the sample.**
+  Isolating this needs a timestamped probe inside the container, or a
+  pre-download step in the Dockerfile that moves the cost somewhere visible.
 - **No question has been put to the Space.** Doing so spends OpenRouter credit,
   so it was deliberately skipped.
 
