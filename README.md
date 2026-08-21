@@ -46,7 +46,7 @@ This system is built for deterministic reliability, performance optimization, an
 * **Drop-in Multi-File Support:** Simply drop `.md` or `.docx` files directly into the `data/` directory. The ingestion pipeline (`backend/core/ingest.py`) will automatically discover and process them upon startup.
 * **Auto-Conversion & Destructive `.docx` Handling:** Any `.docx` files are automatically converted into `.md` format via Pandoc, scrubbed of formatting artifacts, and then **permanently deleted**. Do not expect to find original `.docx` files after a successful ingestion.
 * **Manifest Tracking:** Successfully ingested documents are tracked in `.manifest.json` to prevent duplicate processing.
-* **Continuous Content Refinement:** Existing `.md` files are regularly updated with targeted keywords and contextual enhancements to continuously improve retrieval accuracy and AI Logic synthesis.
+* **Curated Source of Truth:** The `.md` files in `data/` are hand-written and are not tuned for retrieval. When a search misses, the fix goes into the pipeline — chunking in `backend/core/ingest.py`, query expansion and reranking in `backend/core/tools/search.py` — never into the notes.
 
 ### 2. High-Performance Retrieval Engine
 * **Robust Header-Injection Chunking:** Preserves Markdown structure by dynamically prepending parent header contexts (e.g. `## Project Tech Stack`) to **every individual chunk** *after* recursive text splitting. This resolves ChromaDB's native metadata-stripping blind spot and eliminates orphaned context.
