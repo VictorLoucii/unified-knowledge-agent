@@ -54,8 +54,8 @@ This system is built for deterministic reliability, performance optimization, an
 * **Optimized Search Width:** The retriever is configured with $k=40$ child documents per query. `search.py` then merges the results of every expanded query, truncates the combined candidate pool to 50, and reranks that pool down to the 10 documents passed to the model.
 
 ### 3. Unified LLM Architecture & Cost Control
-* **Unified Model Driver (Gemini 2.5 Flash):** Uses `google/gemini-2.5-flash` as the primary, fallback, and triage classifier model. This provides strict tool-calling hygiene (preventing pre-execution text leakage that breaks the HITL UI), ultra-low latency, and maximum token efficiency.
-* **High-Speed Input Classifier:** Triage routing runs on a non-streaming, fast setup of Gemini 2.5 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency.
+* **Model split by job (since 2026-08-22):** `openai/gpt-5-mini` at low reasoning effort drives the agent; `google/gemini-3.6-flash` is the cross-vendor fallback and the triage classifier; `google/gemini-3.5-flash-lite` does query expansion only. GPT-5 Mini was chosen for strict tool-calling hygiene (no pre-execution text leakage that breaks the HITL UI), measured by a streaming probe, and for cost. See [DECISIONS.md](DECISIONS.md), "GPT-5 Mini drives, Gemini 3.6 Flash routes and falls back, Flash Lite only expands".
+* **High-Speed Input Classifier:** Triage routing runs on a non-streaming setup of Gemini 3.6 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency. It must not run on Flash Lite, which marks plain Python questions out of scope (measured, six eval cases).
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
 * **Direct Query Bypass for Search Expansion:** Intercepts searches referencing specific problem IDs to bypass the query expansion LLM entirely, conserving OpenRouter API credits.
 * **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
@@ -149,13 +149,18 @@ This system is built for deterministic reliability, performance optimization, an
 ### Running the Evaluation Suite
 
 Two different models are involved, and they have different defaults. The **agent
-under test** is `google/gemini-2.5-flash` (`backend/core/config.py`). The
+under test** is `openai/gpt-5-mini` (`backend/core/config.py`). The
 **LLM judge that scores the answers** is `deepseek/deepseek-chat`
 (`backend/evals/eval.py`). Run the bare command and you get that pairing:
 
 ```bash
 uv run python -m backend.evals.eval
 ```
+
+On an Apple-silicon Mac add `--concurrency 1`. The default of 10 segfaulted on
+2026-08-22 inside PyTorch's Apple-GPU backend, where the embedding and reranker
+models run; see [OPEN.md](OPEN.md) item 8. Concurrency changes wall-clock time
+only, never a score.
 
 > [!WARNING]
 > **Do not set `MODEL_NAME`.** It is read in three places — the agent, the
