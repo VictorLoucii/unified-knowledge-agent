@@ -59,6 +59,14 @@ hit their target with it.
 **Why `low` and not `minimal`:** the weather probe above. **Why not `medium`:**
 no tool-choice difference on 14 cases, more tokens and latency.
 
+**Also rejected, the same day:** strengthening the `qa_node` prompt with "even
+when you already know the answer from general knowledge" and "never answer a
+technical question without it". Probed on five queries: the four failing Python
+questions already called the search tool under the unchanged prompt, and the
+addition pushed the *weather* query to the search tool. The prompt was left as
+it is. Whoever fixes the weather wording later (OPEN.md item 11) starts from
+that result, not from zero.
+
 ### OpenRouter stays, and cannot be replaced by a Claude Code subscription
 
 **Chosen:** one OpenRouter key and one endpoint for every model call.

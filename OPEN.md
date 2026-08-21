@@ -878,7 +878,10 @@ in that entry:
   Flash Lite (AI Studio rate-limit page, read 2026-08-21), so an eval run spills
   to paid credits almost at once; the OpenAI key is Tier 1, 500 requests per
   minute, and carries the eval. Neither key has "Always use for this provider"
-  on, and that is correct.
+  on, and that is correct. **One trap, hit once:** the OpenAI key was first
+  pasted into the Fallback section of the *Google AI Studio* provider page,
+  where its Test menu offered only Gemini models. A BYOK key lives under the
+  provider that issued it; the page heading says which.
 
 Everything below this line is the record as it stood before the migration, kept
 because it names what was read from where.
@@ -1423,6 +1426,23 @@ defect.
   2026-08-20: `f30ff63:full_evaluation_log.txt` and the copy at `HEAD` both
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
+- **The weather wording in the `qa_node` prompt is ambiguous and still
+  unfixed.** `agents.py:114-123` says "You MUST call `search_knowledge_base`"
+  and "Always call the tool first" before it mentions the weather tool. GPT-5
+  Mini at `minimal` effort followed the words and searched; at `low` it chose
+  the weather tool, and test 94 passes. A first rewording was probed and
+  rejected on 2026-08-22 — see DECISIONS.md, "Also rejected, the same day".
+- **The eval log committed at `f4b9ee1` did not describe the metrics committed
+  beside it.** That `full_evaluation_log.txt` fails tests 2 and 41, two cases,
+  while `latest_run_metrics.json` at the same commit says 90/94, four. They
+  came from different runs. `2c06890` replaced the log with the run that
+  produced the metrics. Do not mine the old log for which cases failed.
+- **`.env.example` names two variables nothing on the request path reads.**
+  `WAQI_API_KEY`: the weather tool at `weather_aqi.py` calls Open-Meteo, which
+  needs no key. `OPENAI_API_KEY`: only `backend/basics.ipynb`. The OpenAI key
+  for the model migration lives in OpenRouter's BYOK page, not in `.env`.
+  `DATABASE_URL` and `LANGCHAIN_API_KEY` are read by `guardrails.py` and
+  `memory.py`, so they stay.
 - **Ingestion file order varies between container starts.** `ingest.py:76` is
   `processed_data_files = set()` and the ingest loop iterates that set. CPython
   randomises `str` hashes per process, so the order changes every run — measured
