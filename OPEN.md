@@ -366,9 +366,11 @@ load.
 
 **Why this may recur rather than being a one-off after a push.** Free
 HuggingFace Spaces sleep when idle and cold-start on the next visit, which would
-put a visitor inside this window regularly. *General knowledge, *not* verified
-for this Space.* If true, it matters most for the case the project exists to
-serve: a recruiter opening the demo cold.
+put a visitor inside this window regularly. **The Space is confirmed
+`cpu-basic` — free tier — read from the HuggingFace API on 2026-08-21, so that
+half of the premise is established.** *The sleep behaviour itself is still
+general knowledge, not verified for this Space.* If it holds, it matters most
+for the case the project exists to serve: a recruiter opening the demo cold.
 
 **The reporting half is fixed — 2026-08-21.** The option recorded here as
 "cheapest honest option, not applied" was applied. `/health` now carries a second
@@ -1376,3 +1378,11 @@ defect.
   2026-08-20: `f30ff63:full_evaluation_log.txt` and the copy at `HEAD` both
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
+- **Ingestion file order varies between container starts.** `ingest.py:76` is
+  `processed_data_files = set()` and the ingest loop iterates that set. CPython
+  randomises `str` hashes per process, so the order changes every run — measured
+  2026-08-21, **four distinct first files in five processes**. Total work is
+  unchanged; only the order is. **Do not compare two container logs line by
+  line, and do not assume start-to-first-batch is a constant.** That assumption
+  is what broke one attempt to estimate the Space's ingest duration from a poll
+  sequence; see item 4.
