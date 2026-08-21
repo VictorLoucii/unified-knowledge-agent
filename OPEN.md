@@ -409,6 +409,44 @@ with existing index.`, which is the early-return path at `ingest.py:109-111`, so
 that branch is the one the observed `done` came from. All four values were then
 driven directly and each was observed, including `not_started` at import time.
 
+**Observed in production, 2026-08-21 — the window itself, caught.** The local run
+above could only reach the early return. The deployed Space took the other
+branch: its clone carries no manifest, so it ingested all 26 files. Polled every
+20-30 s from a local machine — **`ran`**, and the poll bodies are first-hand:
+
+| Local time | `rag_hydrated` | `ingestion_state` | What it shows |
+|---|---|---|---|
+| 14:13:04 | `true` | *absent* | the **old** container, still being routed to |
+| 14:13:25 | **`false`** | `running` | new container up, nothing loaded yet |
+| 14:13:46 | **`true`** | `running` | **the window — the old `/health` would have reported full health here** |
+| 14:22:03 | `true` | `done` | ingestion finished |
+
+**Row three is this section's claim, observed rather than diagnosed.** For
+between **8 m 17 s** and **8 m 38 s** — the flip to `true` fell between two polls
+21 s apart — the Space answered from a partially loaded knowledge base while
+`rag_hydrated` read `true`. `ingestion_state` read `running` for the whole of it.
+The two questions are separated in production, which is what this change was for.
+
+**That span is an observation window, not the ingest duration, and row one is why.**
+At 14:13:04 the old container was still being routed to, so ingestion had already
+been running for some minutes before any row that mentions it. **From these polls
+alone the only sound claim is a floor: the ingest took at least 8 m 38 s.**
+
+**A start timestamp exists and is second-hand twice over.** A container log the
+user pasted to the advisory session carries `===== Application Startup at
+2026-08-21 08:39:12 =====`, which is 14:09:12 local — IST, `+0530`, confirmed on
+the polling machine. That would put the ingest at about **12 m 51 s**, ±30 s for
+the poll band. **I did not read that log; the session that did read a paste
+rather than probe a system, and it says so.** Treat 12 m 51 s as a hypothesis
+with a named source, not as a measurement, and note it also assumes the container
+in the log is the one later polled.
+
+**Item 2's roughly-twenty-minute figure is deliberately left alone.** Both
+numbers above fall under it, but item 2 already flags its own figure as a
+container log read by another session, and one second-hand figure cannot settle
+another. The model download is a first-use cost that nobody has isolated, so
+whether it sits inside any of these numbers is unknown.
+
 **Still a product call, and deliberately not taken: gating answers on
 completion.** `/chat_stream` is untouched and still answers during the window.
 Reporting the state does not close the window — it stops the report being silent
