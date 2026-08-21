@@ -305,11 +305,20 @@ Two behaviours to know before you run ingestion:
 - **A commit that changes a file's line count invalidates every citation to
   it.** `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
   `file:line`. After such a commit, grep all four for that filename and re-check
-  each hit against the file. Commit `247dd15` replaced a 10-line block in
-  `app.py` with a 17-line comment, and **eight citations across two records
-  silently became wrong by exactly 7** — found by accident, weeks later. Leave
-  citations that describe *deleted* code in the past tense alone; those are
-  history and are correct as written.
+  each hit against the file. **That grep is necessary and not sufficient, and it
+  fails in two ways.** Some citations carry no filename at all — `| :102 |` in
+  OPEN.md item 9's route table, and `at :210` in the prose below it — so no grep
+  for the filename finds them; on 2026-08-21 there were 12 such refs into
+  `app.py`, against 44 the filename grep did find. And a range citation is found
+  but half-checked: the grep highlights the start, so an end that moved while the
+  start did not slips past. The `/health` range in OPEN.md failed exactly that
+  way on 2026-08-21 — its start stayed put and its end moved by one — and one
+  session filed it as safe while the other caught it. **Search the bare form
+  separately, and check both ends of every range.** Commit `247dd15` replaced a
+  10-line block in `app.py` with a 17-line comment, and **eight citations across
+  two records silently became wrong by exactly 7** — found by accident, weeks
+  later. Leave citations that describe *deleted* code in the past tense alone;
+  those are history and are correct as written.
 - **A record's evidence must sit at the same level as its claim.** If the claim
   is about what a stage *inside* the pipeline does, output-level evidence cannot
   support it, however many trials it survives. `OPEN.md` item 1 named a
