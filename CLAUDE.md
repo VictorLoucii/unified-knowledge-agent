@@ -69,13 +69,17 @@ Use the bare command. Do **not** set `MODEL_NAME`. It is read in three places �
 `config.py` (the agent under test), `search.py` (the query-expansion model) and
 `eval.py` (the LLM judge) — and setting it silently reassigns the judge, which
 invalidates every cached judgment and makes the run far more expensive. The
-defaults differ: `config.py:49` and `search.py:16` default to
-`google/gemini-2.5-flash`, `eval.py:67` defaults to `deepseek/deepseek-chat`.
+defaults differ: `config.py:49` defaults to `openai/gpt-5-mini`, `search.py:16`
+to `google/gemini-3.5-flash-lite`, `eval.py:67` to `deepseek/deepseek-chat`.
 
 **This also means a model migration belongs in the hardcoded default strings in
 source, never in `MODEL_NAME`.** Setting the variable would swap the judge along
-with the agent. `google/gemini-2.5-flash` is now closed to new users — see
-[OPEN.md](OPEN.md) item 8 before changing any model string.
+with the agent. The 2026-08-22 migration off `google/gemini-2.5-flash` was done
+that way; see [OPEN.md](OPEN.md) item 8 for what it measured. Two findings from
+it bind any later model change: **`fast_llm` must not be `gemini-3.5-flash-lite`**
+— as the scope router it marked six plain Python questions out of scope and cost
+the score three points and a recall case — and **`--concurrency 10` segfaults on
+this Mac** in PyTorch's Apple-GPU backend; run at `--concurrency 1`.
 
 Targeted runs are much cheaper while iterating:
 

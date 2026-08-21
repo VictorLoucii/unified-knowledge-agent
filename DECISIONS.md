@@ -10,7 +10,7 @@ Open work is in [OPEN.md](OPEN.md).
 
 ## Model and provider
 
-### Gemini 2.5 Flash as the unified driver
+### Gemini 2.5 Flash as the unified driver — SUPERSEDED 2026-08-22, see the next entry
 
 **Chosen:** `google/gemini-2.5-flash` via OpenRouter for the agent, the query
 expansion and the fallback model.
@@ -22,6 +22,42 @@ human-in-the-loop approval panel keys off the pause that precedes a tool call,
 so that leading text breaks the handshake and the user sees the agent talking
 about an action it has not been approved for. DeepSeek is still usable for
 evaluation by setting `MODEL_NAME`, but not as the driver.
+
+### GPT-5 Mini drives, Gemini 3.6 Flash routes and falls back, Flash Lite only expands
+
+**Chosen (2026-08-22, `2c06890`):** `openai/gpt-5-mini` with
+`reasoning_effort="low"` for `primary_llm` (`config.py:49`);
+`google/gemini-3.6-flash` for `fallback_llm` (`config.py:60`) and `fast_llm`
+(`config.py:70`); `google/gemini-3.5-flash-lite` for `expansion_llm`
+(`search.py:16`) only. The judge at `eval.py:67` is unchanged.
+
+**Rejected:** `google/gemini-3.6-flash` as the driver; `gemini-3.5-flash-lite`
+as `fast_llm`; `reasoning_effort` of `minimal` or `medium`.
+
+**Why.** Google closed `gemini-2.5-flash` to new users, and every request-path
+string named it (OPEN.md item 8). A 12-call streaming probe with the real tools
+bound and the real `qa_node` prompt showed that neither GPT-5 Mini nor 3.6 Flash
+emits text before its tool call, so the approval-panel constraint above holds
+for both. GPT-5 Mini won on the rest: 0.18% tool-call error against 1.77% on
+the provider pages, listed $0.25/$2.00 against $0.75/$3.75 per 1M, 3.5 s
+against 11 s to the first tool call in the probe (one sample each), and a
+separate $3.80 OpenAI balance that pays for the eval through BYOK. `minimal`
+effort chose the search tool for a weather question; `low` chose the weather
+tool and spent about 60 reasoning tokens.
+
+**Flash Lite is rejected as `fast_llm` by measurement, not by taste.** The scope
+router at `agents.py:40-52` runs on `fast_llm`. With Lite it answered
+`OUT_OF_SCOPE` for tests 46, 58, 59, 60, 93 and `CONVERSATIONAL` for test 42;
+2.5 Flash and 3.6 Flash both answer `IN_SCOPE` on all six. Those cases then
+never reached `qa_node`, called no tool, and scored 87/94 and 33/34. Raising
+GPT-5 Mini to `medium` changed nothing, because the primary was never called.
+With `fast_llm` on 3.6 Flash the suite returned 90/94 and 34/34, identical to
+the committed baseline, with 38/41 and 8/8 on the genuinely exercised cases.
+Lite stays on `expansion_llm` because all 26 cases that reached the search tool
+hit their target with it.
+
+**Why `low` and not `minimal`:** the weather probe above. **Why not `medium`:**
+no tool-choice difference on 14 cases, more tokens and latency.
 
 ### OpenRouter stays, and cannot be replaced by a Claude Code subscription
 
@@ -393,7 +429,7 @@ already, so a future session finding this fall-through should know it was seen
 and left, not missed. The exposure is written up as [OPEN.md](OPEN.md) item 7.
 
 **Not decided:** whether to give `fast_llm` a fallback. It has none —
-`config.py:77` wraps only `primary_llm`.
+`config.py:78` wraps only `primary_llm`.
 
 ### Arize Phoenix over LangSmith
 
@@ -506,7 +542,7 @@ and declined.
 **Why the minimal swap is not enough.** Established while checking the fast-path
 table for that edit: **the vector index is the only path this text takes to a
 reader.** `extract_problem_block` never serves this file — its regex at
-`config.py:176-178` is `^\s*(?:#|//|\*)` and every heading in the file is
+`config.py:177-179` is `^\s*(?:#|//|\*)` and every heading in the file is
 pandoc-escaped as `\#`, giving **0 matches** when run against it. No fast-path
 key concerns tracing either. So a reader gets a *retrieved chunk*, not the
 section.
@@ -519,7 +555,7 @@ either.** The note is the only place that reasoning can reach a reader through
 this system.
 
 **The honest limit.** The bullets help only if they land in the same retrieved
-chunk as the fence. `config.py:113` sets the parent chunk size to 1000 and the
+chunk as the fence. `config.py:114` sets the parent chunk size to 1000 and the
 section runs to roughly 1,600 characters, so they probably do not. Recorded
 rather than resolved.
 
@@ -581,7 +617,7 @@ movement that did not happen. The full explanation is in
 
 ### Changing a fallback model does not oblige an evaluation run
 
-**Chosen (2026-08-18):** a change to `config.py:59` `fallback_llm`, or to any
+**Chosen (2026-08-18):** a change to `config.py:60` `fallback_llm`, or to any
 fallback added later, may be made and committed without running the suite.
 
 **Rejected:** spending roughly $0.11 of a $1.13 balance to confirm a no-op.

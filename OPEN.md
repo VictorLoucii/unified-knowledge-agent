@@ -210,11 +210,13 @@ weights already on disk. Treat that as a floor, not a forecast.
 Space pays it on every container start, in the background thread at `app.py:76`,
 so it never blocks the port bind. **It is not brief.** See item 4.
 
-**The likely cause, read:** `config.py:88` is
+**The likely cause, read:** `config.py:89` is
 `HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")` with **no device pinned**,
 so the library selects the device. The Mac has one to select and the container
-does not. *That the library picks the Mac GPU is general knowledge and is
-unverified; what is read from source is that the code names no device.*
+does not. *That the library picks the Mac GPU was general knowledge and
+unverified until 2026-08-22, when an eval run at `--concurrency 10` segfaulted
+inside PyTorch's MPS backend on a thread named `metal gpu stream` — see item 8.
+The device is now established; the 12x figure's cause is still inferred.*
 
 **Corroboration that the log describes this code.** `ingest.py:124` loops per
 file and `ingest.py:183-187` batches within each file at `BATCH_SIZE = 100`.
@@ -553,7 +555,7 @@ Read from source:
 
 | Path | Reads what | After a `data/` edit |
 |---|---|---|
-| `config.py:171-174` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
+| `config.py:172-175` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
 | The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:32` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
@@ -679,7 +681,11 @@ defect. The comments in `docker-compose.yml` say so at the point of edit.
 ## 7. `fast_llm` has no fallback, and every model in the system is the same model
 
 **Status:** diagnosed from source 2026-08-18 after a live rate-limit incident.
-The silent part is fixed; the exposure itself is not.
+The silent part is fixed. **Since `2c06890` (2026-08-22) the primary's fallback
+is on a different vendor** — `config.py:60` is `google/gemini-3.6-flash` behind
+`openai/gpt-5-mini` — which closes the "same model twice" exposure below.
+`fast_llm` and `expansion_llm` are still wrapped by nothing; that part is open.
+The model table below describes the pre-migration state.
 
 ### What happened
 
@@ -701,11 +707,11 @@ Read from source:
 | Site | Model |
 |---|---|
 | `config.py:49` `primary_llm` | `MODEL_NAME`, defaulting to `google/gemini-2.5-flash` |
-| `config.py:59` `fallback_llm` | `google/gemini-2.5-flash`, hardcoded |
-| `config.py:69` `fast_llm` | `google/gemini-2.5-flash`, hardcoded |
+| `config.py:60` `fallback_llm` | `google/gemini-2.5-flash`, hardcoded |
+| `config.py:70` `fast_llm` | `google/gemini-2.5-flash`, hardcoded |
 | `search.py:16` `expansion_llm` | `MODEL_NAME`, same default |
 
-`config.py:77` is `llm = primary_llm.with_fallbacks([fallback_llm])`. With
+`config.py:78` is `llm = primary_llm.with_fallbacks([fallback_llm])`. With
 `MODEL_NAME` unset — which CLAUDE.md instructs — the fallback asks the same
 provider for the same model that just refused. It protects against a
 per-request error, not a model-level or provider-level outage.
@@ -717,9 +723,9 @@ wording of the error message, not from OpenRouter's documented routing.
 
 ### `fast_llm` is the sharper exposure
 
-`config.py:77` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
+`config.py:78` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
 It makes the first model call on every request and carries the lowest retry
-count of the four, `max_retries=2` at `config.py:74`. **Four call sites** — an
+count of the four, `max_retries=2` at `config.py:75`. **Four call sites** — an
 earlier version of this item said three, having grepped only `backend/core/` and
 missed the one in `app.py`:
 
@@ -772,8 +778,8 @@ $0.30 / $2.50 per million tokens, and the performance charts plot three series:
 Google AI Studio, Google Vertex (Global) and Google Vertex (EU).
 
 *Consequence:* a retry of the same model can land on a different provider, so
-`config.py:77`'s same-model fallback is **not pure decoration**. This lowers the
-priority of the "point `config.py:59` at a different provider" option below —
+`config.py:78`'s same-model fallback is **not pure decoration**. This lowers the
+priority of the "point `config.py:60` at a different provider" option below —
 that option was recorded without knowing the provider count.
 
 *Not settled:* whether OpenRouter fails over between providers **inside** a
@@ -818,7 +824,7 @@ added.
   tool and never touches the approval panel. But this feeds retrieval, so it is
   under the EDD rules. Low value — the current path already produced a correct
   answer.
-- **Point `config.py:59` at a different provider.** **Downgraded 2026-08-18.**
+- **Point `config.py:60` at a different provider.** **Downgraded 2026-08-18.**
   It protects the failure that would break the product, but the multi-provider
   finding above means the existing same-model fallback may already retry against
   a different upstream, and a BYOK key addresses the cause directly. **Taken
@@ -838,15 +844,46 @@ added.
 returns on the first success, and `fallbacks.py:156-161` documents that iterator
 as yielding the runnable and then its fallbacks. A fallback is never reached
 while the primary succeeds, so a passing 94-case run cannot exercise a changed
-fallback and the score cannot move. This holds only for `config.py:59` and the
+fallback and the score cannot move. This holds only for `config.py:60` and the
 fallbacks above. Changing `config.py:49` changes the model under test and does
 require a run.
 
 ---
 
-## 8. The whole system names one model, and that model is closing to new users
+## 8. The whole system names one model, and that model is closing to new users — DONE 2026-08-22
 
-**Status:** documented 2026-08-18. **No model choice has been made. No model
+**Status: migrated in `2c06890`, measured at the committed baseline.** Primary
+`openai/gpt-5-mini` (`reasoning_effort="low"`), fallback and `fast_llm`
+`google/gemini-3.6-flash`, `expansion_llm` `google/gemini-3.5-flash-lite`,
+judge unchanged. Full suite at `--concurrency 1`: 90/94, 34/34; 38/41 and 8/8
+on the genuinely exercised cases; zero judge failures. The reasoning is in
+[DECISIONS.md](DECISIONS.md), "GPT-5 Mini drives, Gemini 3.6 Flash routes and
+falls back, Flash Lite only expands". Two things this item found that are not
+in that entry:
+
+- **The first run at `--concurrency 10` segfaulted.** macOS crash report
+  `python3.12-2026-08-22-004938.ips`: faulting thread `metal gpu stream`, inside
+  `libtorch_cpu.dylib … mps::MetalShaderLibrary::exec_unary_kernel` →
+  `clamp_min_scalar_kernel_mps`. The embedding and reranker models run on the
+  Apple GPU and ten cases reached them from separate threads at once. Not
+  caused by the model strings; likely exposed by GPT-5 Mini answering faster
+  than 2.5 Flash did, so more cases overlapped — that last clause is a guess.
+  Recorded, not fixed. Whether the old model would crash at 10 today was not
+  re-run. See item 2 for what this settles about the device.
+- **`generate_eval_dataset.py:41` still names `gemini-2.5-flash`.** Offline
+  script, not on the request path, left deliberately.
+- **The BYOK picture after the migration.** The OpenRouter BYOK fee is zero
+  below $25,000 of list-price inference a month (dashboard tooltip, read). The
+  Google free-tier key serves 20 requests per day for 3.6 Flash and 500 for
+  Flash Lite (AI Studio rate-limit page, read 2026-08-21), so an eval run spills
+  to paid credits almost at once; the OpenAI key is Tier 1, 500 requests per
+  minute, and carries the eval. Neither key has "Always use for this provider"
+  on, and that is correct.
+
+Everything below this line is the record as it stood before the migration, kept
+because it names what was read from where.
+
+**Status (2026-08-18):** documented. **No model choice has been made. No model
 string has been changed. No migration has been started.** This item exists so
 the next session does not rediscover any of it.
 
@@ -905,8 +942,8 @@ occurrences, and there are no others — checked across `backend/`,
 | Site | Form |
 |---|---|
 | `config.py:49` `primary_llm` | `MODEL_NAME` env var, default `google/gemini-2.5-flash` |
-| `config.py:59` `fallback_llm` | hardcoded |
-| `config.py:69` `fast_llm` | hardcoded |
+| `config.py:60` `fallback_llm` | hardcoded |
+| `config.py:70` `fast_llm` | hardcoded |
 | `search.py:16` `expansion_llm` | `MODEL_NAME` env var, same default |
 | `generate_eval_dataset.py:41` | hardcoded. Offline script, not on the request path. |
 
@@ -1096,7 +1133,7 @@ only what routes through `chat.py`.
 
 ### The key itself is not exposed
 
-**Read.** `config.py:50`, `:60` and `:70` each pass
+**Read.** `config.py:50`, `:61` and `:71` each pass
 `openai_api_key=os.getenv("OPENROUTER_API_KEY")`. The key stays in the container
 and never reaches a browser. The exposure is not key theft — it is that public
 routes make model calls on behalf of whoever asks.
