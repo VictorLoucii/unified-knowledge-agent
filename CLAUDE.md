@@ -217,9 +217,17 @@ nothing the user sees — the fix is in the Python file instead. See
 
 **An approved edit reaches the deployed Space by commit and push alone.** The
 Space ships no manifest since `003496a`, so it re-ingests every file on each
-container start. No manual rebuild is needed there. **The local index is a
-different matter** — it never updates, and `eval.py` measures against it. See
-[OPEN.md](OPEN.md) item 2.
+container start. No manual rebuild is needed there.
+
+**That cuts both ways, and the cost is paid by the live demo.** Any push restarts
+the container, so **any** push — including one that touches no application code —
+makes the Space re-ingest all 26 files. Measured 2026-08-21: two documentation
+commits left it answering from a partially loaded knowledge base for at least
+**7 m 57 s**, and `/health` reported `rag_hydrated: true` for **7 m 46 s** of
+that. See [OPEN.md](OPEN.md) item 4.
+
+**The local index is a different matter** — it never updates, and `eval.py`
+measures against it. See [OPEN.md](OPEN.md) item 2.
 
 ### `data/` is Git LFS — `git diff` will not show you the change
 

@@ -421,6 +421,16 @@ branch: its clone carries no manifest, so it ingested all 26 files. Polled every
 | 14:13:46 | **`true`** | `running` | **the window — the old `/health` would have reported full health here** |
 | 14:22:03 | `true` | `done` | ingestion finished |
 
+**Reproduced on a second deployment, 36 minutes later.** A documentation-only
+push restarted the Space and the same sequence ran again, polled at 10 s instead
+of 20-30 s: `running` with `rag_hydrated: false` at 14:49:19, `rag_hydrated:
+true` at 14:49:30, `done` at 14:57:16. **Window 7 m 46 s, band ±11 s; floor
+7 m 57 s.** Two observations on separate deployments, floors 41 s apart, so this
+is a reproduced result rather than a single sighting. **Run 2 has no defensible
+ingest duration** — no container start was captured for it, and inferring one
+from run 1's mirror-to-start gap rests on a single observation of a quantity that
+varies. Only its floor and its window are quoted.
+
 **Row three is this section's claim, observed rather than diagnosed.** For
 between **8 m 17 s** and **8 m 38 s** — the flip to `true` fell between two polls
 21 s apart — the Space answered from a partially loaded knowledge base while
