@@ -13,7 +13,7 @@ def get_reranker():
     return _reranker
 
 expansion_llm = ChatOpenAI(
-    model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
+    model=os.getenv("MODEL_NAME", "google/gemini-3.5-flash-lite"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,

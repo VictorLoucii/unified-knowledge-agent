@@ -46,17 +46,18 @@ except Exception as e:
 is_eval_mode = os.getenv("EVAL_MODE", "false").lower() == "true"
 
 primary_llm = ChatOpenAI(
-    model=os.getenv("MODEL_NAME", "google/gemini-2.5-flash"),
+    model=os.getenv("MODEL_NAME", "openai/gpt-5-mini"),
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
     streaming=not is_eval_mode,
     request_timeout=45,
     max_retries=2,  # Reduced so it fails over faster
+    reasoning_effort="low",  # probe 2026-08-22: "minimal" picks the wrong tool for weather; "low" spends ~60 reasoning tokens
 )
 
 fallback_llm = ChatOpenAI(
-    model="google/gemini-2.5-flash",
+    model="google/gemini-3.6-flash",
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
@@ -66,7 +67,7 @@ fallback_llm = ChatOpenAI(
 )
 
 fast_llm = ChatOpenAI(
-    model="google/gemini-2.5-flash",
+    model="google/gemini-3.6-flash",  # NOT flash-lite: as the scope router it marks plain Python questions OUT_OF_SCOPE (6 eval failures, 2026-08-22)
     openai_api_key=os.getenv("OPENROUTER_API_KEY"),
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
