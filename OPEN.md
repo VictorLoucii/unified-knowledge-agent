@@ -216,8 +216,8 @@ so the library selects the device. The Mac has one to select and the container
 does not. *That the library picks the Mac GPU is general knowledge and is
 unverified; what is read from source is that the code names no device.*
 
-**Corroboration that the log describes this code.** `ingest.py:106` loops per
-file and `ingest.py:165-169` batches within each file at `BATCH_SIZE = 100`.
+**Corroboration that the log describes this code.** `ingest.py:124` loops per
+file and `ingest.py:183-187` batches within each file at `BATCH_SIZE = 100`.
 17,958 children over 26 files, each file rounding up, gives between 180 and 205
 batches. The log's 194 sits inside that range.
 
@@ -293,7 +293,7 @@ only for the small residue below. The decision and the full mechanism are in
 one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
 files in the background thread at `app.py:76`.
 
-**How it was confirmed, at zero OpenRouter cost.** `app.py:102-119` exposes
+**How it was confirmed, at zero OpenRouter cost.** `app.py:102-120` exposes
 `/health`, which reports `rag_hydrated` by testing whether the docstore holds
 any key (`app.py:110`). An empty docstore was the entire bug, so this flag was
 `false` before.
@@ -343,7 +343,8 @@ file.** Do not treat item 2's local figures as a baseline for the Space.
 
 ### The Space reports healthy while its knowledge base is still loading
 
-**Found 2026-08-19. Diagnosed from source. Nothing changed.** This is a
+**Found 2026-08-19. Diagnosed from source. The reporting half was fixed
+2026-08-21; the window itself is unchanged.** This is a
 *different fact* from the residue closed above, which was about proving all 26
 files eventually load. This one is about the window before they do.
 
@@ -369,15 +370,55 @@ put a visitor inside this window regularly. *General knowledge, *not* verified
 for this Space.* If true, it matters most for the case the project exists to
 serve: a recruiter opening the demo cold.
 
-**Not fixed, and not obviously a one-liner.** Making `/health` report true coverage
-needs a count the docstore does not expose, and gating answers on completion
-would trade a wrong answer for a twenty-minute outage. Both are product calls.
+**The reporting half is fixed — 2026-08-21.** The option recorded here as
+"cheapest honest option, not applied" was applied. `/health` now carries a second
+key, `ingestion_state`, so the two questions stop sharing one answer:
 
-**Cheapest honest option, not applied:** have `initialize_rag` set a module-level
-flag when it finishes and report that alongside `rag_hydrated`, so the two
-questions — "is anything loaded" and "is loading finished" — stop sharing one
-answer. Purely additive. `CLAUDE.md` forbids changing application logic unless
-asked.
+| Key | Question it answers | How |
+|---|---|---|
+| `rag_hydrated` | is **anything** loaded | `next(store.yield_keys(), None)`, `app.py:110` |
+| `ingestion_state` | has loading **finished** | module state in `ingest.py`, read through `get_ingestion_state()` |
+
+`rag_hydrated` keeps its exact former meaning and is still computed at
+`app.py:110`. Nothing that was already in the response changed; the key is
+purely additive.
+
+**`ingestion_state` takes four values, not two.** `not_started`, `running`,
+`done`, `failed`. The rejected boolean, and why the four-value set won, are in
+[DECISIONS.md](DECISIONS.md), "`/health` reports ingestion as four states, not a
+finished boolean".
+
+**`initialize_rag` had three exits, not the two this item assumed.** Besides the
+manifest early return and the fall-off at the end, `get_data_file_paths()` can
+raise `FileNotFoundError`, which was caught and returned — a **failure** that a
+"finished" boolean would have reported as success. That exit now returns
+`"failed"`. A fourth path, an exception escaping the body, is caught by the
+public wrapper and also reports `"failed"`; before this change it vanished into
+an `asyncio` Task that nothing retrieves.
+
+**Measured, not reasoned — 2026-08-21.** A local `uvicorn backend.app:app --port
+7860` against a complete 26-file manifest returned:
+
+```json
+{"status":"online","version":"6.5-docs","rag_hydrated":true,
+ "ingestion_state":"done","provider":"Hugging Face Spaces"}
+```
+
+The startup log printed `✅ Vector Database & DocStore up to date. Proceeding
+with existing index.`, which is the early-return path at `ingest.py:109-111`, so
+that branch is the one the observed `done` came from. All four values were then
+driven directly and each was observed, including `not_started` at import time.
+
+**Still a product call, and deliberately not taken: gating answers on
+completion.** `/chat_stream` is untouched and still answers during the window.
+Reporting the state does not close the window — it stops the report being silent
+about it, and leaves a caller free to poll. Trading a wrong answer for a
+twenty-minute outage is the same trade it always was, and it is not ours to make.
+
+**Also still open: `/health` exposes no document count.** True coverage still
+needs a count the docstore does not expose, so `ingestion_state: "done"` means
+"the ingestion function returned", not "all 26 files are present". The residue
+above closes coverage by counting log lines, and that is still the only way.
 
 ### Still genuinely open
 
@@ -394,8 +435,8 @@ asked.
   so it was deliberately skipped.
 
 **One latent trap this route introduces.** If a `.docx` is ever added to
-`data/`, the container will try to convert it with pandoc (`ingest.py:66`),
-which is **not installed in the image**. `ingest.py:80-81` catches the error and
+`data/`, the container will try to convert it with pandoc (`ingest.py:84`),
+which is **not installed in the image**. `ingest.py:98-99` catches the error and
 skips the file, so it degrades rather than crashes, but that document would
 silently never be ingested in the Space. There are no `.docx` files in `data/`
 today — checked 2026-08-18, count zero, none tracked.
@@ -629,7 +670,7 @@ missed the one in `app.py`:
 | `chat.py:119` triage | `chat.py:154-155` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
 | `agents.py:140` conversational | No local handler. Propagates to `chat.py:289-296`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
-| `app.py:161` `/refine_transcript` | `app.py:166-168` logs and returns the raw transcript unchanged. Graceful. |
+| `app.py:162` `/refine_transcript` | `app.py:167-169` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
 added the router log. Re-grep rather than trusting a line number in this file.
@@ -869,7 +910,7 @@ compatibility signal anyone has, and its cost is unknown.
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
    work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:119` and
-   `app.py:161` — **read from source**. None of them calls a tool, so none is
+   `app.py:162` — **read from source**. None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
    model with the agent that does tool calls and formatted answers. All four
    currently use one model, which is why this reads as a single decision.
@@ -946,18 +987,18 @@ caller.**
 
 | Route | Line | Reaches a model | Notes |
 |---|---|---|---|
-| `GET /health` | :102 | no | Reports `rag_hydrated`. Harmless. |
-| `POST /chat_stream` | :127 | **yes** | Runs the full graph. **Guarded — see below.** |
-| `POST /refine_transcript` | :152 | **yes** | `fast_llm.ainvoke` at :161. **Length cap only**, `app.py:150`, 8,000 characters. No guardrail, no cache. |
-| `GET /` | :172 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :184 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
-| `GET /history` | :209 | no | Lists **every** thread id and title, with `limit`/`offset`. |
-| `GET /history/{thread_id}` | :222 | no | Full message content of any conversation. |
-| `DELETE /history/{thread_id}` | :252 | no | Deletes all data for that thread. |
+| `GET /health` | :102 | no | Reports `rag_hydrated` and `ingestion_state`. Harmless. |
+| `POST /chat_stream` | :128 | **yes** | Runs the full graph. **Guarded — see below.** |
+| `POST /refine_transcript` | :153 | **yes** | `fast_llm.ainvoke` at :162. **Length cap only**, `app.py:151`, 8,000 characters. No guardrail, no cache. |
+| `GET /` | :173 | no | Serves `static/index.html` if present. |
+| `POST /chat_approve` | :185 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
+| `GET /history` | :210 | no | Lists **every** thread id and title, with `limit`/`offset`. |
+| `GET /history/{thread_id}` | :223 | no | Full message content of any conversation. |
+| `DELETE /history/{thread_id}` | :253 | no | Deletes all data for that thread. |
 
 **The three `/history` routes chain, and that is the data exposure.** `/history`
-at :209 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
-at :222 returns the messages; `DELETE /history/{id}` at :252 removes them. The
+at :210 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
+at :223 returns the messages; `DELETE /history/{id}` at :253 removes them. The
 stored conversations contain retrieved fragments of the personal knowledge base,
 because that is what the agent answers with.
 
@@ -980,13 +1021,13 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 - The fast-path table intercepts 53 known questions before any model call.
   *(Taken from CLAUDE.md as a record; the count is not re-derived here.)*
 
-`/refine_transcript` at `app.py:152-168` had **none** of them. No guardrail, no
-length check, no cache. `app.py:149-150` was
+`/refine_transcript` at `app.py:153-169` had **none** of them. No guardrail, no
+length check, no cache. `app.py:150-151` was
 `class RefineRequest(BaseModel): transcript: str` — **no maximum length**. Every
 call reached the model. It was simultaneously the cheapest route to abuse and the
 only one with no brakes.
 
-**A length cap was added 2026-08-20.** `app.py:150` is now
+**A length cap was added 2026-08-20.** `app.py:151` is now
 `transcript: str = Field(..., max_length=8000)`. It bounds the cost of one model
 call and nothing else. There is still no guardrail and no cache on this route, so
 the asymmetry with `/chat_stream` stands.
@@ -1055,7 +1096,7 @@ exactly the route names the scanner was missing. **Closed 2026-08-20 by option
 **(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
 next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**(b) A length cap on `RefineRequest.transcript`, `app.py:149-150`. — APPLIED
+**(b) A length cap on `RefineRequest.transcript`, `app.py:150-151`. — APPLIED
 2026-08-20.** One line, purely additive, breaks no caller. Bounds the cost of one
 model call; does not stop abuse. The value is **8,000** characters. It is not the
 `1000` this option used to recommend for symmetry with `guardrails.py:13` — that
@@ -1112,7 +1153,7 @@ this section answers.
    `app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)`.
    **Measured:** `/openapi.json`, `/docs` and `/redoc` each return **404**,
    requested against the real `app` object.
-2. **`app.py:150`** now reads `transcript: str = Field(..., max_length=8000)`,
+2. **`app.py:151`** now reads `transcript: str = Field(..., max_length=8000)`,
    with `Field` added to the `pydantic` import already on `app.py:4`.
    **Measured:** a POST of 8,001 characters returns **422** with
    `string_too_long` and carries no `refined_transcript` key; 8,000 characters

@@ -253,7 +253,7 @@ things follow, and both have already caught a session out.
 - **Do not commit `data/.manifest.json`.** It is gitignored on purpose since
   2026-08-18. Tracking it shipped a manifest naming all 26 files to the
   HuggingFace Space, which has no vector index of its own, so `initialize_rag`
-  took the early return at `ingest.py:91-93` and the deployed product served an
+  took the early return at `ingest.py:109-111` and the deployed product served an
   empty database in silence. The file must stay on your disk — local Docker
   builds still copy it — and out of every commit. See
   [DECISIONS.md](DECISIONS.md), "The Space ingests at startup".

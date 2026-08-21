@@ -247,6 +247,61 @@ model download time, and whether all 26 files complete rather than merely
 start — `rag_hydrated` proves "at least one document", and nothing exposes a
 count.
 
+### `/health` reports ingestion as four states, not a finished boolean
+
+**Chosen (2026-08-21):** `/health` gains one key, `ingestion_state`, taking the
+string values `not_started`, `running`, `done` or `failed`. `rag_hydrated` keeps
+its exact former meaning and is still computed at `app.py:110`. The key is
+purely additive; nothing already in the response changed.
+
+**Rejected: a boolean `ingestion_finished`.** Its case was not weak. One key, one
+meaning, no vocabulary a caller must string-match against and no value anyone
+can later rename. It is also exactly what the two exits named in the task can
+honestly express.
+
+**What refuted it was reading the function, not preferring richness.**
+`initialize_rag` had **three** exits, not two. `get_data_file_paths()` raises
+`FileNotFoundError`, which the function caught, printed and returned from. That
+is a **failure**: nothing was ingested and nothing ever will be for that process.
+A boolean has one word for it and that word is `true`, so the boolean would have
+reported a dead ingestion as a finished one. A fourth path — an exception
+escaping the body — was worse still: `app.py` launches the work with
+`asyncio.create_task(asyncio.to_thread(initialize_rag))` and keeps no reference,
+so the exception lands on a Task nobody retrieves and both named exits are
+skipped. A flag written only at those two points stays at its pre-completion
+value for the life of the process.
+
+**Argued from what a caller does, which is the test that settled it:**
+
+| Value | What a caller does |
+|---|---|
+| `not_started` | keeps waiting — and if it never changes, the task was never dispatched |
+| `running` | keeps waiting |
+| `done` | stops waiting |
+| `failed` | stops waiting **and reports an error** |
+
+`failed` is the value that changes caller behaviour most, and it is the one the
+boolean cannot express. Without it a caller polls forever against a container
+where ingestion died — the same silent-failure shape as the bug in
+[OPEN.md](OPEN.md) item 4, moved one layer out.
+
+**Two implementation choices that follow from the decision, not from taste.**
+
+1. **A getter, not an exported name.** `app.py` calls `get_ingestion_state()`.
+   `from backend.core.ingest import _ingestion_state` would bind the string at
+   import time and never see an update, which would have shipped a key frozen at
+   `not_started` for ever.
+2. **A thin public wrapper over the existing body.** `initialize_rag` keeps its
+   name — `app.py` and several records cite it — and now sets `running`, calls
+   the unchanged body as `_run_ingestion`, and catches `Exception` to report
+   `failed`. Wrapping avoided re-indenting roughly 130 unchanged lines, which
+   would have moved every citation into the file for no reason.
+
+**What this does not do.** It does not gate any route on completion, and it does
+not count documents. `ingestion_state: "done"` means the ingestion function
+returned, not that all 26 files are present. Both remain open in
+[OPEN.md](OPEN.md) item 4.
+
 ### Local development is documented on 7860, and the port is not ours to pick
 
 **Chosen (2026-08-19):** move `README.md` and `CLAUDE.md` to
@@ -266,7 +321,7 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:269`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:270`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
 `search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
@@ -485,7 +540,7 @@ while letting the environment win.
 
 ### The refine cap is 8,000 characters, not 1,000
 
-**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:150`.
+**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:151`.
 
 **Rejected:** `1000`, matching the message cap at `guardrails.py:13`, so the two
 routes would read consistently.

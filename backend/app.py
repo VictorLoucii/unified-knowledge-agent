@@ -22,7 +22,7 @@ import asyncio
 # nothing listening, so every request paid it. See DECISIONS.md,
 # "batch=True is a requirement, not a tuning knob".
 
-from backend.core.ingest import initialize_rag
+from backend.core.ingest import initialize_rag, get_ingestion_state
 from backend.core.chat import generate_chat_responses, resume_graph_stream
 from backend.core.config import store
 
@@ -115,6 +115,7 @@ async def health_check():
         "status": "online",
         "version": "6.5-docs",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": is_hydrated,
+        "ingestion_state": get_ingestion_state(),
         "provider": "Hugging Face Spaces",
     }
 

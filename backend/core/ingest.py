@@ -36,7 +36,25 @@ def save_manifest(manifest: dict):
     with open(manifest_path, "w", encoding="utf-8") as f:
         json.dump(manifest, f, indent=4)
 
-def initialize_rag():
+# ==========================================
+# INGESTION STATE
+# ==========================================
+# `app.py` starts ingestion on a background thread and nothing awaits it, so
+# `rag_hydrated` answers "is anything loaded" and cannot answer "has loading
+# finished". This module-level state answers the second question.
+#
+# Read it through get_ingestion_state(), never by importing the name directly:
+# `from backend.core.ingest import _ingestion_state` binds the value at import
+# time and would never see an update.
+_ingestion_state = "not_started"
+
+
+def get_ingestion_state() -> str:
+    """How far initialize_rag has got: not_started, running, done or failed."""
+    return _ingestion_state
+
+
+def _run_ingestion() -> str:
     print("🧠 Checking Vector Database state...")
     manifest = load_manifest()
     
@@ -53,7 +71,7 @@ def initialize_rag():
         data_files = get_data_file_paths()
     except FileNotFoundError as e:
         print(f"🚨 ERROR: {e}")
-        return
+        return "failed"
 
     processed_data_files = set()
     for data_file in data_files:
@@ -90,7 +108,7 @@ def initialize_rag():
             
     if not files_to_ingest:
         print("✅ Vector Database & DocStore up to date. Proceeding with existing index.")
-        return
+        return "done"
         
     print(f"⚠️ Vector Database missing {len(files_to_ingest)} files. Initiating Incremental Auto-Ingestion...")
 
@@ -175,3 +193,21 @@ def initialize_rag():
         save_manifest(manifest)
 
     print("✅ Auto-Ingestion complete. The Agent's memory is hydrated.")
+    return "done"
+
+
+def initialize_rag():
+    """Run ingestion and publish its outcome for /health to report.
+
+    Never raises. `app.py` launches this on a background thread that nothing
+    awaits, so an exception escaping here would be swallowed by an unretrieved
+    asyncio Task and would leave the state stuck at "running" for the life of
+    the process.
+    """
+    global _ingestion_state
+    _ingestion_state = "running"
+    try:
+        _ingestion_state = _run_ingestion()
+    except Exception as e:
+        _ingestion_state = "failed"
+        print(f"🚨 Auto-Ingestion failed: {e}")
