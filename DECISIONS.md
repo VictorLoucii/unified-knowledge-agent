@@ -889,11 +889,11 @@ Every measurement, date and hash from the old bullet, and its single home now:
 | Item | Now |
 |---|---|
 | bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:326` |
-| their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:28-29` |
+| their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:39-40` |
 | 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:326-327` |
 | the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:328-329` |
 | `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:330-332` |
-| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:332-333` and `SKILL.md:35-37` |
+| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:332-333` and `SKILL.md:46-48` |
 
 `OPEN.md:729` cited `CLAUDE.md` "Frontend rules" by title and now names
 `frontend/CLAUDE.md`. The other four title references into the root

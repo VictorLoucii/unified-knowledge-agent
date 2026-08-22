@@ -24,6 +24,17 @@ For every file whose line count the commit changed:
 1. **Grep the four records for the filename.** `grep -n "<file>:[0-9]" CLAUDE.md
    DECISIONS.md OPEN.md README.md`. Open each hit and re-check the cited line
    against the file as it is now.
+   **Read the path on every hit — a basename is not a file.** That grep for
+   `CLAUDE.md` also returns `frontend/CLAUDE.md:1-21`, a 23-line file, twice.
+   The prefix is invisible to the pattern, and the instruction above says to
+   check the hit against "the file as it is now", which is exactly the question
+   the prefix answers. A sweeper who misses it opens root `CLAUDE.md` at 1-21,
+   finds the title instead of "## Frontend rules", and **corrects a citation
+   that was already right** — a wrong fix, not a missed one. Neither step 4 nor
+   step 5 catches this: the citation is not past-tense, and a sweeper who has
+   already mis-identified the file has no reason to read the frame. Do not
+   anchor the pattern to a path to fix this; that would miss a legitimate bare
+   citation written with different spacing. Read the path instead.
 2. **Search the bare form separately.** Some citations carry no filename — a
    table cell such as `| :102 |` or prose such as `at :210` (OPEN.md item 9's
    route table and the prose below it are where these hide). Grep for `:[0-9]`

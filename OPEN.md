@@ -278,7 +278,7 @@ the next word as the id, so `### **Problem Statement**` yields the id
   exactly one junk id (`No`) against `search.py`'s 30 fake ids over 57
   occurrences. Only the search tool *truncates*. **But "returns the full block
   correctly" is false**, and in the opposite direction — see item 12, where the
-  `Problem N` fast path returns 867,756 characters for one id because the file
+  `Problem N` fast path returns 867,746 characters for one id because the file
   it picks holds no later header to stop at. The user-visible symptom is that
   the same question can return a complete answer one way and a stub the other,
   and for `Problem 42` it returns neither.
@@ -1522,11 +1522,11 @@ defect.
 
 ---
 
-## 12. `Problem 42` returns 867,756 characters to the browser
+## 12. `Problem 42` returns 867,746 characters to the browser
 
 **Status 2026-08-22: measured, live in production, not fixed. No code changed.**
 
-Ask the deployed agent "tell me about Problem 42" and it answers with 867,756
+Ask the deployed agent "tell me about Problem 42" and it answers with 867,746
 characters. Measured by awaiting `route_query` directly; no model call is
 involved on this path.
 
@@ -1545,6 +1545,19 @@ The mechanism, in order, all `read` at `7a42773`:
    length cap on this path.** The only `max_length=8000` in the backend is on
    `/refine_transcript` (`app.py:151`), a different route — see item 9.
 
+**Corrected 2026-08-22, after the commit that recorded it.** This item first
+said 867,756. That is the raw file slice from the header to EOF.
+`config.py:192` then calls `.strip()` (-1), `config.py:194-200` replaces the
+27-character source header with the 16-character normalised one (-11), and
+`config.py:202` appends `\n\n<END OF PROBLEM>` (+18). What the user receives is
+**867,746**, measured three ways — `extract_problem_block("42")`,
+`route_query(...)["fast_path_response"]`, and the advisor session's independent
+reimplementation, all agreeing. **The subject line of commit `119e256` still
+carries 867,756 and cannot be corrected**, because it is pushed and force-pushing
+is denied in this repository. The trap is worth naming: two probes were run in
+the same session, one measuring the function's output and one the raw slice, and
+the raw figure is the one that reached the record.
+
 **The same query against the other file would have returned 3,346 characters**,
 where `Problem 42` is header 43 of 117 and the next header stops it. A 260-fold
 difference decided by filesystem order.
@@ -1559,7 +1572,7 @@ a user typing the question.
 `backend/core/`, which needs its own task:
 
 - sort `get_data_file_paths()` so the choice is at least deterministic — makes
-  the result stable, not correct, and would still return 867,756 characters;
+  the result stable, not correct, and would still return 867,746 characters;
 - cap the fast-path response the way `app.py:151` caps `/refine_transcript`;
 - end a block at the next heading of any level rather than only at the next
   `Problem N`, which is the actual cause and the largest change.
