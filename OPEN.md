@@ -272,11 +272,16 @@ the next word as the id, so `### **Problem Statement**` yields the id
 - **It truncates blocks.** A block runs from one match to the next, so a
   sub-heading inside a problem ends it early. Problem 12 is cut from 2,806
   characters to 123 — a 96% loss — through the search tool.
-- **The scope is narrower than it first appears.** `config.py` uses a stricter
-  regex that does not misfire, so the `Problem N` fast path returns the full
-  block correctly. Only the search tool truncates. The user-visible symptom is
-  that the same question can return a complete answer one way and a stub the
-  other.
+- **The scope is narrower than it first appears, but not as narrow as this
+  entry claimed until 2026-08-22.** `config.py` uses a stricter regex, and it
+  is much cleaner: over `data/` it yields 118 headers and 116 distinct ids, with
+  exactly one junk id (`No`) against `search.py`'s 30 fake ids over 57
+  occurrences. Only the search tool *truncates*. **But "returns the full block
+  correctly" is false**, and in the opposite direction — see item 12, where the
+  `Problem N` fast path returns 867,756 characters for one id because the file
+  it picks holds no later header to stop at. The user-visible symptom is that
+  the same question can return a complete answer one way and a stub the other,
+  and for `Problem 42` it returns neither.
 
 **Not tried:** any fix. Requiring the captured group to be numeric, or
 requiring `problem` to be followed by a digit, would both work, but every one
@@ -627,6 +632,18 @@ against something they never claimed to equal.
    tiers its verdicts". On the day it was added it reported 3 identical, 17
    differing only in the header and/or the marker, 5 not copies and 1 with no
    live block, and exited 1 on that last entry alone.
+
+   **Its verdict can become machine-dependent, and it is not today.**
+   `config.py:149` iterates `os.listdir` with no `sorted()` and `config.py:173`
+   returns on the first file holding a matching header, so "the live block" for
+   an id is whichever file the filesystem lists first. Measured 2026-08-22
+   across the 26 files: 118 problem headers, 116 distinct ids, with `42` in two
+   files and `26` twice inside `NEXTIER_Internship_Bugs.md`. **Neither is among
+   the 26 `target_id`s, so no verdict depends on the order.** It becomes live
+   the moment a table entry is given a colliding id, or a duplicate header is
+   added for one of the 26. Count both axes when re-checking: counting distinct
+   *filenames* alone misses `26`, and that is how it was missed the first time.
+   The same mechanism is already live in the product — item 12.
 
 `data/` is currently clean — `git status --porcelain --untracked-files=all
 data/` is empty, 39 files tracked, checked 2026-08-18. See item 2 for what this
@@ -1455,6 +1472,16 @@ defect.
   `.venv`. Gitignoring does not help. And `--force` skips every guard and then
   ends with `git reset --hard` (`reset = not is_bare`), which would discard all
   uncommitted tracked changes. Operate on a fresh clone instead.
+- **One fast-path key is the agent's own refusal sentence.**
+  `FAST_PATH_INTERCEPTS` holds the key `"I'm sorry, but that information is not
+  available in my knowledge base."` with `target_id: 1`. `semantic_router.py:9`
+  matches a key as a case-insensitive *substring of the user's query*, so this
+  one fires only if someone pastes the agent's own refusal back at it — and then
+  returns a 246-character answer about React Native. Found 2026-08-22 while
+  building `check_fast_path.py`, which reports it as NOT_A_COPY. Not repaired:
+  `fast_path_routes.py` strings are what 53 evaluation cases return, so the file
+  is under the evaluation gate.
+
 - **The evaluation never exercises `chat.py`.** `eval.py` invokes the compiled
   graph directly, so the input guardrail, the output masking and the semantic
   cache are all untested by the suite.
@@ -1492,3 +1519,52 @@ defect.
   line, and do not assume start-to-first-batch is a constant.** That assumption
   is what broke one attempt to estimate the Space's ingest duration from a poll
   sequence; see item 4.
+
+---
+
+## 12. `Problem 42` returns 867,756 characters to the browser
+
+**Status 2026-08-22: measured, live in production, not fixed. No code changed.**
+
+Ask the deployed agent "tell me about Problem 42" and it answers with 867,756
+characters. Measured by awaiting `route_query` directly; no model call is
+involved on this path.
+
+The mechanism, in order, all `read` at `7a42773`:
+
+1. `semantic_router.py:18` matches `problem\s*:?\s*([A-Za-z0-9_]+)` in any
+   query that no table key matched, and calls `extract_problem_block`.
+2. `config.py:149` iterates `os.listdir` with **no `sorted()`**, and
+   `config.py:173` returns on the **first** file holding a matching header.
+   Two files hold a `Problem 42` header; `Agentic_AI_Engineer.md` is at listdir
+   position 0 and `NEXTIER_Internship_Bugs.md` at position 13, so the first wins.
+3. `config.py:187-191` ends a block at the **next** header, or at end of file
+   when there is none. `Agentic_AI_Engineer.md` is 1,271,338 characters and
+   holds **exactly one** problem header — `Problem 42`. So the block runs to EOF.
+4. `agents.py:95` puts that string into an `AIMessage` unchanged. **There is no
+   length cap on this path.** The only `max_length=8000` in the backend is on
+   `/refine_transcript` (`app.py:151`), a different route — see item 9.
+
+**The same query against the other file would have returned 3,346 characters**,
+where `Problem 42` is header 43 of 117 and the next header stops it. A 260-fold
+difference decided by filesystem order.
+
+**Why nobody noticed.** `42` is not one of the 26 `target_id`s in
+`FAST_PATH_INTERCEPTS`, and the evaluation dataset does not ask for it, so no
+test on either path touches it. `check_fast_path.py` does not cover it either —
+it only walks entries that carry a `target_id`. The defect is reachable only by
+a user typing the question.
+
+**Not tried: any fix.** Three candidates, none evaluated, and each touches
+`backend/core/`, which needs its own task:
+
+- sort `get_data_file_paths()` so the choice is at least deterministic — makes
+  the result stable, not correct, and would still return 867,756 characters;
+- cap the fast-path response the way `app.py:151` caps `/refine_transcript`;
+- end a block at the next heading of any level rather than only at the next
+  `Problem N`, which is the actual cause and the largest change.
+
+**Related, not the same.** Item 3 is `search.py`'s loose regex *truncating*
+blocks. This is `config.py`'s strict regex *failing to terminate* one. Both
+produce "the same question returns different text depending on the path", which
+is why they read alike; the mechanisms are opposite and the fixes are separate.

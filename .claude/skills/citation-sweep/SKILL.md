@@ -11,6 +11,14 @@ into that file. The rule, and the evidence for why a plain grep is not enough,
 are in the root `CLAUDE.md` under "Core logic rules". This skill is the
 procedure only.
 
+**Warning, before step 1: in zsh an unquoted variable does not word-split.**
+`R="CLAUDE.md DECISIONS.md OPEN.md README.md"; grep -n 'pat' $R` passes grep one
+filename — the whole string — and prints a `No such file or directory` warning
+followed by **zeroes**. Read quickly, four zeroes is indistinguishable from a
+clean sweep, and zero is the *expected* answer for most forms, so this trap
+manufactures the result you are hoping for. Two sessions hit it in the same turn
+on 2026-08-22. Always spell the four filenames out in the command.
+
 For every file whose line count the commit changed:
 
 1. **Grep the four records for the filename.** `grep -n "<file>:[0-9]" CLAUDE.md
@@ -27,6 +35,14 @@ For every file whose line count the commit changed:
 4. **Leave past-tense citations to deleted code alone.** A citation that
    describes code as it *was* before a commit is history and is correct as
    written. Do not "fix" it to a line that no longer holds that code.
+5. **A block that declares its own commit is also history, even when the code
+   still exists.** Read the prose around a table before correcting its numbers.
+   `DECISIONS.md` holds two tables written in the same commit, one headed "at
+   the commit that records this entry" and one headed "its single home now".
+   Only the second could drift, and correcting the first would make its own
+   header false. The difference is one word, and step 4 does not cover it —
+   step 4 is written as *to deleted code*, and these point at content that
+   still exists and has moved.
 
 Report each form searched and the count of hits re-checked, so the handback's
 `sweep:` line can name them. Fix a moved citation in the record that holds it;
