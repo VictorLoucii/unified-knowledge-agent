@@ -479,3 +479,15 @@ advisor skill sends a round when it is its turn and falls back to the hand relay
 only when a project has no contract file. The duplicated paragraph and the
 unsourced sentence are deleted. The line numbers above describe the files as
 they were, and are history.
+
+**6. Rename the role skills to `relay-advisor` and `relay-executor`. — Done
+2026-08-22, `efe4285`.** Claude Code ships a built-in `/advisor` command ("Let
+Claude consult a stronger model at key moments"). With the custom skill also
+named `advisor`, the picker showed two identical entries and which one ran
+depended on picker order, which no CLI update guarantees. Both the `name:`
+field and the folder were renamed, and the executor skill with them so the pair
+stays matched. The alternative — rename `name:` only and test whether the picker
+keys on the folder or the field — was rejected: renaming both makes the answer
+irrelevant. Observed on the same day: a changed `name:` appears in the picker
+without a session restart. The file name of this contract is unchanged; it is a
+file, not a command, and `DECISIONS.md` cites it by line.
