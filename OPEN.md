@@ -559,17 +559,45 @@ Read from source:
 | The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:32` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
-**The permanently stale path wins.** `agents.py:36-38` calls `route_query`
-first and returns `fast_path_node` on a hit, before any model call, and
-`semantic_router.py:9` matches the key as a *substring* of the user's query.
+**The permanently stale path wins when a table key matches, and only then.**
+`agents.py:36-38` calls `route_query` first and returns `fast_path_node` on a
+hit, before any model call, and `semantic_router.py:9` matches the key as a
+*substring* of the user's query.
 **Taken from DECISIONS.md, not source:** that ordering is deliberate, recorded
 under "The deterministic fast-path table runs before the classifying model", so
 a probabilistic call cannot override a deterministic match.
 
-**Measured 2026-08-18:** the table holds 53 entries. **26 carry a `target_id`
-and are verbatim copies of `data/` problem blocks**, ending with the same
-`<END OF PROBLEM>` marker that appears in the markdown. 27 are short answers
-with `target_id: None`.
+**But the table is not the only fast path, and rows one and three above are not
+independent routes.** `semantic_router.py:17-31` runs after the table loop: when
+no key matched and the query names a problem, it calls `extract_problem_block`
+and serves the live block. So the same problem reaches a user by two paths, and
+which one answers depends on how the question was phrased.
+
+**Measured 2026-08-22, `route_query` awaited directly, no model call** — the
+router itself never calls a model, the classifier does, at `agents.py:41`. "Can
+you provide the complete details and code for Problem 14?" is a table key and
+returns the stored string, whose first line is `**# Problem 1**4`. "Tell me
+about Problem 14 please" matches no table key, falls through to
+`semantic_router.py:18` and returns the live block, whose first line is
+`**# Problem 14**`. Both are 1,099 characters. The two strings are not equal.
+**Two users asking the same question in different words get different answers
+today.**
+
+**Measured 2026-08-22 at `55fb8e9` by `backend/evals/check_fast_path.py`,
+replacing a coarser count taken on 2026-08-18:** the table holds 53 entries. 26
+carry a `target_id`, pointing at 20 distinct ids. **They are not all copies.** 3
+are byte-identical to the live block. 17 have an identical body but differ in
+the first line, or lack the trailing `<END OF PROBLEM>` marker, or both — 4, 7
+and 6 respectively. 5 hold a short answer *about* a problem and were never
+copies. 1 (`"JOB_HUNT"`) has no live block at all. Only **7 of the 26** end with
+the `<END OF PROBLEM>` marker. 27 entries are short answers with
+`target_id: None`.
+
+**`target_id` is a recall label before it is a copy claim.** When it is truthy,
+`agents.py:87-93` synthesises the `ToolMessage` that `eval.py:47-55` scrapes and
+`eval.py:143-147` scores for Recall@k. That is why five entries carry one and
+are still not copies, and why a byte-for-byte check of all 26 would measure them
+against something they never claimed to equal.
 
 ### Consequences to act on
 
@@ -581,11 +609,24 @@ with `target_id: None`.
    reader would ask, the edit never surfaces, on any host, ever. Nothing in the
    ingestion pipeline can fix that; the fix is editing
    `backend/core/fast_path_routes.py`.
-3. **A consistency check is cheap and nothing does it today.** For each of the
-   26 entries with a `target_id`, compare the stored `output` against
-   `extract_problem_block(target_id)`. That needs no hashing, no manifest and no
-   ingestion, because `extract_problem_block` already reads the files live. Not
-   started.
+3. **A consistency check is cheap, and `backend/evals/check_fast_path.py` now
+   does it.** Added 2026-08-22. Run it from the repo root:
+
+   ```bash
+   uv run python -m backend.evals.check_fast_path
+   ```
+
+   For each of the 26 entries with a `target_id` it compares the stored `output`
+   against `extract_problem_block(target_id)` and prints one line naming the
+   file a reader must open, or "nothing" and why. It needs no hashing, no
+   manifest and no ingestion, because `extract_problem_block` already reads the
+   files live, and it makes no model call. It exits non-zero only for a body
+   difference or a missing live block, because every other difference can be
+   repaired only inside `backend/core/fast_path_routes.py`, whose strings 53
+   evaluation cases return — see [DECISIONS.md](DECISIONS.md), "`check_fast_path.py`
+   tiers its verdicts". On the day it was added it reported 3 identical, 17
+   differing only in the header and/or the marker, 5 not copies and 1 with no
+   live block, and exited 1 on that last entry alone.
 
 `data/` is currently clean — `git status --porcelain --untracked-files=all
 data/` is empty, 39 files tracked, checked 2026-08-18. See item 2 for what this

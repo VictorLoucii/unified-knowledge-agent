@@ -213,8 +213,13 @@ which must hold:
    untracked, commit it before editing, so every file has a recoverable version.
 
 **Before proposing any `data/` edit, check the fast-path table.** 26 of the 53
-entries in `backend/core/fast_path_routes.py` are verbatim copies of `data/`
-problem blocks, and `agents.py:36-38` consults that table before any model call.
+entries in `backend/core/fast_path_routes.py` carry a `target_id`, and 20 of
+those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
+only in the first line or the trailing `<END OF PROBLEM>` marker. Five more
+carry a `target_id` but hold a short answer *about* a problem, and one
+(`"JOB_HUNT"`) names a problem that has no block in `data/` at all. Run
+`uv run python -m backend.evals.check_fast_path` to see which is which.
+`agents.py:36-38` consults that table before any model call.
 If a table key matches the query a reader would ask, editing `data/` changes
 nothing the user sees — the fix is in the Python file instead. See
 [OPEN.md](OPEN.md) item 5.

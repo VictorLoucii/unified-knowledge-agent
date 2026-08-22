@@ -736,8 +736,10 @@ impractical — so the work was delegated under per-file approval. **That volume
 is the user's assessment and has not been measured.** One stale passage is
 verified: `data/Unified_Knowledge_Project_Details.md:1350-1364` documents an
 `app.py` block deleted on 2026-08-18 for being a production defect, confirmed by
-reading the file and commit `247dd15`. How many others exist is unknown, and
-`OPEN.md` item 5 records that no check for them exists.
+reading the file and commit `247dd15`. How many others exist is unknown.
+`OPEN.md` item 5 now names a check, `backend/evals/check_fast_path.py`, added
+2026-08-22 — but it compares the fast-path table against `data/`, not `data/`
+against the code it documents. Nothing checks for stale passages.
 
 **This is a delegation of labour, not a judgement that the rule was wrong.** The
 distinction matters for whoever reads this next. "The rule forbade something
@@ -765,10 +767,12 @@ different things and only one of them needed relaxing.
   requirement, not a one-off.
 
 **The trap that makes this less useful than it looks, and is stated in the
-rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries are verbatim copies of
-`data/` problem blocks, and `agents.py:36-38` consults that table before any
-model call. Editing `data/` cannot change what those queries return. See
-[OPEN.md](OPEN.md) item 5.
+rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries carry a `target_id`, and 20
+of those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
+only in the first line or the trailing `<END OF PROBLEM>` marker.
+`agents.py:36-38` consults that table before any model call, so editing `data/`
+cannot change what those queries return. Measured 2026-08-22 by
+`backend/evals/check_fast_path.py`. See [OPEN.md](OPEN.md) item 5.
 
 **Consequence:** an approved edit reaches the deployed Space by commit and push
 alone, because the Space ships no manifest since `003496a` and re-ingests on
@@ -799,6 +803,48 @@ conceptual explanations" and the judge then failed the agent for doing exactly
 that. The neighbouring case already carried the "additional context must not
 fail the test" convention and passed on identical behaviour, so this was
 consistency with an existing pattern rather than score tuning.
+
+### `check_fast_path.py` tiers its verdicts; a strict byte comparison was rejected
+
+**Chosen:** five verdicts — identical, header and/or marker only, body differs,
+not a copy, no live block — each line carrying an action column that names the
+file a reader must open, or says "nothing" and why. Exit non-zero for a body
+difference and a missing live block only.
+
+**Rejected:** a strict comparison, in which any byte difference is a failure.
+Also rejected: splitting the header/marker tier in two, one tier for a mangled
+header and one for a missing marker.
+
+**Why not strict:** `target_id` is a recall label before it is a copy claim.
+When it is truthy, `agents.py:87-93` synthesises the `ToolMessage` that
+`eval.py:47-55` scrapes and `eval.py:143-147` scores for Recall@k. Five entries
+carry one and hold a short answer *about* a problem rather than a copy of it, so
+a strict rule measures them against something they never claimed to equal and
+they can never pass. The second reason is the exit code. Repairing the rest
+means editing `backend/core/fast_path_routes.py`, whose strings 53 evaluation
+cases return, so under a strict rule the script ships permanently red — and an
+exit code that can never return to zero carries no information, so nothing gets
+wired to it. Strict would have failed 23 of 26 on the day it was written.
+
+**Why not the two-way tier split:** measured 2026-08-22, of the 17 entries that
+differ only in the header and/or the marker, 4 have a mangled header alone, 7
+lack the marker alone, and **6 have both** — ids 9, 13, 33, 49, 55, 90. A tier
+named for one fault hides the other in those six, and a reader repairing that
+tier by adding markers would leave six headers broken. The two faults are
+printed as independent flags on each line instead — `header`, `marker` or
+`header+marker` — which costs no verdict name and cannot mislabel them. The
+split was proposed from the stored-versus-live length gap, which is a proxy: a
+mangled `**# Problem 1**3` is the same length as a correct `**# Problem 13**`,
+so four of the six looked like marker-only differences.
+
+**Two latent defects were closed in the same commit, neither reachable today.**
+The action column could name a file and no repair when a difference was
+whitespace `_body` strips; a `whitespace` flag now covers that. And a live block
+with an empty body — which `config.py:198-200` can emit for a header with
+nothing under it — has the same empty body as any one-line short answer, so the
+two collided and the short answer was reported as a header difference; the body
+test now requires a non-empty body or a problem heading. `data/` holds 118
+problem headers and no header-only block, so neither case fires.
 
 ## Records
 
@@ -842,15 +888,38 @@ Every measurement, date and hash from the old bullet, and its single home now:
 
 | Item | Now |
 |---|---|
-| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:317` |
+| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:326` |
 | their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:20-21` |
-| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:317-318` |
-| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:319-320` |
-| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:320-323` |
-| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:323-324` and `SKILL.md:27-29` |
+| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:326-327` |
+| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:328-329` |
+| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:330-332` |
+| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:332-333` and `SKILL.md:27-29` |
 
-`OPEN.md:669` cited `CLAUDE.md` "Frontend rules" by title and now names
+`OPEN.md:712` cited `CLAUDE.md` "Frontend rules" by title and now names
 `frontend/CLAUDE.md`. The other four title references into the root
-(`OPEN.md:147`, `OPEN.md:925`, `DECISIONS.md:109`, `DECISIONS.md:716`) point at
-sections that did not move. No `CLAUDE.md:NNN`, bare `:NNN` or range citation
-into the root existed in the four records before or after (grep, 0).
+(`OPEN.md:147`, `OPEN.md:966`, `DECISIONS.md:109`, `DECISIONS.md:716`) point at
+sections that did not move. No bare `:NNN` citation into the root exists in the
+four records (grep, 0).
+
+**Corrected 2026-08-22.** The right-hand column above was **exact at
+`f4b9ee1`**, the commit that wrote this entry: `CLAUDE.md` held 408 lines and
+the bare-examples line sat at `:317`, as cited. `430c940` then added four lines
+to `CLAUDE.md` and did not sweep, moving all five down by four — the first of
+them from `:317` to `:321`. `81889dc`, `c1cc45f`, `efe4285` and `55fb8e9`
+carried the break unchanged, and the commit that added `check_fast_path.py`
+moved them a further five. All five now name the true line.
+
+The table above them is not corrected and does not need to be. Its numbers are
+exact at the frame it declares in words two paragraphs up, checked at `f4b9ee1`:
+`## Secrets` at 357, the `---` at 363, `## Commands` at 365; the rule at 313-324,
+twelve lines; `frontend/CLAUDE.md:1-21`, twenty-one lines. **Both tables were
+written in the same commit and both were correct in it. The only difference is
+one word in their headers** — table 1 says "at the commit that records this
+entry", table 2 says "now". One declared a frame and the other claimed currency,
+and only the one claiming currency could drift. Note that the rule "leave
+past-tense citations alone" does not decide this: it is written as *to deleted
+code*, and table 1 points at content that still exists and has moved. The frame
+declaration is what carries it.
+
+This is the failure the rule it documents exists to catch, found in the entry
+that documents it, four commits after the commit that caused it.
