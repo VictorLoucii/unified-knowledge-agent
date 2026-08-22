@@ -128,8 +128,8 @@ Both sessions follow these. They are not optional.
 
 ### The opening message
 
-**Start each session from its role skill.** `/advisor` in one terminal,
-`/executor` in the other, before the first prompt. A session that finds itself
+**Start each session from its role skill.** `/relay-advisor` in one terminal,
+`/relay-executor` in the other, before the first prompt. A session that finds itself
 in a role it was not started in reads that skill before it answers, rather than
 working from the task block alone.
 
@@ -395,7 +395,7 @@ amended* gets re-proposed in its original form otherwise.
   Adopted, folded into part A.
 - **P9 — a role skill points at this contract; it does not restate it.**
   Adopted, folded into "The opening message". It governs both role skills,
-  `~/.claude/skills/advisor/SKILL.md` and `~/.claude/skills/executor/SKILL.md`.
+  `~/.claude/skills/relay-advisor/SKILL.md` and `~/.claude/skills/relay-executor/SKILL.md`.
 
 ## Recorded as proposals, and deliberately not written as rules
 
@@ -416,8 +416,8 @@ not by either session. Two sessions do not decide the user's permission settings
 between themselves, and a rule in this file cannot enact one.
 
 **2. Create an executor skill, mirroring the advisor's. — Satisfied
-2026-08-20.** `~/.claude/skills/executor/SKILL.md` now exists alongside
-`~/.claude/skills/advisor/SKILL.md`. Before it, the executor's role had to be
+2026-08-20.** `~/.claude/skills/relay-executor/SKILL.md` now exists alongside
+`~/.claude/skills/relay-advisor/SKILL.md`. Before it, the executor's role had to be
 typed each time.
 
 Two constraints were set for it, carried over from the advisor skill. It holds
