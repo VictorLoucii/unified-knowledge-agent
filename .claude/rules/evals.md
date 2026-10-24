@@ -19,7 +19,8 @@ uv run python -m backend.evals.eval --concurrency 1
 - **Never set `MODEL_NAME`.** Three places read it: `config.py:49` (agent,
   default `openai/gpt-5-mini`), `search.py:16` (query expansion,
   `google/gemini-3.5-flash-lite`) and `eval.py:67` (judge,
-  `deepseek/deepseek-chat`). Setting it also swaps the judge. A model migration
+  `deepseek/deepseek-chat`). Setting it also swaps the judge, which invalidates
+  every cached judgment and makes the run far more expensive. A model migration
   changes the default strings in source (`OPEN.md` item 8).
 - **`fast_llm` must not be `gemini-3.5-flash-lite`.** As the scope router it
   marked six plain Python questions out of scope (`OPEN.md` item 8).

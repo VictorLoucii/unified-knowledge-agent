@@ -36,7 +36,8 @@ mirrors to a HuggingFace Space (`.github/workflows/sync_to_hub.yml`).
   `localhost:7860`, and `Dockerfile:33` binds 7860.
 - Inside the sandbox, `uv` cannot write its cache and Python cannot read `.env`.
   So Claude uses `.venv/bin/python` and hands the owner any command that loads
-  `backend/core/config.py`.
+  `backend/core/config.py`. The owner runs such a command with `!`, which runs
+  outside the sandbox.
 - `docker compose up --build` has never been run end to end (`OPEN.md` item 6).
 
 Current check results: `.claude/check-baseline.md`.

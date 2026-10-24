@@ -80,7 +80,7 @@ the executing session stops there deliberately rather than by accident.
 
 - `none` — the task touches neither.
 - `push` — the work ends in a push. The user approves it.
-- `eval` — the work obliges a run of the evaluation suite. `CLAUDE.md` sets out
+- `eval` — the work obliges a run of the evaluation suite. `.claude/rules/evals.md` sets out
   when that is obligatory and what it costs. The user approves it.
 - `judgement` — no automatic gate applies, but the user wants to decide
   something before the work continues. Name what.

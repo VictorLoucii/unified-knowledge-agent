@@ -8,7 +8,7 @@ description: Re-check every file:line citation in CLAUDE.md, DECISIONS.md, OPEN.
 `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
 `file:line`. A commit that changes a file's line count moves every citation
 into that file. The rule, and the evidence for why a plain grep is not enough,
-are in the root `CLAUDE.md` under "Core logic rules". This skill is the
+are in the root `CLAUDE.md` under "Working rules". This skill is the
 procedure only.
 
 **Warning, before step 1: in zsh an unquoted variable does not word-split.**

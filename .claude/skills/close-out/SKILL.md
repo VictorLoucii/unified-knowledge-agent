@@ -20,7 +20,7 @@ session this skill came from. Two traps:
 - Every eval run overwrites that file, including a partial `--indices` run. If
   this session ran one, the file may hold a single-case result. Say so instead
   of comparing it.
-- Report the three-part breakdown, not the headline. `CLAUDE.md` records that
+- Report the three-part breakdown, not the headline. `.claude/rules/evals.md` records that
   the fast-path table answers 53 of the 94 cases and 26 of the 34 recall
   targets. A README quoting only the headline is incomplete — flag it.
 

@@ -150,8 +150,8 @@ inside the generalised rule.
 **Rejected:** a third hardcoded query injection at `search.py:86-93`. Two
 already exist there, so a `Community Type` entry would have passed index 83 and
 would have matched precedent. It would have moved the score without improving
-the pipeline, which is the failure `CLAUDE.md`'s opening section exists to
-prevent.
+the pipeline, which is the failure the score warning in `.claude/rules/evals.md`
+exists to prevent.
 
 **Why the examples had to survive the generalisation.** They are load-bearing in
 a way their old wording did not advertise. `search.py:62` matches the problem
@@ -557,7 +557,7 @@ section.
 
 A bare corrected fence therefore reaches someone as `register(batch=True)` with
 no indication that it is load-bearing rather than a default somebody typed.
-`CLAUDE.md` says "Never change that to `batch=False`" and this file says "Do not
+`.claude/rules/backend.md` says "Keep `register(batch=True)`" and this file says "Do not
 change this back" — **and neither file is in `data/`, so the agent cannot cite
 either.** The note is the only place that reasoning can reach a reader through
 this system.
@@ -621,7 +621,7 @@ score is therefore not a measure of the RAG pipeline.
 **Why it matters:** report the 41-case logic figure and the 8-case recall
 figure alongside the headline whenever retrieval changes, or you will report a
 movement that did not happen. The full explanation is in
-[CLAUDE.md](CLAUDE.md).
+[.claude/rules/evals.md](.claude/rules/evals.md).
 
 ### Changing a fallback model does not oblige an evaluation run
 
@@ -888,12 +888,12 @@ Every measurement, date and hash from the old bullet, and its single home now:
 
 | Item | Now |
 |---|---|
-| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:74` |
+| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:75` |
 | their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:39-40` |
-| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:74-75` |
-| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:75-77` |
-| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:77-79` |
-| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:80` and `SKILL.md:46-48` |
+| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:75-76` |
+| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:76-78` |
+| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:78-80` |
+| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:81` and `SKILL.md:46-48` |
 
 `OPEN.md:729` cited `CLAUDE.md` "Frontend rules" by title and now names
 `frontend/CLAUDE.md`. The other four title references into the root
@@ -923,3 +923,41 @@ declaration is what carries it.
 
 This is the failure the rule it documents exists to catch, found in the entry
 that documents it, four commits after the commit that caused it.
+
+### The Gemini rules moved to path-scoped files; the sandbox stays strict
+
+Done 2026-10-24 by following `~/.claude/playbooks/claude-md-setup.md`, section
+"Migrating a project from Antigravity/Gemini". Commits `7539d0b`, `99a6d74`,
+`864566b`. The rule-by-rule map is `.claude/gemini-migration-map.md`.
+
+**Chosen:** the root `CLAUDE.md` holds the map, the commands and the working
+rules (417 lines → 111). Eval rules moved to `.claude/rules/evals.md`, `data/`
+rules to `.claude/rules/knowledge-base.md`, tracing and debug-print rules to
+`.claude/rules/backend.md`. Each loads only when Claude touches a matching path.
+The citation rule kept its evidence in the root, per the entry above.
+
+**Rejected — keeping every rule in the root.** It loads all 417 lines on every
+turn, including the eval and `data/` detail that most tasks never touch.
+
+**Chosen:** `.claude/settings.json` turns the sandbox on in strict mode
+(`allowUnsandboxedCommands: false`). Python cannot read `.env` inside it, so
+the eval, `check_fast_path` and the backend fail there. The owner runs them with
+`!`, which runs outside the sandbox. The 2026-10-24 eval ran that way.
+
+**Rejected — exempting the eval and `check_fast_path` from the sandbox.** The
+command would run this repo's code with access to every file, so an edited
+backend module could read any secret on the machine.
+
+**Chosen:** after the 2026-10-24 full run scored 91/94, the metrics file was
+restored to the committed 95.74 (90/94). Case 46 flipped from fail to pass on
+docs-only changes. Nobody checked whether its answer changed or only the
+judge's verdict did.
+
+**Rejected — committing 96.8.** It would raise the floor on an unexplained flip,
+and the next session would read a judge-noise point as a regression.
+
+**Chosen:** the four `.agents/rules/` files were moved to
+`~/archive/uka-gemini-rules/`, outside the repo.
+
+**Rejected — deleting them.** Git never tracked them, so a deleted file could
+not be recovered.

@@ -144,7 +144,7 @@ judge, for 37 specifically, on the evidence above.
 `search.py:86-93` already hardcodes two query injections for queries that expand
 badly. A third for Community Type would have passed index 83 and would have
 matched precedent. It would have moved the score without improving the pipeline,
-which is the failure `CLAUDE.md`'s opening section exists to prevent.
+which is the failure the score warning in `.claude/rules/evals.md` exists to prevent.
 
 ### Still not established
 
@@ -1020,7 +1020,7 @@ whole application rests on one model that has begun closing doors.
 `config.py:49` and `search.py:16` read the **same variable** with a different
 default. So setting `MODEL_NAME` does not only change the agent — **it swaps the
 evaluation judge from DeepSeek to whatever is set.** That is exactly what
-CLAUDE.md warns about under Eval-Driven Development.
+`.claude/rules/evals.md` warns about under "The command".
 
 **Therefore: any migration belongs in the hardcoded default strings in source,
 never in an environment variable.**
