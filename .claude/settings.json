@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "permissions": {
+    "allow": [
+      "Bash(npm run lint)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(uv run python -m compileall -q backend)",
+      "Bash(uv run python -m backend.evals.check_fast_path)"
+    ],
+    "ask": [
+      "Bash(uv run python -m backend.evals.eval*)",
+      "Bash(uv add *)",
+      "Bash(uv pip install *)",
+      "Bash(pip install *)",
+      "Bash(pip3 install *)",
+      "Bash(npm install*)",
+      "Bash(npm i *)",
+      "Edit(/data/**)"
+    ],
+    "deny": [
+      "Read(/.env)",
+      "Edit(/.env)",
+      "Bash(git filter-repo*)",
+      "Bash(git push --force*)",
+      "Bash(git push -f*)",
+      "Bash(git push * --force*)",
+      "Bash(git push * -f*)",
+      "Bash(git add .)",
+      "Bash(git add . *)",
+      "Bash(git add ./*)",
+      "Bash(git add :/*)",
+      "Bash(git add -A*)",
+      "Bash(git add --all*)",
+      "Bash(git add -u*)",
+      "Bash(git add --update*)",
+      "Bash(git add * -A*)",
+      "Bash(git add * --all*)",
+      "Bash(git add * -u*)",
+      "Bash(git -C * add *)",
+      "Bash(git stage *)",
+      "Bash(git commit -a*)",
+      "Bash(git commit --all*)",
+      "Bash(git commit * -a)",
+      "Bash(git commit * -a *)",
+      "Bash(git commit * --all*)"
+    ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": false,
+    "allowUnsandboxedCommands": false,
+    "excludedCommands": [
+      "bash ~/.claude/scripts/notify.sh *"
+    ]
+  }
+}

@@ -1,417 +1,103 @@
-# Unified Knowledge Agent — working rules
-
-A RAG agent over a personal knowledge base of markdown files. FastAPI +
-LangGraph backend, Next.js frontend, ChromaDB for vectors, OpenRouter for
-model calls. The `data/` directory is the single source of truth.
-
----
-
-## Read this before you trust the evaluation score
-
-**The fast-path table answers 53 of the 94 evaluation cases without calling
-the retriever or the answering model.**
-
-`backend/core/fast_path_routes.py` holds `FAST_PATH_INTERCEPTS`, a table of 53
-question/answer pairs. `semantic_router.py` matches a key as a *substring* of
-the user query. On a hit, `agents.py:fast_path_node` returns the stored string
-as the answer and synthesises a `ToolMessage` carrying the stored problem id,
-which is exactly what `eval.py` scrapes to compute Recall@k.
-
-Measured consequence, as of the last full run:
-
-| Metric | Headline | From the table | Genuinely exercised |
-|---|---|---|---|
-| AI Logic Score | 90/94 | 53 cases | **41 cases, 38 passing** |
-| Recall@k | 34/34 | 26 cases | **8 of 8 cases** |
-
-So the Recall@k headline rests on 8 vector retrievals, not 34. The table is a
-legitimate O(1) cache in the product. It is not a measurement of the RAG
-pipeline. **When you change retrieval, report the 41-case and 8-case figures
-alongside the headline, or you will report a change that did not happen.**
-
-The 8 genuinely-exercised recall cases are indices **6, 46, 77, 78, 79, 80, 81,
-83**. `--indices` is 1-based (`eval.py:124` does `dataset[i-1]`). Index 83 was
-the miss until 2026-08-20 and is fixed; see [OPEN.md](OPEN.md) item 1.
-
-**The 41 indices are derivable, not guessable.** Import `FAST_PATH_INTERCEPTS`
-and test each dataset query for a substring key, which is the same match
-`semantic_router.py:9` performs. Two sessions derived the same list
-independently on 2026-08-20:
-
-```
-1,3,4,5,6,27,28,29,30,31,36,37,42,44,45,46,51,57,58,59,60,62,63,64,65,66,67,68,
-71,72,73,74,77,78,79,80,81,83,92,93,94
-```
-
-`eval.py:130` sets `total_llm` from the **sliced** dataset, so an `--indices`
-run over those 41 prints the 41-case figure directly rather than requiring it to
-be derived from the headline. In such a run `total_recall_targets` is 8, so the
-printed recall is the 8-case figure.
-
-Note also that the intercept keys match the eval's queries verbatim, so the
-table helps the score far more than it helps a real user, who will phrase the
-question differently and fall through to RAG.
-
----
-
-## Eval-Driven Development
-
-Adding or changing anything that touches the system prompt, the semantic
-router, the tools, or the retrieval pipeline puts you under these rules.
-
-**1. Run the suite before you call the work done.**
-
-```bash
-uv run python -m backend.evals.eval
-```
-
-Use the bare command. Do **not** set `MODEL_NAME`. It is read in three places —
-`config.py` (the agent under test), `search.py` (the query-expansion model) and
-`eval.py` (the LLM judge) — and setting it silently reassigns the judge, which
-invalidates every cached judgment and makes the run far more expensive. The
-defaults differ: `config.py:49` defaults to `openai/gpt-5-mini`, `search.py:16`
-to `google/gemini-3.5-flash-lite`, `eval.py:67` to `deepseek/deepseek-chat`.
-
-**This also means a model migration belongs in the hardcoded default strings in
-source, never in `MODEL_NAME`.** Setting the variable would swap the judge along
-with the agent. The 2026-08-22 migration off `google/gemini-2.5-flash` was done
-that way; see [OPEN.md](OPEN.md) item 8 for what it measured. Two findings from
-it bind any later model change: **`fast_llm` must not be `gemini-3.5-flash-lite`**
-— as the scope router it marked six plain Python questions out of scope and cost
-the score three points and a recall case — and **`--concurrency 10` segfaults on
-this Mac** in PyTorch's Apple-GPU backend; run at `--concurrency 1`.
-
-Targeted runs are much cheaper while iterating:
-
-```bash
-uv run python -m backend.evals.eval --indices 5,37,42,83
-```
-
-**Warning: every run, including a partial `--indices` run, overwrites
-`backend/evals/latest_run_metrics.json`.** Back that file up before a partial
-run and restore it afterwards, or you will lose the committed baseline.
-
-`--concurrency` caps how many cases run at once (`eval.py:112`, default 10;
-the semaphore is at `eval.py:189`). It changes wall-clock time only, never a
-score. Lower it if you suspect rate limiting — see "Judge noise is real"
-below.
-
-**2. Do not drop below the committed baseline.**
-
-The floor is whatever `backend/evals/latest_run_metrics.json` holds at `HEAD`.
-Do not merge, commit, or finalise a change that lowers either score below it.
-If you regress, find the cause, fix or revert, and re-run until you are back at
-or above the committed figures. The suite's own gate lives at `eval.py` —
-read the threshold from the code, never restate a number in a rule or a skill.
-
-**3. Be surgical with the system prompt.**
-
-The directives in `backend/core/agents.py` that handle problem extraction,
-rigid formatting and the zero-knowledge guardrail are load-bearing. Do not
-remove or heavily rewrite them without a specific reason.
-
-**4. Change the test when the behaviour should change.**
-
-If a new feature legitimately changes how the agent should answer, update the
-expected output and criteria in `backend/evals/qa_dataset.json`. Do not bend
-the system prompt to satisfy a test that no longer describes what you want.
-
-**5. Follow the EDD loop for any bug you find.**
-
-1. Document the query, the wrong output and the desired output. Touch nothing.
-2. Add the failing case to `qa_dataset.json`.
-3. Run the suite and watch it fail. That is your baseline.
-4. Fix the prompt or the retrieval logic.
-5. Re-run. The new case passes, every old case still passes, and the scores are
-   at or above the committed baseline.
-
-### A fast run means a warm cache, not a working pipeline
-
-`eval.py:31` installs a `SQLiteCache` at `.langchain.db`. That file is about
-97 MB on disk and is gitignored (`.gitignore:28-29`), so a fresh clone starts
-cold and a fully warm run makes no network calls at all. Runtime is therefore
-not evidence about retrieval. Three separate things make a run fast and only
-one of them is the pipeline: the fast-path table answers 53 cases with no
-model call, the cache answers repeats with no network call, and
-`--concurrency` overlaps whatever waiting is left. See
-[DECISIONS.md](DECISIONS.md), "`.langchain.db` was stripped from the history,
-not migrated to LFS", for why the file stays out of Git.
-
-**The cache is never invalidated, so no measurement made against it is
-perishable.** `SQLAlchemyCache.lookup` is a keyed `SELECT` on the exact prompt
-text and the llm string; `update` only inserts; `clear` is the sole destructive
-path and nothing in `backend/` calls it. So an edit that changes a prompt does
-not destroy the old rows — it stops matching them, and reverting the file makes
-them match again. A pre-change figure can be re-measured at any time for the
-cost of a `git checkout` of one file. **Do not argue that a measurement must be
-taken before an edit because the edit would destroy it.** That claim was made on
-2026-08-20, accepted by two sessions, and used to justify spending twice before
-anyone opened the library.
-
-The cache keys on exact prompt text. Any edit to the system prompt, the
-retrieval logic or a model string turns every hit into a miss. The next run is
-then slow whether or not the change was correct. Do not read a slow run as a
-regression, and do not read a fast one as a pass.
-
-Recorded runtimes in this repo are not comparable to each other. The two logs
-dated 2026-07-26 report 27.17 s and 230.68 s on the same runner, at the same
-concurrency, with the same 155 reranked retrievals and a one-case difference
-in the dataset. Only the 230.68 s log is at `HEAD`; `c982350` put it there.
-The 27.17 s log is the 90-case run and is in history only — read it with
-`git show f30ff63:full_evaluation_log.txt`. The slower one is the later one,
-so a cache that only grows does not explain it. The cause is unconfirmed. The
-one lead: the slow log's header records `Span Processor: SimpleSpanProcessor`,
-which exports every span synchronously on the calling thread. The fast log
-cannot be compared against it. That log begins at `🤖 Loading LLM model`,
-which `config.py` prints after the tracing block, so its startup was never
-captured and its tracing configuration is unknown. This pair is therefore not
-a before/after for `batch=True`; do not cite it as one. Treat both numbers as
-history and do not derive an expected runtime from them.
-
-### Judge noise is real
-
-The judge is an LLM. Cases have flipped verdict across runs on unchanged code —
-index 42 alternated fail/pass/pass/fail. Before chasing a single-case
-difference, check whether the agent's output actually changed. If the case is
-served by the fast-path table and that table is unmodified, the output is
-byte-identical and the difference is the judge.
-
-Rate limiting also presents as a fail, not as an error. `eval.py:155-177`
-retries a failed judge call five times, sleeping 2 s between attempts, then
-falls back to `passed=False` with the reason recorded in the verdict. At the
-default concurrency of 10 an OpenRouter limit therefore shows up as a slow run
-with a few unexplained failures. Grep the output for `LLM Judge evaluation
-failed` before you edit a prompt to chase one.
-
----
-
-## `data/` is the source of truth — corrections need approval, per file
-
-`data/` is the raw knowledge base. It is manually curated and is the single
-source of truth.
-
-**The default is still: do not modify, edit, or append to any `.md` or `.docx`
-file inside `data/`.** Nothing here licenses a routine edit.
-
-### The one exception: a proposed correction, approved per file
-
-Since 2026-08-18 a `data/` file may be corrected, under these conditions, all of
-which must hold:
-
-1. **Propose first, write second.** Show the exact file, the exact lines, and
-   the exact replacement text. Wait for approval. Approval covers **that one
-   file**, and does not carry to the next file or the next session — the same
-   shape as a push.
-2. **Corrections only.** The permitted reason is that the note states something
-   that is no longer true, such as documenting code that has since been deleted.
-   Rewriting for style, brevity or tone is not a correction.
-3. **The parser-hack ban is unchanged and absolute.** See the bullet below. An
-   edit that exists to make the text easier to chunk, retrieve or parse is
-   forbidden whether or not it is approved.
-4. **Check `git status` on `data/` first.** The rule below about hand-written
-   notes existing in no commit is real. If anything in `data/` is modified or
-   untracked, commit it before editing, so every file has a recoverable version.
-
-**Before proposing any `data/` edit, check the fast-path table.** 26 of the 53
-entries in `backend/core/fast_path_routes.py` carry a `target_id`, and 20 of
-those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
-only in the first line or the trailing `<END OF PROBLEM>` marker. Five more
-carry a `target_id` but hold a short answer *about* a problem, and one
-(`"JOB_HUNT"`) names a problem that has no block in `data/` at all. Run
-`uv run python -m backend.evals.check_fast_path` to see which is which.
-`agents.py:36-38` consults that table before any model call.
-If a table key matches the query a reader would ask, editing `data/` changes
-nothing the user sees — the fix is in the Python file instead. See
-[OPEN.md](OPEN.md) item 5.
-
-**An approved edit reaches the deployed Space by commit and push alone.** The
-Space ships no manifest since `003496a`, so it re-ingests every file on each
-container start. No manual rebuild is needed there.
-
-**That cuts both ways, and the cost is paid by the live demo.** Any push restarts
-the container, so **any** push — including one that touches no application code —
-makes the Space re-ingest all 26 files. Measured 2026-08-21: two documentation
-commits left it answering from a partially loaded knowledge base for at least
-**7 m 57 s**, and `/health` reported `rag_hydrated: true` for **7 m 46 s** of
-that. See [OPEN.md](OPEN.md) item 4.
-
-**The local index is a different matter** — it never updates, and `eval.py`
-measures against it. See [OPEN.md](OPEN.md) item 2.
-
-### `data/` is Git LFS — `git diff` will not show you the change
-
-`.gitattributes:8` is `data/*.md filter=lfs diff=lfs merge=lfs -text`. Two
-things follow, and both have already caught a session out.
-
-- **`git diff` on a `data/` file prints a three-line pointer, not the text.** A
-  13-line correction reported "2 insertions, 2 deletions". Never read a `data/`
-  diff that way. Smudge the committed side first:
-
-  ```bash
-  git cat-file -p HEAD:data/<file>.md | git lfs smudge > /tmp/before.md
-  diff -u /tmp/before.md data/<file>.md
-  ```
-
-- **`.github/workflows/sync_to_hub.yml:16` sets
-  `git config lfs.allowincompletepush true`** before force-pushing to
-  HuggingFace. The mirror can therefore report success while shipping a pointer
-  instead of the file. **After every `data/` push, confirm the bytes arrived**
-  by fetching the Space's copy and grepping it for text you just added. Nothing
-  in the workflow fails when the object is missing.
-
-- **No parser hacks.** Do not inject formatting tags, HTML or structural
-  markers into the source files to make them easier to parse. The data stays
-  clean, natural and human-readable.
-- **Fix the pipeline, not the data.** If retrieval misses a section, change
-  `backend/core/ingest.py` (chunking), `backend/core/tools/search.py` (query
-  expansion, reranking, score boosting) or the expansion prompt.
-- **Cache files are the exception.** `data/.manifest.json` may be modified or
-  deleted, and only when deliberately re-ingesting.
-- **Do not commit `data/.manifest.json`.** It is gitignored on purpose since
-  2026-08-18. Tracking it shipped a manifest naming all 26 files to the
-  HuggingFace Space, which has no vector index of its own, so `initialize_rag`
-  took the early return at `ingest.py:109-111` and the deployed product served an
-  empty database in silence. The file must stay on your disk — local Docker
-  builds still copy it — and out of every commit. See
-  [DECISIONS.md](DECISIONS.md), "The Space ingests at startup".
-
-### Ingestion is destructive and does not update
-
-Two behaviours to know before you run ingestion:
-
-- **Any `.docx` dropped into `data/` is converted to markdown and the original
-  is permanently deleted** (`ingest.py`). Copy the original somewhere outside
-  `data/` first.
-- **Ingestion keys on filename only.** `ingest.py` compares basenames against
-  `data/.manifest.json`. It ignores content, size and mtime, and there is no
-  delete path anywhere in the backend. A file already in the manifest will
-  never be re-read no matter how much you edit it, and clearing its manifest
-  entry adds a second copy rather than replacing the first. `search.py`
-  de-duplicates by exact `page_content`, so identical chunks collapse but
-  *changed* ones do not — you get the stale and the fresh version competing.
-  To pick up edited files, rebuild: rename `backend/chroma_db` and
-  `backend/docstore` aside, empty the manifest, then run ingestion. Both
-  directories are gitignored, so git holds no backup — rename, never delete.
-
----
-
-## Core logic rules
-
-- Do not change application logic unless asked.
-- **Backward compatibility is the golden rule.** Changes to shared components
-  or hooks use optional props and default values so existing callers keep
-  working.
-- Do not guess or assume missing information. Reason only from files you have
-  actually read. If something cannot be confirmed from the code, say so.
-- Follow the existing project structure and style. Do not refactor unrelated
-  code.
-- Say exactly which file and which line to change.
-- **Do not add dependencies without asking.** Check `package.json`,
-  `pyproject.toml` and `uv.lock` before writing a utility or adding a package.
-- Grep for every reference to a function, hook, column or variable before
-  renaming or deleting it.
-- Never leave a catch block empty. Log the error or return a descriptive
-  message.
-- Keep components and screens under roughly 450 lines. Push presentation into
-  sub-components and business logic into hooks.
-- **Non-destructive editing.** Preserve existing comments, docstrings and
-  unrelated functions. Do not delete logic unless told to.
-- Check modified files compile or lint before calling the work done.
-- **Git hygiene.** Never run `git add .`. Stage only the files that implement
-  the requested change, and read the diff before committing.
-- **A commit that changes a file's line count invalidates every citation to
-  it.** `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
-  `file:line`. After such a commit, run `/citation-sweep`. A grep for the
-  filename is necessary and not sufficient, for two reasons. Some citations are
-  bare — `| :102 |`, `at :210` — and on 2026-08-21 there were 12 such refs into
-  `app.py` against 44 the filename grep found. And a range is only half-checked
-  by its start: the `/health` range in OPEN.md moved its end by one that same
-  day, and one session filed it as safe while the other caught it. Commit
-  `247dd15` replaced a 10-line block in `app.py` with a 17-line comment, and
-  eight citations across two records became wrong by exactly 7 — found by
-  accident, weeks later. Leave past-tense citations to deleted code alone; they
-  are history and are correct as written.
-- **A record's evidence must sit at the same level as its claim.** If the claim
-  is about what a stage *inside* the pipeline does, output-level evidence cannot
-  support it, however many trials it survives. `OPEN.md` item 1 named a
-  mechanism inside retrieval — that truncation discarded a document before the
-  reranker scored it — and every fact offered for it described what the tool
-  *returned*. Nobody inspected the candidate pool. The claim stood as
-  established fact for weeks and one probe refuted it twice over: in the failing
-  case the document is not in the pool at all, and in the succeeding case it
-  sits inside the cap. Before writing a mechanism into a record, name the thing
-  you would have to measure to be wrong, and measure it. If you cannot, write it
-  as a hypothesis and label it.
-
-## History rewrites
-
-**Never run `git filter-repo` in this working repository.** Its clean-tree guard
-calls `git ls-files -o` *without* `--exclude-standard`, so it counts gitignored
-paths as untracked. Here that is over 126,000 entries, most of them inside
-`.venv`, and no amount of gitignoring reduces it. The guard can never pass.
-
-`--force` skips every guard and then ends with `git reset --hard`, because
-`reset = not is_bare`. That discards every uncommitted change to a tracked file.
-The repository has repeatedly held hand-written `data/` notes that exist in no
-commit, so this is a live data-loss path, not a theoretical one.
-
-Clone to a scratch directory and operate there. Use `GIT_LFS_SKIP_SMUDGE=1` so
-the clone keeps LFS pointers instead of downloading every object. In a fresh
-clone the guards pass on their own and `--force` is never needed.
-
-`--dry-run` does not help: it disables commit-message rewriting outright, so it
-cannot verify a `--message-callback`. Run the real pass in the throwaway clone
-and inspect `git log` there before pushing anything.
-
-## Secrets
-
-Never hardcode API keys, passwords or credentials — read them from the
-environment. Never open, read or request the real `.env`; use `.env.example`
-to check variable names and schemas.
-
----
+# Unified Knowledge Agent
+
+A RAG agent over a personal knowledge base of markdown files in `data/`.
+FastAPI + LangGraph backend, Next.js frontend, ChromaDB for vectors, OpenRouter
+for model calls, Arize Phoenix for tracing. The repo is public; a push to `main`
+mirrors to a HuggingFace Space (`.github/workflows/sync_to_hub.yml`).
+
+## Map
+
+| Path | What it holds |
+|---|---|
+| `backend/app.py` | FastAPI app, `/health`, background ingestion at startup |
+| `backend/core/agents.py` | LangGraph graph, system prompt, `fast_path_node` |
+| `backend/core/semantic_router.py`, `fast_path_routes.py` | Fast-path table: 53 stored answers, matched by substring |
+| `backend/core/ingest.py` | Chunking and ingestion into `backend/chroma_db`, `backend/docstore` |
+| `backend/core/tools/search.py` | Query expansion, retrieval, reranking |
+| `backend/core/config.py` | Models, tracing setup, environment loading |
+| `backend/evals/` | Eval suite (`eval.py`), dataset (`qa_dataset.json`), committed scores |
+| `frontend/` | Next.js app; its own rules in `frontend/CLAUDE.md` |
+| `data/` | The knowledge base. Source of truth. Git LFS |
 
 ## Commands
 
-```bash
-# install
-uv sync
+| Task | Command | Who runs it |
+|---|---|---|
+| Install | `uv sync`; `cd frontend && npm ci` | owner |
+| Backend | `uv run uvicorn backend.app:app --reload --port 7860` | owner |
+| Frontend | `cd frontend && npm run dev` | owner |
+| Lint | `cd frontend && npm run lint` | Claude |
+| Types | `cd frontend && npx tsc --noEmit` | Claude |
+| Python syntax | `.venv/bin/python -m compileall -q backend` | Claude |
+| Fast-path drift | `.venv/bin/python -m backend.evals.check_fast_path` | owner |
+| Eval | `uv run python -m backend.evals.eval --concurrency 1` | owner |
 
-# backend (also triggers ingestion of any file not in the manifest).
-# --port 7860 is REQUIRED, not optional. Uvicorn defaults to 8000 and the three
-# frontend call sites fall back to localhost:7860, so omitting it leaves the
-# browser calling a port nothing serves. 7860 is what HuggingFace Spaces serve
-# on and what Dockerfile:33 binds. Compose is the one exception — see below.
-uv run uvicorn backend.app:app --reload --port 7860
+- `--port 7860` is required. The frontend's three call sites fall back to
+  `localhost:7860`, and `Dockerfile:33` binds 7860.
+- Inside the sandbox, `uv` cannot write its cache and Python cannot read `.env`.
+  So Claude uses `.venv/bin/python` and hands the owner any command that loads
+  `backend/core/config.py`.
+- `docker compose up --build` has never been run end to end (`OPEN.md` item 6).
 
-# frontend
-cd frontend && npm run dev
+Current check results: `.claude/check-baseline.md`.
 
-# full stack. Fixed in source, but NEVER RUN end to end — see OPEN.md item 6.
-# docker-compose.yml:31 publishes 8000:7860; the container side must stay 7860
-# because Dockerfile:33 binds it. The frontend's API URL is frozen into its
-# browser bundle by next build, so docker-compose.yml:62 passes it as a BUILD
-# ARG. Never move that to `environment:` — it would apply after the freeze and
-# do nothing. Changing it needs `docker compose build frontend`, not a restart.
-docker compose up --build
+## Working rules
 
-# evaluation — see the EDD section above before running
-uv run python -m backend.evals.eval
-```
+- **`data/` is not edited.** The one exception is a correction the owner
+  approves per file. Rules: `.claude/rules/knowledge-base.md`.
+- **Changes to the prompt, router, tools or retrieval are eval-driven.** Never
+  set `MODEL_NAME`. Rules: `.claude/rules/evals.md`.
+- State assumptions. When a request reads two ways, ask. Reason only from files
+  you have read; when the files cannot confirm something, say so.
+- Touch only what the request needs. Do not change application logic unless
+  asked. Keep existing comments, docstrings and unrelated functions. Mention
+  dead code; do not remove it. Do not refactor unrelated code.
+- Name the file and line of every change you propose or make.
+- Grep every reference before renaming or deleting a function, hook, column or
+  variable.
+- Check `pyproject.toml`, `uv.lock` and `frontend/package.json` before writing a
+  utility. Ask before adding a dependency.
+- Never leave a catch or `except` block empty. Log the error or return a
+  descriptive message.
+- Done means the Claude-run checks above were run, no count is above
+  `.claude/check-baseline.md`, and the owner has the eval command when the eval
+  rules apply. Report the results.
+- Keep every check current. When code changes what a check guards, update the
+  check in the same change. Never loosen a check to make it pass.
+- Stage named files only. Show `git diff --staged` before any commit.
+- A record's evidence must sit at the same level as its claim. Before writing a
+  mechanism into a record, name what you would measure to be wrong, and measure
+  it; otherwise label it a hypothesis.
+- A commit that changes a file's line count breaks `file:line` citations in
+  `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md`. Run `/citation-sweep`.
+  Leave past-tense citations to deleted code alone.
 
-Observability is Arize Phoenix. Note that `docker-compose.yml` defines no
-Phoenix service — only `backend` and `frontend` — so Phoenix is started by
-hand, not by compose. `config.py:31` defaults the collector to
-`http://localhost:4317`, which `phoenix.otel` resolves to the gRPC exporter
-(`phoenix/config.py:2828` sets `GRPC_PORT = 4317`).
+## Secrets
 
-If no collector is listening, tracing degrades quietly, because `config.py:40`
-uses `register(batch=True)` so failed exports stay off the request path. Never
-change that to `batch=False`.
+Variable names live in `.env.example`; read that. It names OpenRouter, OpenAI,
+LangChain and WAQI keys and a database URL. `.claude/settings.json`
+denies it to Claude's tools and, through the sandbox, to shell commands. Never
+hardcode a key; code reads keys from the environment.
 
-**Instrument in exactly one place: `config.py:23-44`.** `app.py` once carried a
-second setup with a `SimpleSpanProcessor`, and because it ran before the import
-chain reached `config.py` it silently won, leaving the batch processor with no
-spans. Measured against a closed port: 7.194 s per span on the caller's thread,
-against roughly zero for the batch processor. `app.py:7-23` is now a comment
-explaining why nothing may go back there. Do not add a second instrumentation.
+## Gotchas
+
+- **Any push restarts the Space**, which re-ingests every `data/` file. On
+  2026-08-21 it answered from a partly loaded index for 7 m 57 s while `/health`
+  reported ready (`OPEN.md` item 4). Pushes are the owner's call.
+- **Never run `git filter-repo` in this repo.** With `--force` it ends in
+  `git reset --hard` and can destroy uncommitted `data/` notes. Clone with
+  `GIT_LFS_SKIP_SMUDGE=1` to a scratch directory and work there. A deny rule
+  blocks it here.
+- `.langchain.db` (~100 MB, gitignored) caches every eval model call. A fresh
+  clone starts cold. See `DECISIONS.md` for why it stays out of Git.
+- Shell traps on this Mac (`grep` shadowed, zsh globs, `===`):
+  `~/.claude/playbooks/tool-traps-mac.md`.
+
+## Records and skills
+
+- `DECISIONS.md`: why things are the way they are. `OPEN.md`: open problems, by
+  item number. Read the named section, not the whole file.
+- `.claude/advisor-executor-hitl.md`: the two-session relay
+  (`/relay-advisor`, `/relay-executor`).
+- `/citation-sweep` re-checks citations; `/close-out` reconciles the records
+  before the context is cleared.

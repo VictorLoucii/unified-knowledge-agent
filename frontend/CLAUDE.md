@@ -5,6 +5,10 @@
 - **Golden rule of hooks.** Declare hooks at the top level of the component
   that consumes their values. Never declare a hook inside a child when the
   parent needs the data.
+- **Backward compatibility.** Change a shared component or hook only through
+  optional props and default values, so existing callers keep working.
+- Keep a component or screen under roughly 450 lines. Move presentation into
+  sub-components and business logic into hooks under `src/hooks/`.
 - This is Next.js, not React Native. `frontend/AGENTS.md` warns that this
   Next.js version has breaking changes against common knowledge — read the
   relevant guide under `node_modules/next/dist/docs/` before writing frontend
