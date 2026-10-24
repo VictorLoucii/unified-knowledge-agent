@@ -114,5 +114,7 @@ earned · needed here · current · not covered globally.
 | `allowUnsandboxedCommands` | `false` in the file |
 | Python `open()`, symlink, `cp` on the real `.env` | Not run: the auto-mode classifier refused the probe |
 | Read/Grep tools and shell routes in a decoy repo with a canary | Not run: the fresh `claude -p` session refused the probe |
-| Global hook `block_secrets.py:16` vs OpenRouter keys | **Gap, reported to owner.** `sk-[A-Za-z0-9]{32,}` cannot match `sk-or-v1-…` |
+| Global hook `block_secrets.py:16` vs OpenRouter keys | **Fixed 2026-10-24**: `block_secrets.py:17` adds `\bsk-or-v1-[A-Za-z0-9]{32,}`; tests 34/34. |
 | `Write(...)` permission rules | Removed: Claude Code warned they match nothing; `Edit(...)` covers all edit tools |
+
+Step 9 — done 2026-10-24. The owner confirmed this map. The four files moved to `~/archive/uka-gemini-rules/`, outside the repo.
