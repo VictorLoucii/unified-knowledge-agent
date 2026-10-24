@@ -70,6 +70,13 @@ Current check results: `.claude/check-baseline.md`.
   it; otherwise label it a hypothesis.
 - A commit that changes a file's line count breaks `file:line` citations in
   `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md`. Run `/citation-sweep`.
+  A filename grep is not enough, for two reasons. Some citations are bare
+  (`| :102 |`, `at :210`): on 2026-08-21, 12 bare refs into `app.py` against 44
+  the grep found. And a range must be checked at both ends: that day the
+  `/health` range in `OPEN.md` moved its end by one, and one of two sessions
+  filed it safe. `247dd15` replaced a 10-line `app.py` block with a 17-line
+  comment; eight citations across two records broke by exactly 7, found by
+  accident weeks later.
   Leave past-tense citations to deleted code alone.
 
 ## Secrets
