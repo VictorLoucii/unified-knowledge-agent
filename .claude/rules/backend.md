@@ -10,7 +10,7 @@ paths:
 - **Tracing is set up in one place: `backend/core/config.py:23-44`.** Never add
   a second setup. `app.py` once had one with a `SimpleSpanProcessor`; it ran
   first and won, and each span cost 7.194 s on the caller's thread against a
-  closed port. `app.py:7-23` is a comment explaining why.
+  closed port. `app.py:8-24` is a comment explaining why.
 - Keep `register(batch=True)` (`config.py:40`). With no Phoenix collector
   listening, batch mode keeps failed exports off the request path.
 - Phoenix is started by hand; `docker-compose.yml` defines no Phoenix service.

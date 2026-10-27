@@ -476,7 +476,7 @@ request was paying for it. **Do not change this back.**
 
 **Chosen (2026-08-18):** delete the OpenTelemetry block that stood at
 `app.py:7-16` and let `config.py:23-44` be the only instrumentation. A comment
-now occupies those lines explaining why nothing may go back there.
+explaining why nothing may go back there now sits at `app.py:8-24`.
 
 **Rejected — keeping both and making `app.py`'s processor a batch one.** It
 leaves two setups to drift apart, which is how this defect appeared.
