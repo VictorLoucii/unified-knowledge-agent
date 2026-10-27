@@ -1261,8 +1261,8 @@ recommendation was refuted from the frontend source, and the refutation is under
 
 **(c) A shared secret required by the spend routes.** **This does not work as
 stated, and the frontend is why.** Read: every call site is client-side —
-`page.tsx:71`, `ChatInput.tsx:84`, and `useChatStream.ts:48`, `:173`, `:218`,
-`:261`, `:293`. All three files resolve
+`page.tsx:71`, `ChatInput.tsx:84`, and `useChatStream.ts:55`, `:199`, `:245`,
+`:288`, `:321`. All three files resolve
 `process.env.NEXT_PUBLIC_API_URL`, and `ChatInput.tsx` and `page.tsx` are
 `"use client"`. **A `NEXT_PUBLIC_*` variable is inlined into the JavaScript
 bundle at build time and served to every visitor**, so a secret the frontend
@@ -1278,7 +1278,7 @@ over. Fixes nothing on its own.
 
 **(e) Authentication on the three `/history` routes.** **Blocked by the same
 thing as (c).** The frontend calls `/history` from the browser at
-`page.tsx:71` and `useChatStream.ts:48`, so any credential it carries is equally
+`page.tsx:71` and `useChatStream.ts:55`, so any credential it carries is equally
 public. Narrowing the scope does not escape the problem: this frontend has no
 server-side session to hold anything.
 

@@ -4,6 +4,13 @@ import { ChatMessage, AgentStreamEvent } from "../types/agent";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
 
+// The one wording shown when a request fails; the backend never sends exception text
+const ERROR_MESSAGE = "Something went wrong on our side. Please try again in a moment.";
+
+// Keep any partial answer and put the error message below it
+const withErrorMessage = (content: string) =>
+  content ? `${content}\n\n${ERROR_MESSAGE}` : ERROR_MESSAGE;
+
 const getSessionId = () => {
   if (typeof window === "undefined") {
     return `thread_${Date.now()}`;
@@ -66,8 +73,19 @@ export const useChatStream = (initialThreadId?: string) => {
     }
   };
 
+  const showErrorMessage = (assistantId: string) => {
+    setMessages((prev) =>
+      prev.map((msg) =>
+        msg.id === assistantId && !msg.isError
+          ? { ...msg, content: withErrorMessage(msg.content), isThinking: false, currentTool: null, isError: true }
+          : msg
+      )
+    );
+  };
+
   // --- REUSABLE STREAM READER ---
   const readStream = async (response: Response, assistantId: string) => {
+    if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
     if (!response.body) throw new Error("No readable stream available");
     
     const reader = response.body.getReader();
@@ -122,6 +140,8 @@ export const useChatStream = (initialThreadId?: string) => {
             updatedMsg.currentTool = null;
             break;
           case "on_chat_model_stream":
+            // The backend still appends its latency line after an error; keep the error message last
+            if (updatedMsg.isError) break;
             if (event.data.chunk?.content) {
               updatedMsg.content += event.data.chunk.content;
               updatedMsg.isThinking = false;
@@ -130,6 +150,12 @@ export const useChatStream = (initialThreadId?: string) => {
           case "on_agent_interrupt":
             updatedMsg.isThinking = false;
             updatedMsg.currentTool = "Action Required: Pending approval.";
+            break;
+          case "on_error":
+            updatedMsg.content = withErrorMessage(updatedMsg.content);
+            updatedMsg.isThinking = false;
+            updatedMsg.currentTool = null;
+            updatedMsg.isError = true;
             break;
         }
 
@@ -184,6 +210,7 @@ export const useChatStream = (initialThreadId?: string) => {
         console.log("Stream connection stopped by user.");
       } else {
         console.error("Stream connection failed:", error);
+        showErrorMessage(assistantId);
       }
     } finally {
       if (abortControllerRef.current === controller) {
@@ -272,6 +299,7 @@ export const useChatStream = (initialThreadId?: string) => {
         console.log("Stream resumption stopped by user.");
       } else {
         console.error("Stream resumption failed:", err);
+        showErrorMessage(targetAssistantId);
       }
     } finally {
       if (abortControllerRef.current === controller) {

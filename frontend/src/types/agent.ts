@@ -23,4 +23,5 @@ export interface ChatMessage {
   content: string;
   isThinking?: boolean;
   currentTool?: string | null; // e.g., "Searching the web..."
+  isError?: boolean; // Set once the request failed; later stream text is dropped
 }

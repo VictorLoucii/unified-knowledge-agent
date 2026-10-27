@@ -293,7 +293,7 @@ Rules:
         traceback.print_exc()
 
         print(f"🚨 Raw Error: {repr(e)}")
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
         print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Error")
         yield "data: [DONE]\n\n"
 
@@ -432,5 +432,5 @@ async def resume_graph_stream(thread_id: str, graph):
         import traceback
         print("🚨 resume_graph_stream Crash Details:")
         traceback.print_exc()
-        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
         yield "data: [DONE]\n\n"

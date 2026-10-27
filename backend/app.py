@@ -217,7 +217,7 @@ async def get_all_threads(limit: int = 20, offset: int = 0):
         return {"threads": threads, "has_more": has_more}
     except Exception as e:
         print(f"🚨 Error fetching threads: {e}")
-        return {"error": str(e), "threads": [], "has_more": False}
+        return {"error": "Internal error", "threads": [], "has_more": False}
 
 
 @app.get("/history/{thread_id}")
@@ -246,7 +246,7 @@ async def get_thread_history(thread_id: str):
         return {"messages": formatted_messages}
     except Exception as e:
         print(f"🚨 Error fetching thread state: {e}")
-        return {"error": str(e), "messages": []}
+        return {"error": "Internal error", "messages": []}
 
 
 # Added Delete Endpoint
@@ -258,7 +258,7 @@ async def delete_thread(thread_id: str):
         return {"status": "success"}
     except Exception as e:
         print(f"🚨 Delete Error: {e}")
-        return {"error": str(e)}
+        return {"error": "Internal error"}
 
 
 if __name__ == "__main__":
