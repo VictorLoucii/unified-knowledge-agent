@@ -1581,3 +1581,89 @@ a user typing the question.
 blocks. This is `config.py`'s strict regex *failing to terminate* one. Both
 produce "the same question returns different text depending on the path", which
 is why they read alike; the mechanisms are opposite and the fixes are separate.
+
+---
+
+## 13. The DB pool handed out a dead connection after idle — fix in place, not verified against the trigger
+
+**Status 2026-10-27: fix applied at `app.py:65`. The original failure did not
+reproduce, so the fix is untested against what caused it.**
+
+An earlier local session saw `/history` hang after roughly 15 minutes idle, then
+return the empty error list (`app.py:218-220`), with
+`discarding closed connection ... [BAD]` in the backend log. *Stated* — taken
+from the task brief; the original log was not re-read.
+
+### What the log line means — read
+
+`psycopg_pool` 3.3.0 logs that warning in `_return_connection`
+(`pool_async.py:791`), on the branch for a connection handed **back** after use.
+So the pool gave out a connection that was already dead, the query waited on
+it, and the pool noticed only afterwards. The pool's 30 s `timeout` does not
+bound that wait: it covers waiting for a free connection, not the query.
+*Inferred* from the code path: the wait was the OS TCP timeout, matching
+`SSL SYSCALL error: Operation timed out`.
+
+### Reproduction attempt — measured, did not reproduce
+
+Unfixed code at `282d1c2`, Mac kept awake with `caffeinate`, no other request
+in the backend log. `/history` after **≥ 20 m 59 s** idle (timestamps printed
+before and after the curl): **0.191 s**, 20 real threads, no `[BAD]` line.
+Plain idle with the Mac awake does not kill these connections.
+
+The database is Supabase's pooler (Supavisor), port 5432, session mode — read
+from the host and port only, by the owner.
+
+### The fix
+
+1. `check=AsyncConnectionPool.check_connection` — the pool runs an empty query
+   on each connection before handing it out, and replaces one that fails.
+2. `keepalives_idle=60, keepalives_interval=10, keepalives_count=3` — libpq's
+   keepalives are on by default, but the first probe waits for the OS default
+   of 2 h. With these, a flow that dies while idle is marked dead within ~90 s.
+
+Rejected: a shorter `max_idle` alone. `_shrink_pool` (`pool_async.py:898-921`)
+closes at most one connection per period and only above `min_size` (default 4),
+so it never retires the base connections.
+
+### After the fix — measured
+
+Same conditions, fixed build. `/history` after **20 m 56 s** idle (22:13:14 to
+22:34:10, timestamps printed): **0.211 s**, 20 real threads, no `[BAD]` line, and
+no other request in the backend log. The 11-line form of
+the fix was running; the committed one-line form has an identical AST (`ast.dump`
+compared).
+
+That shows the fix does no harm at idle. It does **not** verify the fix,
+because the unfixed build also passed at idle.
+
+### Hypotheses, not measured
+
+- **The trigger was Mac sleep.** Awake, the kernel answers the pooler's
+  keepalives; asleep, nothing does, the pooler drops the flow, and on wake the
+  client's next write retransmits into silence until `ETIMEDOUT`. What would
+  refute it: a sleep of ≥ 15 min that does not reproduce, or a reproduction that
+  ends in a fast reset rather than a timeout. The owner declined the sleep test.
+- **The first request after a long sleep may still take ~30–40 s.** Client
+  keepalives do not run while asleep. After wake, `check_connection` waits on the
+  dead socket until the 10 s × 3 probes fail, then the pool swaps the connection
+  and the request succeeds. A time limit on the check would close this; not
+  added, because the state psycopg leaves a connection in after a cancelled
+  `execute` was not checked. What would refute it: a curl straight after a
+  ≥ 15 min sleep on the fixed build that answers in under 2 s.
+- **The deployed Space may never hit this.** An always-awake container answers
+  keepalives. A cloud NAT idle timer could still drop a flow, which the 60 s
+  keepalives cover. No production failure has been observed. What would refute
+  it: a `discarding closed connection` warning in the Space's logs.
+
+### Why one line
+
+The fix sits on the line that already held the pool, with a trailing pointer
+here, as item 9's did (`app.py:84`). A multi-line block would have moved 44
+live citations, 5 of them in `DECISIONS.md` — a subagent's sweep count, not
+re-counted.
+
+### Not checked
+
+Supavisor's own idle settings. Whether a Wi-Fi drop reproduces the failure.
+`tcp_user_timeout`, which bounds a stuck write, but only on Linux.

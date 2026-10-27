@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
     global async_pool, graph
 
     # 1. Start the DB Pool first so the app is ready
-    async_pool = AsyncConnectionPool(conninfo=DB_URI, max_size=10, open=False)
+    async_pool = AsyncConnectionPool(conninfo=DB_URI, max_size=10, open=False, check=AsyncConnectionPool.check_connection, kwargs={"keepalives": 1, "keepalives_idle": 60, "keepalives_interval": 10, "keepalives_count": 3})  # see OPEN.md item 13
     await async_pool.open()
 
     memory = AsyncPostgresSaver(async_pool)
