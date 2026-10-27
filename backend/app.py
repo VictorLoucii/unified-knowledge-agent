@@ -37,7 +37,7 @@ from backend.memory import (
 from backend.core.agents import workflow
 
 # FastAPI Imports
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, FileResponse
 
@@ -100,7 +100,7 @@ app.add_middleware(
 # DEPLOYMENT HEALTH CHECK
 # ==========================================
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     """
     Fastest way to verify if the latest Git Push is live
     and if the RAG brain has finished hydrating.
@@ -110,10 +110,10 @@ async def health_check():
         is_hydrated = next(store.yield_keys(), None) is not None
     except Exception:
         is_hydrated = False
-
+    print(f"🔧 [__DEV__] /health client={request.client.host if request.client else None} xff={request.headers.get('x-forwarded-for')}", flush=True)
     return {
         "status": "online",
-        "version": "6.5-docs",  # <--- CHANGE THIS ON EVERY PUSH
+        "version": "6.6-health-log",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": is_hydrated,
         "ingestion_state": get_ingestion_state(),
         "provider": "Hugging Face Spaces",
