@@ -1,12 +1,12 @@
 ---
 name: citation-sweep
-description: Re-check every file:line citation in CLAUDE.md, DECISIONS.md, OPEN.md and README.md after a commit changes a tracked file's line count. Use when the user types /citation-sweep, or right after such a commit, before the handback. Read-only: it reports moved citations; it does not edit the records.
+description: Re-check every file:line citation in CLAUDE.md, DECISIONS.md, OPEN.md, README.md and every other tracked file outside data/ after a commit changes a tracked file's line count. Use when the user types /citation-sweep, or right after such a commit, before the handback. Read-only: it reports moved citations; it does not edit the records.
 ---
 
 # Citation sweep
 
-`CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md` cite source by
-`file:line`. A commit that changes a file's line count moves every citation
+`CLAUDE.md`, `DECISIONS.md`, `OPEN.md`, `README.md` and other tracked files cite
+source by `file:line`. A commit that changes a file's line count moves every citation
 into that file. The rule, and the evidence for why a plain grep is not enough,
 are in the root `CLAUDE.md` under "Working rules". This skill is the
 procedure only.
@@ -54,6 +54,13 @@ For every file whose line count the commit changed:
    header false. The difference is one word, and step 4 does not cover it —
    step 4 is written as *to deleted code*, and these point at content that
    still exists and has moved.
+
+6. **Then search every other tracked file outside `data/`.** Use the file's
+   basename, not its path: `.gitignore` cites `app.py:78`, not
+   `backend/app.py:78`. Run
+   `git ls-files | command grep -v '^data/' | xargs command grep -nIE '<basename>:[0-9]'`,
+   then search the same files for the bare form, as in step 2. Re-check each
+   hit as in steps 1 to 5.
 
 Report each form searched and the count of hits re-checked, so the handback's
 `sweep:` line can name them. Fix a moved citation in the record that holds it;

@@ -70,7 +70,8 @@ Current check results: `.claude/check-baseline.md`.
   mechanism into a record, name what you would measure to be wrong, and measure
   it; otherwise label it a hypothesis.
 - A commit that changes a file's line count breaks `file:line` citations in
-  `CLAUDE.md`, `DECISIONS.md`, `OPEN.md` and `README.md`. Run `/citation-sweep`.
+  `CLAUDE.md`, `DECISIONS.md`, `OPEN.md`, `README.md` and every other tracked
+  file outside `data/`. Run `/citation-sweep`.
   A filename grep is not enough, for two reasons. Some citations are bare
   (`| :102 |`, `at :210`): on 2026-08-21, 12 bare refs into `app.py` against 44
   the grep found. And a range must be checked at both ends: that day the
