@@ -27,6 +27,16 @@ def setup_database_tables():
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
 
+                    -- Each thread belongs to the browser that created it
+                    ALTER TABLE thread_metadata
+                    ADD COLUMN IF NOT EXISTS owner_id TEXT;
+                    """
+                )
+
+                # The owner column is added in the call above, so a failed FK
+                # step here cannot roll it back or skip it
+                cur.execute(
+                    """
                     -- Tie LangGraph's checkpoints to our metadata table
                     ALTER TABLE checkpoints 
                     DROP CONSTRAINT IF EXISTS fk_cascade_metadata_checkpoints;
@@ -91,22 +101,34 @@ async def generate_title_from_llm(user_message: str) -> str:
 
 
 async def save_thread_title(
-    async_pool: AsyncConnectionPool, thread_id: str, user_message: str
-):
-    """Generates and saves a title for a new thread if it doesn't exist."""
+    async_pool: AsyncConnectionPool, thread_id: str, user_message: str, owner_id: str
+) -> bool:
+    """Generates and saves a title for a new thread if it doesn't exist.
+
+    Returns True when the thread belongs to owner_id (newly created or already
+    owned), False when another owner, or no owner, holds it.
+    """
     async with async_pool.connection() as conn:
         async with conn.cursor() as cur:
+            # Write an optimistic title first to avoid blocking stream startup
+            title = user_message[:40] + ("..." if len(user_message) > 40 else "")
             await cur.execute(
-                "SELECT title FROM thread_metadata WHERE thread_id = %s", (thread_id,)
+                """
+                INSERT INTO thread_metadata (thread_id, title, owner_id)
+                VALUES (%s, %s, %s)
+                ON CONFLICT (thread_id) DO NOTHING
+                RETURNING thread_id
+                """,
+                (thread_id, title, owner_id),
             )
             if not await cur.fetchone():
-                # Write an optimistic title first to avoid blocking stream startup
-                title = user_message[:40] + ("..." if len(user_message) > 40 else "")
+                # The row already existed: re-read its owner instead of trusting the caller
                 await cur.execute(
-                    "INSERT INTO thread_metadata (thread_id, title) VALUES (%s, %s)",
-                    (thread_id, title),
+                    "SELECT owner_id FROM thread_metadata WHERE thread_id = %s", (thread_id,)
                 )
-                
+                row = await cur.fetchone()
+                return row is not None and row[0] == owner_id
+            else:
                 # Kick off background LLM call to update it to a meaningful title
                 async def update_title_bg():
                     try:
@@ -121,32 +143,50 @@ async def save_thread_title(
                         print(f"⚠️ [WARNING] Background title update failed: {e}")
 
                 asyncio.create_task(update_title_bg())
+                return True
 
 
-async def get_all_threads_history(async_pool: AsyncConnectionPool, limit: int = 20, offset: int = 0):
-    """Fetches a paginated list of unique thread IDs joined with their titles."""
+async def get_thread_owner(async_pool: AsyncConnectionPool, thread_id: str) -> tuple[bool, str | None]:
+    """Returns (exists, owner_id) for a thread's metadata row."""
+    async with async_pool.connection() as conn:
+        async with conn.cursor() as cur:
+            await cur.execute(
+                "SELECT owner_id FROM thread_metadata WHERE thread_id = %s", (thread_id,)
+            )
+            row = await cur.fetchone()
+            return (row is not None, row[0] if row else None)
+
+
+async def get_all_threads_history(async_pool: AsyncConnectionPool, owner_id: str, limit: int = 20, offset: int = 0):
+    """Fetches a paginated list of the owner's thread IDs with their titles."""
     async with async_pool.connection() as conn:
         async with conn.cursor() as cur:
             await cur.execute(
                 """
-                SELECT c.thread_id, COALESCE(m.title, c.thread_id) as title 
-                FROM (SELECT DISTINCT thread_id FROM checkpoints) c
-                LEFT JOIN thread_metadata m ON c.thread_id = m.thread_id
-                ORDER BY m.created_at DESC NULLS LAST, c.thread_id DESC
+                SELECT m.thread_id, COALESCE(m.title, m.thread_id) as title
+                FROM thread_metadata m
+                WHERE m.owner_id = %s
+                  AND EXISTS (SELECT 1 FROM checkpoints c WHERE c.thread_id = m.thread_id)
+                ORDER BY m.created_at DESC NULLS LAST, m.thread_id DESC
                 LIMIT %s OFFSET %s;
                 """,
-                (limit, offset)
+                (owner_id, limit, offset)
             )
             rows = await cur.fetchall()
             return [{"id": row[0], "title": row[1]} for row in rows]
 
 
 
-async def delete_thread_from_db(async_pool: AsyncConnectionPool, thread_id: str):
-    """Safely deletes thread metadata. PostgreSQL ON DELETE CASCADE handles LangGraph tables automatically."""
+async def delete_thread_from_db(async_pool: AsyncConnectionPool, thread_id: str, owner_id: str) -> bool:
+    """Safely deletes thread metadata. PostgreSQL ON DELETE CASCADE handles LangGraph tables automatically.
+
+    Deletes only a thread owned by owner_id; returns False when nothing matched.
+    """
     async with async_pool.connection() as conn:
         async with conn.cursor() as cur:
             # We only need to delete the parent record now
             await cur.execute(
-                "DELETE FROM thread_metadata WHERE thread_id = %s;", (thread_id,)
+                "DELETE FROM thread_metadata WHERE thread_id = %s AND owner_id = %s;",
+                (thread_id, owner_id),
             )
+            return cur.rowcount > 0

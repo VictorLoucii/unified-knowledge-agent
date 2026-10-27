@@ -237,7 +237,7 @@ LFS rules that already sit unused at `.gitattributes:4-6`.
 
 **Why:** three reasons, in order of weight.
 
-1. **The startup cost is already absorbed.** `app.py:74-76` runs
+1. **The startup cost is already absorbed.** `app.py:76-78` runs
    `initialize_rag` in a background thread precisely so HuggingFace health
    checks pass instantly — the comment there says so. The ingest never blocks
    the port bind, and the Space does answer from the first second.
@@ -276,7 +276,7 @@ early return. Only clones behave differently.
 **Confirmed live the same day, commit `003496a`.** The Space rebuilt in about
 three minutes and `/health` then reported `rag_hydrated: true` on eight
 consecutive polls over five and a half minutes. That flag tests whether the
-docstore holds any key (`app.py:110`), and an empty docstore was the entire
+docstore holds any key (`app.py:112`), and an empty docstore was the entire
 bug. It cost no OpenRouter credit. Two assumptions became facts: the
 sentence-transformer models do resolve inside the Space, and the background
 ingestion thread does keep the app answering while it runs.
@@ -295,7 +295,7 @@ count.
 
 **Chosen (2026-08-21):** `/health` gains one key, `ingestion_state`, taking the
 string values `not_started`, `running`, `done` or `failed`. `rag_hydrated` keeps
-its exact former meaning and is still computed at `app.py:110`. The key is
+its exact former meaning and is still computed at `app.py:112`. The key is
 purely additive; nothing already in the response changed.
 
 **Rejected: a boolean `ingestion_finished`.** Its case was not weak. One key, one
@@ -365,7 +365,7 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:270`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:336`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
 `search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
@@ -584,7 +584,7 @@ while letting the environment win.
 
 ### The refine cap is 8,000 characters, not 1,000
 
-**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:151`.
+**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:194`.
 
 **Rejected:** `1000`, matching the message cap at `guardrails.py:13`, so the two
 routes would read consistently.

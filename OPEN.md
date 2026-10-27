@@ -207,7 +207,7 @@ weights already on disk. Treat that as a floor, not a forecast.
 **The deployed Space pays roughly twelve times that. Measured 2026-08-19:**
 17,958 children in **about twenty minutes**, against 97 seconds locally — about
 **15 chunks per second in the container, against about 185 on the Mac.** The
-Space pays it on every container start, in the background thread at `app.py:76`,
+Space pays it on every container start, in the background thread at `app.py:78`,
 so it never blocks the port bind. **It is not brief.** See item 4.
 
 **The likely cause, read:** `config.py:89` is
@@ -298,11 +298,11 @@ only for the small residue below. The decision and the full mechanism are in
 
 `data/.manifest.json` is no longer tracked, so the Space's clone arrives without
 one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
-files in the background thread at `app.py:76`.
+files in the background thread at `app.py:78`.
 
-**How it was confirmed, at zero OpenRouter cost.** `app.py:102-120` exposes
+**How it was confirmed, at zero OpenRouter cost.** `app.py:104-122` exposes
 `/health`, which reports `rag_hydrated` by testing whether the docstore holds
-any key (`app.py:110`). An empty docstore was the entire bug, so this flag was
+any key (`app.py:112`). An empty docstore was the entire bug, so this flag was
 `false` before.
 
 1. `13:28:04` Space stage `RUNNING_BUILDING`.
@@ -320,7 +320,7 @@ those keys.
 **Two of the three unknowns are now answered.** The models *do* resolve inside
 the Space — ingestion cannot embed without `all-MiniLM-L6-v2`, and the store is
 populated. The startup penalty *does not* break anything — the app reported
-`online` while ingestion ran, which is what `app.py:74-76` was built for.
+`online` while ingestion ran, which is what `app.py:76-78` was built for.
 
 ### Residue
 
@@ -357,10 +357,10 @@ files eventually load. This one is about the window before they do.
 
 Read, three lines:
 
-1. `app.py:76` fires ingestion with
+1. `app.py:78` fires ingestion with
    `asyncio.create_task(asyncio.to_thread(initialize_rag))`. **Nothing awaits
    it.**
-2. `app.py:110` computes `rag_hydrated` as `next(store.yield_keys(), None)`,
+2. `app.py:112` computes `rag_hydrated` as `next(store.yield_keys(), None)`,
    which is true once **any** key exists — that is, after the **first** of 26
    files.
 3. Item 2 records the Space's ingest at roughly **twenty minutes**.
@@ -385,11 +385,11 @@ key, `ingestion_state`, so the two questions stop sharing one answer:
 
 | Key | Question it answers | How |
 |---|---|---|
-| `rag_hydrated` | is **anything** loaded | `next(store.yield_keys(), None)`, `app.py:110` |
+| `rag_hydrated` | is **anything** loaded | `next(store.yield_keys(), None)`, `app.py:112` |
 | `ingestion_state` | has loading **finished** | module state in `ingest.py`, read through `get_ingestion_state()` |
 
 `rag_hydrated` keeps its exact former meaning and is still computed at
-`app.py:110`. Nothing that was already in the response changed; the key is
+`app.py:112`. Nothing that was already in the response changed; the key is
 purely additive.
 
 **`ingestion_state` takes four values, not two.** `not_started`, `running`,
@@ -681,7 +681,7 @@ the request shape and session persistence all worked, which is exactly what a
 matching port was never sufficient to prove.
 
 **The `OPTIONS ... 200` is the browser's cross-origin preflight passing**, which
-confirms live what was previously only read from `app.py:92` — that CORS is not
+confirms live what was previously only read from `app.py:94` — that CORS is not
 a blocker here.
 
 **Provenance: the terminal output and a screenshot were pasted by the user and
@@ -706,7 +706,7 @@ or after any of the fixes.** Three things follow, in increasing order of doubt:
 3. **Whether the two halves talk *through compose*.** They do talk locally —
    see the observed run above — but that ran two processes on the host, not two
    containers with a published port between them. **CORS is ruled out on both
-   paths:** `app.py:92` sets `allow_origin_regex=".*"` with `allow_methods` and
+   paths:** `app.py:94` sets `allow_origin_regex=".*"` with `allow_methods` and
    `allow_headers` both `["*"]`, and the local run's `OPTIONS ... 200` shows a
    real browser preflight passing against it.
 
@@ -789,10 +789,10 @@ missed the one in `app.py`:
 
 | Site | Behaviour on failure |
 |---|---|
-| `chat.py:117` triage | `chat.py:152-153` logs and falls through to the core pipeline. Graceful. |
+| `chat.py:131` triage | `chat.py:169-170` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:140` conversational | No local handler. Propagates to `chat.py:287-294`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
-| `app.py:162` `/refine_transcript` | `app.py:167-169` logs and returns the raw transcript unchanged. Graceful. |
+| `agents.py:140` conversational | No local handler. Propagates to `chat.py:307-314`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
+| `app.py:205` `/refine_transcript` | `app.py:210-212` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
 added the router log. Re-grep rather than trusting a line number in this file.
@@ -1065,8 +1065,8 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:117` and
-   `app.py:162` — **read from source**. None of them calls a tool, so none is
+   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:131` and
+   `app.py:205` — **read from source**. None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
    model with the agent that does tool calls and formatted answers. All four
    currently use one model, which is why this reads as a single decision.
@@ -1114,8 +1114,8 @@ session from a container log pasted by the user; I did not read that log.*
 - **Three public routes reach a paid model** — `/chat_stream`,
   `/refine_transcript` and `/chat_approve`. None checks anything about the
   caller. The full route table is below.
-- `app.py:90-96` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
-  The comment at `app.py:86` calls this "Secure CORS" and `app.py:92` says it
+- `app.py:92-98` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
+  The comment at `app.py:88` calls this "Secure CORS" and `app.py:94` says it
   "Allows any local origin format"; `.*` matches **every** origin, not local
   ones.
 
@@ -1143,18 +1143,18 @@ caller.**
 
 | Route | Line | Reaches a model | Notes |
 |---|---|---|---|
-| `GET /health` | :102 | no | Reports `rag_hydrated` and `ingestion_state`. Harmless. |
-| `POST /chat_stream` | :128 | **yes** | Runs the full graph. **Guarded — see below.** |
-| `POST /refine_transcript` | :153 | **yes** | `fast_llm.ainvoke` at :162. **Length cap only**, `app.py:151`, 8,000 characters. No guardrail, no cache. |
-| `GET /` | :173 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :185 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
-| `GET /history` | :210 | no | Lists **every** thread id and title, with `limit`/`offset`. |
-| `GET /history/{thread_id}` | :223 | no | Full message content of any conversation. |
-| `DELETE /history/{thread_id}` | :253 | no | Deletes all data for that thread. |
+| `GET /health` | :104 | no | Reports `rag_hydrated` and `ingestion_state`. Harmless. |
+| `POST /chat_stream` | :161 | **yes** | Runs the full graph. **Guarded — see below.** |
+| `POST /refine_transcript` | :196 | **yes** | `fast_llm.ainvoke` at :205. **Length cap only**, `app.py:194`, 8,000 characters. No guardrail, no cache. |
+| `GET /` | :216 | no | Serves `static/index.html` if present. |
+| `POST /chat_approve` | :228 | **yes** | Resumes an interrupted graph run for any `thread_id`. |
+| `GET /history` | :263 | no | Lists **every** thread id and title, with `limit`/`offset`. |
+| `GET /history/{thread_id}` | :279 | no | Full message content of any conversation. |
+| `DELETE /history/{thread_id}` | :315 | no | Deletes all data for that thread. |
 
 **The three `/history` routes chain, and that is the data exposure.** `/history`
-at :210 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
-at :223 returns the messages; `DELETE /history/{id}` at :253 removes them. The
+at :263 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
+at :279 returns the messages; `DELETE /history/{id}` at :315 removes them. The
 stored conversations contain retrieved fragments of the personal knowledge base,
 because that is what the agent answers with.
 
@@ -1169,10 +1169,10 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 **Read.** `/chat_stream` is genuinely defended, but none of the defence lives in
 `app.py` — it is all in `chat.py`, which only `/chat_stream` routes through.
 
-- `chat.py:49` calls `check_input_guardrail`. `guardrails.py:13` refuses any
+- `chat.py:60` calls `check_input_guardrail`. `guardrails.py:13` refuses any
   message over 1,000 characters, and `guardrails.py:20-25` blocks jailbreak and
   key-extraction phrases.
-- `chat.py:64-97` checks the semantic cache first. A repeated or near-identical
+- `chat.py:75-111` checks the semantic cache first. A repeated or near-identical
   question is answered with **no model call**.
 - The fast-path table intercepts 53 known questions before any model call.
   *(Taken from CLAUDE.md as a record; the count is not re-derived here.)*
@@ -1183,7 +1183,7 @@ length check, no cache. `app.py:150-151` was
 call reached the model. It was simultaneously the cheapest route to abuse and the
 only one with no brakes.
 
-**A length cap was added 2026-08-20.** `app.py:151` is now
+**A length cap was added 2026-08-20.** `app.py:194` is now
 `transcript: str = Field(..., max_length=8000)`. It bounds the cost of one model
 call and nothing else. There is still no guardrail and no cache on this route, so
 the asymmetry with `/chat_stream` stands.
@@ -1201,11 +1201,11 @@ routes make model calls on behalf of whoever asks.
 
 ### Two pieces of dead configuration
 
-- **`app.py:88` reads `VERCEL_FRONTEND_URL` into `frontend_url`, and nothing
+- **`app.py:90` reads `VERCEL_FRONTEND_URL` into `frontend_url`, and nothing
   ever uses it.** A grep across `backend/` returns that single line and no other
-  hit — read. The CORS middleware at `app.py:90-96` uses
+  hit — read. The CORS middleware at `app.py:92-98` uses
   `allow_origin_regex=".*"` with `allow_credentials=True` instead. **So the
-  allowlist the comment at `app.py:86` calls "Secure CORS" was written and never
+  allowlist the comment at `app.py:88` calls "Secure CORS" was written and never
   wired in.**
 - CORS is not the control here regardless. It governs what browser JavaScript
   may *read*, not what `curl` or a server may call.
@@ -1252,7 +1252,7 @@ exactly the route names the scanner was missing. **Closed 2026-08-20 by option
 **(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
 next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**(b) A length cap on `RefineRequest.transcript`, `app.py:150-151`. — APPLIED
+**(b) A length cap on `RefineRequest.transcript`, `app.py:193-194`. — APPLIED
 2026-08-20.** One line, purely additive, breaks no caller. Bounds the cost of one
 model call; does not stop abuse. The value is **8,000** characters. It is not the
 `1000` this option used to recommend for symmetry with `guardrails.py:13` — that
@@ -1261,8 +1261,8 @@ recommendation was refuted from the frontend source, and the refutation is under
 
 **(c) A shared secret required by the spend routes.** **This does not work as
 stated, and the frontend is why.** Read: every call site is client-side —
-`page.tsx:71`, `ChatInput.tsx:84`, and `useChatStream.ts:55`, `:199`, `:245`,
-`:288`, `:321`. All three files resolve
+`page.tsx:72`, `ChatInput.tsx:84`, and `useChatStream.ts:56`, `:202`, `:248`,
+`:291`, `:324`. All three files resolve
 `process.env.NEXT_PUBLIC_API_URL`, and `ChatInput.tsx` and `page.tsx` are
 `"use client"`. **A `NEXT_PUBLIC_*` variable is inlined into the JavaScript
 bundle at build time and served to every visitor**, so a secret the frontend
@@ -1270,7 +1270,7 @@ holds is readable in devtools by anyone. The only version of (c) that works puts
 a server-side proxy in front — a Next.js route handler that holds the secret
 server-side and forwards. That is a real feature, not a one-line change.
 
-**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:84`. —
+**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:86`. —
 APPLIED 2026-08-20.** One line. Obscurity only — `/chat_stream` is not an exotic
 name. Slightly better than it first appears, because the scanner in the log
 demonstrably did **not** have the route names, and `/openapi.json` handed them
@@ -1278,7 +1278,7 @@ over. Fixes nothing on its own.
 
 **(e) Authentication on the three `/history` routes.** **Blocked by the same
 thing as (c).** The frontend calls `/history` from the browser at
-`page.tsx:71` and `useChatStream.ts:55`, so any credential it carries is equally
+`page.tsx:72` and `useChatStream.ts:56`, so any credential it carries is equally
 public. Narrowing the scope does not escape the problem: this frontend has no
 server-side session to hold anything.
 
@@ -1295,7 +1295,7 @@ still points where it did.** The 33 `app.py:NNN` references that stood across th
 records before the edit, and the 12 bare `:NNN` references inside this item, were
 re-checked line by line afterwards. One was already wrong and is corrected in the
 same commit: this item cited `app.py:87` for the "Secure CORS" comment, which
-sits at `app.py:86`.
+sits at `app.py:88`.
 
 **A grep for that filename now returns 41, not 33, and the eight are additions
 rather than omissions.** They are citations written for the first time by this
@@ -1305,12 +1305,12 @@ more to the CORS comment, and four to the capped field — three here and one in
 `DECISIONS.md` — less the single citation lost with the "Not checked" bullet that
 this section answers.
 
-1. **`app.py:84`** now reads
+1. **`app.py:86`** now reads
    `app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)`.
    **Measured:** `/openapi.json`, `/docs` and `/redoc` each return **404**,
    requested against the real `app` object.
-2. **`app.py:151`** now reads `transcript: str = Field(..., max_length=8000)`,
-   with `Field` added to the `pydantic` import already on `app.py:4`.
+2. **`app.py:194`** now reads `transcript: str = Field(..., max_length=8000)`,
+   with `Field` added to the `pydantic` import already on `app.py:5`.
    **Measured:** a POST of 8,001 characters returns **422** with
    `string_too_long` and carries no `refined_transcript` key; 8,000 characters
    validates.
@@ -1334,7 +1334,7 @@ ingests. And it bounds one call only — there is still no rate limit anywhere i
 
 **Option (d) costs the local `/docs` page too.** The interactive schema is gone
 in development as well as in the Space. Getting it back is an edit to
-`app.py:84`, not a setting.
+`app.py:86`, not a setting.
 
 **One consequence left alone.** `data/Agentic_AI_Engineer.md:14254` gives
 `http://127.0.0.1:8000/docs` as a local URL, which option (d) turns into a 404.
@@ -1394,7 +1394,7 @@ applies.
 `MemorySaver` — which is what `eval.py:35` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
-  input for __start__` and produces zero events. `chat.py:429-434` catches it and
+  input for __start__` and produces zero events. `chat.py:449-454` catches it and
   yields `{"error": ...}` then `[DONE]`, so the stream terminates cleanly.
 - A thread with `state.next == ()` raises nothing and yields two events,
   `on_chain_start` and `on_chain_end`. No `on_chat_model_*` event appears, so no
@@ -1543,7 +1543,7 @@ The mechanism, in order, all `read` at `7a42773`:
    holds **exactly one** problem header — `Problem 42`. So the block runs to EOF.
 4. `agents.py:95` puts that string into an `AIMessage` unchanged. **There is no
    length cap on this path.** The only `max_length=8000` in the backend is on
-   `/refine_transcript` (`app.py:151`), a different route — see item 9.
+   `/refine_transcript` (`app.py:194`), a different route — see item 9.
 
 **Corrected 2026-08-22, after the commit that recorded it.** This item first
 said 867,756. That is the raw file slice from the header to EOF.
@@ -1573,7 +1573,7 @@ a user typing the question.
 
 - sort `get_data_file_paths()` so the choice is at least deterministic — makes
   the result stable, not correct, and would still return 867,746 characters;
-- cap the fast-path response the way `app.py:151` caps `/refine_transcript`;
+- cap the fast-path response the way `app.py:194` caps `/refine_transcript`;
 - end a block at the next heading of any level rather than only at the next
   `Problem N`, which is the actual cause and the largest change.
 
@@ -1586,11 +1586,11 @@ is why they read alike; the mechanisms are opposite and the fixes are separate.
 
 ## 13. The DB pool handed out a dead connection after idle — fix in place, not verified against the trigger
 
-**Status 2026-10-27: fix applied at `app.py:65`. The original failure did not
+**Status 2026-10-27: fix applied at `app.py:67`. The original failure did not
 reproduce, so the fix is untested against what caused it.**
 
 An earlier local session saw `/history` hang after roughly 15 minutes idle, then
-return the empty error list (`app.py:218-220`), with
+return the empty error list (`app.py:274-276`), with
 `discarding closed connection ... [BAD]` in the backend log. *Stated* — taken
 from the task brief; the original log was not re-read.
 
@@ -1659,7 +1659,7 @@ because the unfixed build also passed at idle.
 ### Why one line
 
 The fix sits on the line that already held the pool, with a trailing pointer
-here, as item 9's did (`app.py:84`). A multi-line block would have moved 44
+here, as item 9's did (`app.py:86`). A multi-line block would have moved 44
 live citations, 5 of them in `DECISIONS.md` — a subagent's sweep count, not
 re-counted.
 

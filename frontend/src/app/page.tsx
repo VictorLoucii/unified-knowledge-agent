@@ -3,6 +3,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChatStream } from "../hooks/useChatStream";
+import { browserIdHeaders } from "../lib/browserId";
 import Sidebar from "../components/Sidebar";
 import ChatHeader from "../components/ChatHeader";
 import MessageList from "../components/MessageList";
@@ -69,6 +70,7 @@ export default function ChatUI() {
     const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
     fetch(
       `${API_BASE_URL}/history?limit=${LIMIT}&offset=${currentOffset}`,
+      { headers: browserIdHeaders() },
     )
       .then((res) => res.json())
       .then((data) => {

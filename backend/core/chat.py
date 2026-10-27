@@ -39,7 +39,18 @@ def is_excluded_from_cache(message: str) -> bool:
     return False
 
 
-async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool):
+def _thread_refused_events():
+    """SSE events for a thread that belongs to another browser."""
+    refused_event = {
+        "event": "on_chat_model_stream",
+        "name": "Ownership",
+        "run_id": "thread_refused",
+        "data": {"chunk": {"content": "This chat is not available."}},
+    }
+    return [f"data: {json.dumps(refused_event)}\n\n", "data: [DONE]\n\n"]
+
+
+async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
     """
     Handles input validation, LLM bypass check for direct problem queries,
     and streams responses from the LangGraph workflow.
@@ -73,7 +84,10 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             if cached_response:
                 print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
                 # Save title before streaming starts
-                await save_thread_title(async_pool, thread_id, user_message)
+                if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+                    for event in _thread_refused_events():
+                        yield event
+                    return
 
                 # Persist state directly in PostgreSQL history
                 ai_msg = AIMessage(content=cached_response)
@@ -123,7 +137,10 @@ Rules:
         if triage_content != "ROUTE_TO_CORE":
             print(f"⚡ [TRIAGE] Handled by fast classifier: {triage_content}")
             # Save title before streaming starts
-            await save_thread_title(async_pool, thread_id, user_message)
+            if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+                for event in _thread_refused_events():
+                    yield event
+                return
             
             # Persist to postgres memory
             ai_msg = AIMessage(content=triage_content)
@@ -157,7 +174,10 @@ Rules:
 
     try:
         # Save title before streaming starts
-        await save_thread_title(async_pool, thread_id, user_message)
+        if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+            for event in _thread_refused_events():
+                yield event
+            return
 
         # Get initial state to find if any tools ran in previous turns (for follow-ups)
         state = await graph.aget_state(config)

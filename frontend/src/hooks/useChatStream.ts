@@ -1,6 +1,7 @@
 // frontend/src/hooks/useChatStream.ts
 import { useState, useRef } from "react";
 import { ChatMessage, AgentStreamEvent } from "../types/agent";
+import { browserIdHeaders } from "../lib/browserId";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
 
@@ -52,7 +53,9 @@ export const useChatStream = (initialThreadId?: string) => {
     setMessages([]);
 
     try {
-      const response = await fetch(`${API_BASE_URL}/history/${id}`);
+      const response = await fetch(`${API_BASE_URL}/history/${id}`, {
+        headers: browserIdHeaders(),
+      });
       const data = await response.json();
 
       if (data.messages) {
@@ -198,7 +201,7 @@ export const useChatStream = (initialThreadId?: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/chat_stream`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...browserIdHeaders() },
         body: JSON.stringify({ message: userText, thread_id: threadId }),
         signal: controller.signal,
       });
@@ -244,7 +247,7 @@ export const useChatStream = (initialThreadId?: string) => {
       try {
         await fetch(`${API_BASE_URL}/chat_approve`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { "Content-Type": "application/json", ...browserIdHeaders() },
           body: JSON.stringify({ thread_id: threadId, approve: false }),
         });
         
@@ -287,7 +290,7 @@ export const useChatStream = (initialThreadId?: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/chat_approve`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...browserIdHeaders() },
         body: JSON.stringify({ thread_id: threadId, approve: true }),
         signal: controller.signal,
       });
@@ -320,6 +323,7 @@ export const useChatStream = (initialThreadId?: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/history/${id}`, {
         method: "DELETE",
+        headers: browserIdHeaders(),
       });
       if (response.ok) {
         if (id === threadId) setMessages([]);

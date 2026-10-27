@@ -1,5 +1,6 @@
 # backend/app.py
 import os
+import re
 from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 import asyncio
@@ -30,6 +31,7 @@ from backend.memory import (
     DB_URI,
     setup_database_tables,
     get_all_threads_history,
+    get_thread_owner,
     delete_thread_from_db,
 )
 
@@ -37,9 +39,9 @@ from backend.memory import (
 from backend.core.agents import workflow
 
 # FastAPI Imports
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import StreamingResponse, FileResponse, JSONResponse
 
 # LangGraph / Postgres checkpointer
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
@@ -120,18 +122,59 @@ async def health_check(request: Request):
     }
 
 
+# ==========================================
+# THREAD OWNERSHIP (browser id)
+# ==========================================
+# The frontend creates a random id once per browser and sends it in the
+# X-Browser-Id header. A thread belongs to the browser that created it.
+BROWSER_ID_PATTERN = re.compile(r"[A-Za-z0-9-]{1,64}")
+
+
+def read_browser_id(x_browser_id: str | None) -> str | None:
+    """Returns the browser id header value, or None when it is missing or malformed."""
+    if x_browser_id and BROWSER_ID_PATTERN.fullmatch(x_browser_id):
+        return x_browser_id
+    return None
+
+
+async def owns_thread(thread_id: str, owner_id: str, allow_new: bool = False) -> bool:
+    """True when owner_id owns the thread. allow_new also accepts a thread with no row yet."""
+    exists, owner = await get_thread_owner(async_pool, thread_id)
+    if not exists:
+        return allow_new
+    return owner is not None and owner == owner_id
+
+
+def thread_not_found() -> JSONResponse:
+    return JSONResponse(status_code=404, content={"error": "Thread not found"})
+
+
+def missing_browser_id() -> JSONResponse:
+    return JSONResponse(status_code=400, content={"error": "Missing browser id"})
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=4000)
     thread_id: str = "default_session"
 
 
 @app.post("/chat_stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, x_browser_id: str | None = Header(default=None)):
+    owner_id = read_browser_id(x_browser_id)
+    if not owner_id:
+        return missing_browser_id()
+    try:
+        if not await owns_thread(request.thread_id, owner_id, allow_new=True):
+            return thread_not_found()
+    except Exception as e:
+        print(f"🚨 Ownership check error: {e}")
+        return JSONResponse(status_code=503, content={"error": "Internal error"})
+
     async def timed_generator():
         import time, json
         start = time.time()
         is_interrupted = False
-        async for chunk in generate_chat_responses(request.message, request.thread_id, graph, async_pool):
+        async for chunk in generate_chat_responses(request.message, request.thread_id, graph, async_pool, owner_id):
             if "on_agent_interrupt" in chunk:
                 is_interrupted = True
             if chunk.strip() == "data: [DONE]":
@@ -183,8 +226,18 @@ class ActionRequest(BaseModel):
 
 
 @app.post("/chat_approve")
-async def chat_approve(request: ActionRequest):
+async def chat_approve(request: ActionRequest, x_browser_id: str | None = Header(default=None)):
     """Endpoint for the frontend to approve or reject a pending tool call."""
+    owner_id = read_browser_id(x_browser_id)
+    if not owner_id:
+        return missing_browser_id()
+    try:
+        if not await owns_thread(request.thread_id, owner_id):
+            return thread_not_found()
+    except Exception as e:
+        print(f"🚨 Ownership check error: {e}")
+        return JSONResponse(status_code=503, content={"error": "Internal error"})
+
     if request.approve:
         async def timed_resume_generator():
             import time, json
@@ -208,10 +261,13 @@ async def chat_approve(request: ActionRequest):
 # 6. MEMORY & HISTORY ENDPOINTS
 # ==========================================
 @app.get("/history")
-async def get_all_threads(limit: int = 20, offset: int = 0):
-    """Fetches a list of all unique thread IDs and their titles from PostgreSQL."""
+async def get_all_threads(limit: int = 20, offset: int = 0, x_browser_id: str | None = Header(default=None)):
+    """Fetches a list of the calling browser's thread IDs and their titles from PostgreSQL."""
+    owner_id = read_browser_id(x_browser_id)
+    if not owner_id:
+        return {"threads": [], "has_more": False}
     try:
-        threads = await get_all_threads_history(async_pool, limit, offset)
+        threads = await get_all_threads_history(async_pool, owner_id, limit, offset)
         # If we get exactly the limit amount, there are likely more rows to fetch
         has_more = len(threads) == limit
         return {"threads": threads, "has_more": has_more}
@@ -221,9 +277,15 @@ async def get_all_threads(limit: int = 20, offset: int = 0):
 
 
 @app.get("/history/{thread_id}")
-async def get_thread_history(thread_id: str):
+async def get_thread_history(thread_id: str, x_browser_id: str | None = Header(default=None)):
     """Fetches the message history for a specific thread_id."""
+    owner_id = read_browser_id(x_browser_id)
+    if not owner_id:
+        return thread_not_found()
     try:
+        if not await owns_thread(thread_id, owner_id):
+            return thread_not_found()
+
         config = {"configurable": {"thread_id": thread_id}}
         state = await graph.aget_state(config)
 
@@ -251,10 +313,14 @@ async def get_thread_history(thread_id: str):
 
 # Added Delete Endpoint
 @app.delete("/history/{thread_id}")
-async def delete_thread(thread_id: str):
+async def delete_thread(thread_id: str, x_browser_id: str | None = Header(default=None)):
     """Deletes all data for a specific thread_id."""
+    owner_id = read_browser_id(x_browser_id)
+    if not owner_id:
+        return thread_not_found()
     try:
-        await delete_thread_from_db(async_pool, thread_id)
+        if not await delete_thread_from_db(async_pool, thread_id, owner_id):
+            return thread_not_found()
         return {"status": "success"}
     except Exception as e:
         print(f"🚨 Delete Error: {e}")
