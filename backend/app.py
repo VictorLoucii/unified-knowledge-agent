@@ -121,7 +121,7 @@ async def health_check(request: Request):
 
 
 class ChatRequest(BaseModel):
-    message: str
+    message: str = Field(..., max_length=4000)
     thread_id: str = "default_session"
 
 

@@ -48,8 +48,6 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
     # 1. Run Input Guardrail Check
     refusal = check_input_guardrail(user_message)
     if refusal:
-        # Save title before streaming starts
-        await save_thread_title(async_pool, thread_id, user_message)
         error_event = {
             "event": "on_chat_model_stream",
             "name": "Guardrail",

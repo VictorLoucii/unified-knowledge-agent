@@ -76,7 +76,7 @@ async def generate_title_from_llm(user_message: str) -> str:
             )
         )
         
-        response = await llm.ainvoke([system_prompt, HumanMessage(content=user_message)])
+        response = await llm.ainvoke([system_prompt, HumanMessage(content=user_message[:200])])
         title = response.content.strip()
         # Strip any "title:" prefix case-insensitively if generated
         if title.lower().startswith("title:"):
