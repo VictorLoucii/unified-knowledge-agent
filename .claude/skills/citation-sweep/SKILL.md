@@ -56,8 +56,8 @@ For every file whose line count the commit changed:
    still exists and has moved.
 
 6. **Then search every other tracked file outside `data/`.** Use the file's
-   basename, not its path: `.gitignore` cites `app.py:78`, not
-   `backend/app.py:78`. Run
+   basename, not its path: `.gitignore` cites `app.py:77`, not
+   `backend/app.py:77`. Run
    `git ls-files | command grep -v '^data/' | xargs command grep -nIE '<basename>:[0-9]'`,
    then search the same files for the bare form, as in step 2. Re-check each
    hit as in steps 1 to 5.
