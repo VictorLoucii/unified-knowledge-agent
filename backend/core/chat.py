@@ -1,6 +1,7 @@
 # backend/core/chat.py
 import json
 import asyncio
+import openai
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 
 from backend.core.config import parse_problem_id, extract_problem_block, cache_vectorstore, SEMANTIC_CACHE_THRESHOLD
@@ -48,6 +49,37 @@ def _thread_refused_events():
         "data": {"chunk": {"content": "This chat is not available."}},
     }
     return [f"data: {json.dumps(refused_event)}\n\n", "data: [DONE]\n\n"]
+
+
+# Fixed reply when OpenRouter refuses a call because the key's credit limit is
+# spent. Measured 2026-10-28 with a $0-limit key: openai.PermissionDeniedError,
+# status 403, body {"message": "Key limit exceeded (total limit). ...",
+# "code": 403, "metadata": {"scope": "key_limit",
+# "limit_source": "openrouter_key_limit", ...}}. Every other error keeps the
+# general error event.
+DEMO_PAUSED_LINE = "The demo is paused: it has used its credit for now. Please try again later."
+
+
+def is_credit_limit_refusal(e: Exception) -> bool:
+    """True only for the measured OpenRouter key-limit refusal (403, scope key_limit)."""
+    if not isinstance(e, openai.PermissionDeniedError):
+        return False
+    body = e.body if isinstance(e.body, dict) else {}
+    metadata = body.get("metadata")
+    if not isinstance(metadata, dict):
+        return False
+    return metadata.get("scope") == "key_limit" and metadata.get("limit_source") == "openrouter_key_limit"
+
+
+def _demo_paused_event():
+    """SSE event with the fixed "demo paused" line, in the shape of the guardrail refusal."""
+    paused_event = {
+        "event": "on_chat_model_stream",
+        "name": "CreditLimit",
+        "run_id": "demo_paused",
+        "data": {"chunk": {"content": DEMO_PAUSED_LINE}},
+    }
+    return f"data: {json.dumps(paused_event)}\n\n"
 
 
 async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
@@ -311,7 +343,11 @@ Rules:
         traceback.print_exc()
 
         print(f"🚨 Raw Error: {repr(e)}")
-        yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
+        if is_credit_limit_refusal(e):
+            print("🔧 [__DEV__] generate_chat_responses | is_credit_limit_refusal matched (403, scope key_limit) | Response: demo paused line")
+            yield _demo_paused_event()
+        else:
+            yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
         print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Error")
         yield "data: [DONE]\n\n"
 
@@ -450,5 +486,9 @@ async def resume_graph_stream(thread_id: str, graph):
         import traceback
         print("🚨 resume_graph_stream Crash Details:")
         traceback.print_exc()
-        yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
+        if is_credit_limit_refusal(e):
+            print("🔧 [__DEV__] resume_graph_stream | is_credit_limit_refusal matched (403, scope key_limit) | Response: demo paused line")
+            yield _demo_paused_event()
+        else:
+            yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
         yield "data: [DONE]\n\n"

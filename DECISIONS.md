@@ -388,7 +388,7 @@ now." The banner shows a failed variant.
 runs after the ownership check and before the semantic cache. A cache hit
 therefore cannot answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
-is a second copy of the guardrail refusal's event shape (`chat.py:62-70`).
+is a second copy of the guardrail refusal's event shape (`chat.py:94-102`).
 
 **No eval run, and why.** `eval.py:22-44` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
