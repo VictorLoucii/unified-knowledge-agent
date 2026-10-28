@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 import { ChatMessage, AgentStreamEvent } from "../types/agent";
 import { browserIdHeaders } from "../lib/browserId";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:7860";
 
 // The one wording shown when a request fails; the backend never sends exception text
 const ERROR_MESSAGE = "Something went wrong on our side. Please try again in a moment.";

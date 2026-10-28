@@ -360,12 +360,12 @@ Read, three lines:
 1. `app.py:78` fires ingestion with
    `asyncio.create_task(asyncio.to_thread(initialize_rag))`. **Nothing awaits
    it.**
-2. `app.py:112` computes `rag_hydrated` as `next(store.yield_keys(), None)`,
+2. `app.py:112` computed `rag_hydrated` as `next(store.yield_keys(), None)`,
    which is true once **any** key exists — that is, after the **first** of 26
    files.
 3. Item 2 records the Space's ingest at roughly **twenty minutes**.
 
-**So for about twenty minutes after every container start, the Space reports
+**So for about twenty minutes after every container start, the Space reported
 `rag_hydrated: true` while answering from a partially loaded knowledge base.**
 It does not error. It answers, from less than it has. A question whose evidence
 lives in a file not yet ingested gets a confident answer built on whatever did
@@ -385,12 +385,13 @@ key, `ingestion_state`, so the two questions stop sharing one answer:
 
 | Key | Question it answers | How |
 |---|---|---|
-| `rag_hydrated` | is **anything** loaded | `next(store.yield_keys(), None)`, `app.py:112` |
+| `rag_hydrated` | has loading **finished** (since 2026-10-28) | `ingestion_state == "done"`, `app.py:113` |
 | `ingestion_state` | has loading **finished** | module state in `ingest.py`, read through `get_ingestion_state()` |
 
-`rag_hydrated` keeps its exact former meaning and is still computed at
-`app.py:112`. Nothing that was already in the response changed; the key is
-purely additive.
+On 2026-08-21 `rag_hydrated` kept its former meaning, "is **anything**
+loaded", computed at `app.py:112`. Since 2026-10-28 it is derived from
+`ingestion_state`; see [DECISIONS.md](DECISIONS.md), "`rag_hydrated` means
+ingestion finished, and `/chat_stream` waits for it".
 
 **`ingestion_state` takes four values, not two.** `not_started`, `running`,
 `done`, `failed`. The rejected boolean, and why the four-value set won, are in
@@ -466,11 +467,11 @@ container log read by another session, and one second-hand figure cannot settle
 another. The model download is a first-use cost that nobody has isolated, so
 whether it sits inside any of these numbers is unknown.
 
-**Still a product call, and deliberately not taken: gating answers on
-completion.** `/chat_stream` is untouched and still answers during the window.
-Reporting the state does not close the window — it stops the report being silent
-about it, and leaves a caller free to poll. Trading a wrong answer for a
-twenty-minute outage is the same trade it always was, and it is not ours to make.
+**Gating answers on completion — taken 2026-10-28.** The owner made the product
+call: during the window `/chat_stream` returns a fixed "still loading" line with
+no model call, and the frontend shows a banner. A visitor now gets a short
+outage instead of a wrong answer. The window itself is not shorter; only
+shipping a prebuilt index, built in the Docker image, would shorten it.
 
 **Also still open: `/health` exposes no document count.** True coverage still
 needs a count the docstore does not expose, so `ingestion_state: "done"` means

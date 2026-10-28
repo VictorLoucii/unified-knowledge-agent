@@ -291,7 +291,7 @@ model download time, and whether all 26 files complete rather than merely
 start — `rag_hydrated` proves "at least one document", and nothing exposes a
 count.
 
-### `/health` reports ingestion as four states, not a finished boolean
+### `/health` reports ingestion as four states, not a finished boolean — SUPERSEDED IN PART 2026-10-28, see the next entry
 
 **Chosen (2026-08-21):** `/health` gains one key, `ingestion_state`, taking the
 string values `not_started`, `running`, `done` or `failed`. `rag_hydrated` keeps
@@ -345,6 +345,69 @@ where ingestion died — the same silent-failure shape as the bug in
 not count documents. `ingestion_state: "done"` means the ingestion function
 returned, not that all 26 files are present. Both remain open in
 [OPEN.md](OPEN.md) item 4.
+
+### `rag_hydrated` means ingestion finished, and `/chat_stream` waits for it
+
+**Chosen (2026-10-28):** `/health` computes `rag_hydrated` as
+`ingestion_state == "done"` (`app.py:113`), and no longer looks at the docstore.
+While the state is not `done`, `/chat_stream` returns one fixed line as a normal
+stream (`app.py:192-194`, built at `app.py:156-172`). It makes no model call and
+saves nothing to history. The frontend polls `/health` and shows a banner until
+`done`.
+
+**What this supersedes.** Two sentences of the previous entry, and nothing else:
+"`rag_hydrated` keeps its exact former meaning", and "It does not gate any route
+on completion". The four states, the getter and the wrapper stand.
+
+**Why the old meaning lost.** "Anything is loaded" is the wrong answer to the
+question a caller asks of a key named `rag_hydrated`. [OPEN.md](OPEN.md) item 4
+records the Space reporting `rag_hydrated: true` with `ingestion_state: running`
+for at least 8 m 17 s on one deployment, and a 7 m 46 s window on a second.
+*Stated: those polls are that record's; this change did not re-measure them.*
+
+**Kept the key, rejected removing it.** Redefining keeps the response shape for
+any caller. No code in `backend/` or `frontend/src` reads `rag_hydrated` (grep,
+2026-10-28), so the redefinition breaks nothing in the repository. *Inferred: an
+outside caller is not known either way.*
+
+**`not_started` is treated as `running`.** Both mean "wait"; the previous
+entry's table says so.
+
+**`failed` gets its own line; it is not the loading line, and it does not reach
+the model.**
+
+1. The loading line would tell the visitor to wait for something that never
+   comes. Nothing re-runs `initialize_rag` in the same process.
+2. Letting the request through answers from an empty or partial index. That is
+   the failure this change exists to stop.
+
+So `failed` answers "The knowledge base did not load, so I cannot answer right
+now." The banner shows a failed variant.
+
+**The gate sits in `app.py`, not in `generate_chat_responses`.** In `app.py` it
+runs after the ownership check and before the semantic cache. A cache hit
+therefore cannot answer during loading. It also adds no latency line, and it
+stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
+is a second copy of the guardrail refusal's event shape (`chat.py:62-70`).
+
+**No eval run, and why.** `eval.py:22-44` compiles its own graph and calls
+`graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
+`initialize_rag`, so no eval input or output can change. The change touches no
+prompt, router, tool or retrieval code. *Inferred from the read; the owner
+approves it at the task gate.*
+
+**The banner keeps a slow poll after `done` or `failed`.** It polls every 3 s
+while loading and every 30 s once `done` or `failed`
+(`frontend/src/hooks/useIngestionState.ts`). Stopping was rejected for both: the
+tab outlives the backend process. A tab that stopped on `done` would never see
+the next restart, and the push is the case this exists for. A tab that stopped
+on `failed` would keep a red banner after a later restart loads fine. A failed
+fetch keeps the last state and polls again at 3 s.
+
+**What this does not do.** It does not count documents, so `done` still means
+"the ingestion function returned". It does not stop a visitor from sending:
+the chat shows the fixed line instead. A thread whose only message got the fixed
+line has no saved title, so it leaves the sidebar on the next history refresh.
 
 ### Local development is documented on 7860, and the port is not ours to pick
 

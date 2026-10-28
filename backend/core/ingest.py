@@ -40,8 +40,8 @@ def save_manifest(manifest: dict):
 # INGESTION STATE
 # ==========================================
 # `app.py` starts ingestion on a background thread and nothing awaits it, so
-# `rag_hydrated` answers "is anything loaded" and cannot answer "has loading
-# finished". This module-level state answers the second question.
+# a key in the docstore shows only that something is loaded, not that loading
+# finished. This state answers the second; `/health` and `/chat_stream` read it.
 #
 # Read it through get_ingestion_state(), never by importing the name directly:
 # `from backend.core.ingest import _ingestion_state` binds the value at import

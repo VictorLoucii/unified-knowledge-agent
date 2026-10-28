@@ -3,9 +3,11 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChatStream } from "../hooks/useChatStream";
+import { useIngestionState } from "../hooks/useIngestionState";
 import { browserIdHeaders } from "../lib/browserId";
 import Sidebar from "../components/Sidebar";
 import ChatHeader from "../components/ChatHeader";
+import IngestionBanner from "../components/IngestionBanner";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 
@@ -22,6 +24,7 @@ export default function ChatUI() {
     createNewChat,
     stopResponse,         // <-- [NEW] Extracted stop handler
   } = useChatStream() as any;
+  const ingestionState = useIngestionState();
 
   const [input, setInput] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -280,6 +283,8 @@ export default function ChatUI() {
           isStreaming={isStreaming}
           onToggleSidebar={() => setIsSidebarOpen((prev) => !prev)}
         />
+
+        <IngestionBanner ingestionState={ingestionState} />
 
         <MessageList
           messages={messages}

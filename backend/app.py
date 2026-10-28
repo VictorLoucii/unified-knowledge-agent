@@ -25,7 +25,6 @@ import asyncio
 
 from backend.core.ingest import initialize_rag, get_ingestion_state
 from backend.core.chat import generate_chat_responses, resume_graph_stream
-from backend.core.config import store
 
 from backend.memory import (
     DB_URI,
@@ -107,16 +106,12 @@ async def health_check(request: Request):
     Fastest way to verify if the latest Git Push is live
     and if the RAG brain has finished hydrating.
     """
-    try:
-        # Check if at least one document exists in the store
-        is_hydrated = next(store.yield_keys(), None) is not None
-    except Exception:
-        is_hydrated = False
+    ingestion_state = get_ingestion_state()
     return {
         "status": "online",
         "version": "6.7-p1-task-b",  # <--- CHANGE THIS ON EVERY PUSH
-        "rag_hydrated": is_hydrated,
-        "ingestion_state": get_ingestion_state(),
+        "rag_hydrated": ingestion_state == "done",  # see DECISIONS.md, "rag_hydrated means ingestion finished"
+        "ingestion_state": ingestion_state,
         "provider": "Hugging Face Spaces",
     }
 
@@ -152,6 +147,31 @@ def missing_browser_id() -> JSONResponse:
     return JSONResponse(status_code=400, content={"error": "Missing browser id"})
 
 
+# Fixed replies while the knowledge base is not ready. They make no model call
+# and save nothing to history. "failed" never recovers in this process.
+INGESTION_LOADING_LINE = "The knowledge base is still loading after a restart. Please try again in a minute."
+INGESTION_FAILED_LINE = "The knowledge base did not load, so I cannot answer right now."
+
+
+def ingestion_not_ready_response(ingestion_state: str) -> StreamingResponse:
+    """SSE stream with one fixed line, in the shape of the guardrail refusal (chat.py)."""
+    import json
+    failed = ingestion_state == "failed"
+    event = {
+        "event": "on_chat_model_stream",
+        "name": "Ingestion",
+        "run_id": "ingestion_failed" if failed else "ingestion_loading",
+        "data": {"chunk": {"content": INGESTION_FAILED_LINE if failed else INGESTION_LOADING_LINE}},
+    }
+    print(f"🔧 [__DEV__] /chat_stream | ingestion_state: {ingestion_state} | Response: fixed line, no model call")
+
+    async def not_ready_generator():
+        yield f"data: {json.dumps(event)}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(not_ready_generator(), media_type="text/event-stream")
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=4000)
     thread_id: str
@@ -168,6 +188,10 @@ async def chat_stream(request: ChatRequest, x_browser_id: str | None = Header(de
     except Exception as e:
         print(f"🚨 Ownership check error: {e}")
         return JSONResponse(status_code=503, content={"error": "Internal error"})
+
+    ingestion_state = get_ingestion_state()
+    if ingestion_state != "done":
+        return ingestion_not_ready_response(ingestion_state)
 
     async def timed_generator():
         import time, json
