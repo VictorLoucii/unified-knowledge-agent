@@ -70,7 +70,7 @@ latest_run_logs.txt
 # initialize_rag then took the early return at ingest.py:91-93 and served an
 # empty vector database. Untracked, the Space has no manifest,
 # ingest.py:32 returns an empty one, and the container ingests at startup in
-# the background thread at app.py:78. The local copy is untouched, so local
+# the background thread at app.py:77. The local copy is untouched, so local
 # Docker builds still use the existing index.
 data/.manifest.json
 
