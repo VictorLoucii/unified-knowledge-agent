@@ -86,7 +86,7 @@ def mask_sensitive_data(text: str) -> str:
         return text
     
     # Mask environment variable values dynamically
-    sensitive_keys = ["OPENROUTER_API_KEY", "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY"]
+    sensitive_keys = ["OPENROUTER_API_KEY", "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY", "OPENAI_API_KEY", "WAQI_API_KEY"]
     for key in sensitive_keys:
         val = os.getenv(key)
         if val and len(val) > 4 and val in text:

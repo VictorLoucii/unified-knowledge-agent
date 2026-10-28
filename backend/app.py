@@ -87,12 +87,12 @@ app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None
 
 # [PHASE 6 UPDATE] Secure CORS for Vercel Handshake
 # Reads the frontend URL from environment, defaults to localhost to prevent breaking local dev
-frontend_url = os.environ.get("VERCEL_FRONTEND_URL", "http://localhost:3000")
+frontend_url = os.environ.get("VERCEL_FRONTEND_URL", "http://localhost:3000").rstrip("/")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=".*",  # <Allows any local origin format
-    allow_credentials=True,
+    allow_origins=list(dict.fromkeys([frontend_url, "http://localhost:3000"])),  # exact match; local dev stays allowed
+    allow_credentials=False,  # the frontend sends no cookies; it uses the X-Browser-Id header
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -112,10 +112,9 @@ async def health_check(request: Request):
         is_hydrated = next(store.yield_keys(), None) is not None
     except Exception:
         is_hydrated = False
-    print(f"🔧 [__DEV__] /health client={request.client.host if request.client else None} xff={request.headers.get('x-forwarded-for')}", flush=True)
     return {
         "status": "online",
-        "version": "6.6-health-log",  # <--- CHANGE THIS ON EVERY PUSH
+        "version": "6.7-p1-task-b",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": is_hydrated,
         "ingestion_state": get_ingestion_state(),
         "provider": "Hugging Face Spaces",
@@ -155,7 +154,7 @@ def missing_browser_id() -> JSONResponse:
 
 class ChatRequest(BaseModel):
     message: str = Field(..., max_length=4000)
-    thread_id: str = "default_session"
+    thread_id: str
 
 
 @app.post("/chat_stream")
