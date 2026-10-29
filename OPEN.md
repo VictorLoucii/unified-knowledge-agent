@@ -467,6 +467,13 @@ container log read by another session, and one second-hand figure cannot settle
 another. The model download is a first-use cost that nobody has isolated, so
 whether it sits inside any of these numbers is unknown.
 
+**Observed again, 2026-10-29 — push to `done`, not ingest duration.** After the
+push `96008ad..feb8a9b`, `/health` read `running` with `rag_hydrated: false`
+about 8 min after the push and `done` about 17 min after it, polled every 30 s,
+so ±30 s — **`ran`**, one restart. The clock started at the push, so the span
+includes the mirror and the image build; no container start was captured. It is
+not comparable with the 7 m 57 s floor above.
+
 **Gating answers on completion — taken 2026-10-28.** The owner made the product
 call: during the window `/chat_stream` returns a fixed "still loading" line with
 no model call, and the frontend shows a banner. A visitor now gets a short
