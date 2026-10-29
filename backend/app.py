@@ -25,6 +25,7 @@ import asyncio
 
 from backend.core.ingest import initialize_rag, get_ingestion_state
 from backend.core.chat import generate_chat_responses, resume_graph_stream
+from backend.core.rate_limit import check_rate_limit
 
 from backend.memory import (
     DB_URI,
@@ -178,7 +179,9 @@ class ChatRequest(BaseModel):
 
 
 @app.post("/chat_stream")
-async def chat_stream(request: ChatRequest, x_browser_id: str | None = Header(default=None)):
+async def chat_stream(request: ChatRequest, http_request: Request, x_browser_id: str | None = Header(default=None)):
+    if limited := check_rate_limit(http_request):
+        return limited
     owner_id = read_browser_id(x_browser_id)
     if not owner_id:
         return missing_browser_id()
@@ -217,8 +220,10 @@ class RefineRequest(BaseModel):
     transcript: str = Field(..., max_length=8000)  # see OPEN.md item 9
 
 @app.post("/refine_transcript")
-async def refine_transcript(request: RefineRequest):
+async def refine_transcript(request: RefineRequest, http_request: Request):
     """Refines a raw voice transcript using a fast LLM."""
+    if limited := check_rate_limit(http_request):
+        return limited
     from backend.core.config import fast_llm
     from langchain_core.messages import SystemMessage, HumanMessage
     
@@ -249,7 +254,7 @@ class ActionRequest(BaseModel):
 
 
 @app.post("/chat_approve")
-async def chat_approve(request: ActionRequest, x_browser_id: str | None = Header(default=None)):
+async def chat_approve(request: ActionRequest, http_request: Request, x_browser_id: str | None = Header(default=None)):
     """Endpoint for the frontend to approve or reject a pending tool call."""
     owner_id = read_browser_id(x_browser_id)
     if not owner_id:
@@ -262,6 +267,9 @@ async def chat_approve(request: ActionRequest, x_browser_id: str | None = Header
         return JSONResponse(status_code=503, content={"error": "Internal error"})
 
     if request.approve:
+        # Only approval resumes the graph; cancelling spends no credit and is not counted.
+        if limited := check_rate_limit(http_request):
+            return limited
         async def timed_resume_generator():
             import time, json
             start = time.time()

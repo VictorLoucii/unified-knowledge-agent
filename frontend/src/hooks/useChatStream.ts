@@ -9,8 +9,14 @@ export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost
 const ERROR_MESSAGE = "Something went wrong on our side. Please try again in a moment.";
 
 // Keep any partial answer and put the error message below it
-const withErrorMessage = (content: string) =>
-  content ? `${content}\n\n${ERROR_MESSAGE}` : ERROR_MESSAGE;
+const withErrorMessage = (content: string, message: string = ERROR_MESSAGE) =>
+  content ? `${content}\n\n${message}` : message;
+
+// A 429 from the rate limit; its message is the backend's fixed line
+class RateLimitedError extends Error {}
+
+const errorText = (error: unknown) =>
+  error instanceof RateLimitedError ? error.message : ERROR_MESSAGE;
 
 const getSessionId = () => {
   if (typeof window === "undefined") {
@@ -76,11 +82,11 @@ export const useChatStream = (initialThreadId?: string) => {
     }
   };
 
-  const showErrorMessage = (assistantId: string) => {
+  const showErrorMessage = (assistantId: string, message: string = ERROR_MESSAGE) => {
     setMessages((prev) =>
       prev.map((msg) =>
         msg.id === assistantId && !msg.isError
-          ? { ...msg, content: withErrorMessage(msg.content), isThinking: false, currentTool: null, isError: true }
+          ? { ...msg, content: withErrorMessage(msg.content, message), isThinking: false, currentTool: null, isError: true }
           : msg
       )
     );
@@ -88,6 +94,11 @@ export const useChatStream = (initialThreadId?: string) => {
 
   // --- REUSABLE STREAM READER ---
   const readStream = async (response: Response, assistantId: string) => {
+    if (response.status === 429) {
+      // Another layer (HF's proxy) could also answer 429; then the body is not ours
+      const body: { error?: unknown } | null = await response.json().catch(() => null);
+      throw new RateLimitedError(typeof body?.error === "string" ? body.error : ERROR_MESSAGE);
+    }
     if (!response.ok) throw new Error(`Request failed with status ${response.status}`);
     if (!response.body) throw new Error("No readable stream available");
     
@@ -213,7 +224,7 @@ export const useChatStream = (initialThreadId?: string) => {
         console.log("Stream connection stopped by user.");
       } else {
         console.error("Stream connection failed:", error);
-        showErrorMessage(assistantId);
+        showErrorMessage(assistantId, errorText(error));
       }
     } finally {
       if (abortControllerRef.current === controller) {
@@ -302,7 +313,7 @@ export const useChatStream = (initialThreadId?: string) => {
         console.log("Stream resumption stopped by user.");
       } else {
         console.error("Stream resumption failed:", err);
-        showErrorMessage(targetAssistantId);
+        showErrorMessage(targetAssistantId, errorText(err));
       }
     } finally {
       if (abortControllerRef.current === controller) {
