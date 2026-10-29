@@ -1442,6 +1442,9 @@ that.
 - Whether the HuggingFace Space sits behind any gateway that rate-limits or
   filters before the container sees a request. That could change the whole
   assessment; there is no evidence either way.
+  *Partly answered 2026-10-28:* the HuggingFace proxy answers CORS before the
+  app (inferred from the reply headers; see "Two pieces of dead
+  configuration"). Whether it rate-limits or filters is still not checked.
 
 *The second bullet that stood here — whether `resume_graph_stream` fails safely
 for a `thread_id` with no pending interrupt — was answered 2026-08-20. See "The

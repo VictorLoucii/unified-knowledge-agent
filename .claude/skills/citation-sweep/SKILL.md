@@ -58,9 +58,11 @@ For every file whose line count the commit changed:
 6. **Then search every other tracked file outside `data/`.** Use the file's
    basename, not its path: `.gitignore` cites `app.py:78`, not
    `backend/app.py:78`. Run
-   `git ls-files | command grep -v '^data/' | xargs command grep -nIE '<basename>:[0-9]'`,
+   `git -c core.fsmonitor=false ls-files | command grep -v '^data/' | xargs command grep -nIE '<basename>:[0-9]'`,
    then search the same files for the bare form, as in step 2. Re-check each
-   hit as in steps 1 to 5.
+   hit as in steps 1 to 5. Count the listed files first; if the count is 0,
+   stop. On 2026-10-29 a broken fsmonitor daemon made plain `git ls-files`
+   list nothing, and the sweep looked clean.
 
 Report each form searched and the count of hits re-checked, so the handback's
 `sweep:` line can name them. Fix a moved citation in the record that holds it;

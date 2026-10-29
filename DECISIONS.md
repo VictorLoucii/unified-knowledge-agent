@@ -1047,3 +1047,28 @@ test `/health`.
 address that never answers, every answer was 200, the slowest took 1192 ms, and
 the log showed `TimeoutError`. A call that arrives during a check waits for it,
 so the worst case is about one timeout.
+
+### P1 close check 2 is an accepted risk on the Space, not reworded
+
+**Chosen (owner, 2026-10-29):** close check 2 ("a request with `Origin:
+https://evil.example` gets no `access-control-allow-origin`") keeps its wording.
+It passes locally and fails on `*.hf.space`, and the owner accepted the risk.
+Measured 2026-10-28 with curl: locally the preflight got 400 and no
+`access-control-allow-origin`; on the Space the same origin got its own
+`access-control-allow-origin`, on the preflight and on `GET /health`. Inferred:
+the HuggingFace proxy answers CORS before the app, so app code cannot pass the
+check there. [OPEN.md](OPEN.md) item 9, "Two pieces of dead configuration".
+
+**Rejected — rewording the check to cover only the app's CORS layer.** It would
+pass at once, but it loosens a check to make it pass, and the live demo would
+still echo any origin.
+
+**Why the risk is small.** The frontend sends no cookies, and `app.py:95` sets
+`allow_credentials=False`; the proxy sent no `allow-credentials` header. A page
+on another origin cannot read the visitor's browser id, so it reads only its own
+threads. *Not checked:* where the frontend stores the id. What such a page can
+do is spend credit, which `curl` can do already; the rate limit and the $2 key
+limit bound it.
+
+**Not checked:** a real `POST` with that origin on the Space, and HuggingFace's
+documentation of the proxy.
