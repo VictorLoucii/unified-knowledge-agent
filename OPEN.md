@@ -1696,3 +1696,25 @@ re-counted.
 
 Supavisor's own idle settings. Whether a Wi-Fi drop reproduces the failure.
 `tcp_user_timeout`, which bounds a stuck write, but only on Linux.
+
+## 14. Two findings from the CI review, deferred (2026-10-29, P2 item 2)
+
+The CI design is in `DECISIONS.md` "## CI". Both items were found by
+`/code-review high` on `77ff34b` and left out of that task's scope.
+
+- **torch resolves from PyPI with CUDA packages, not from the CPU index.**
+  *Read, not measured.* `tool.uv.sources` pins `torch` to the CPU index, but
+  that applies only to direct dependencies; torch comes in through
+  `sentence-transformers`. `uv.lock:4646-4648` records `torch` 2.11.0 from
+  `pypi.org`, with `cuda-toolkit` and `nvidia-*` dependencies under
+  `sys_platform == 'linux'`; `uv.lock` names 15 `nvidia-*` packages. So the CI
+  runner, and probably the Space's Docker build, install CUDA wheels the app
+  never uses. The cold CI backend job still took 1 m 4 s; the download size and
+  the Docker image were not checked. A fix edits `pyproject.toml` (torch as a
+  direct CPU-index dependency) and needs a Docker build and an eval.
+- **The mirror can race, and its token has default scopes.** *Read, not
+  observed.* `sync_to_hub.yml` has no `concurrency` group, and each run
+  force-pushes the commit it checked out. Two pushes to `main` seconds apart
+  could leave the older commit on the Space if its run ends last. The job holds
+  `HF_TOKEN` and has no `permissions:` block. Adding either block changes the
+  file's line count and moves the citations at `sync_to_hub.yml:16, 20`.

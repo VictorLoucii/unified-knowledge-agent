@@ -1109,3 +1109,53 @@ answer reaches the browser whole and unmasked.
 foreign key from the checkpoint tables to `thread_metadata` (`memory.py:41-59`;
 it needs Postgres), and real retrieval quality. Sockets opened inside native
 code are not seen by the guards.
+
+## CI
+
+### One workflow, two jobs; lint is a counted ratchet, not a pass/fail lint
+
+**Chosen (2026-10-29, P2 item 2, `77ff34b`):** `.github/workflows/ci.yml` runs on
+every push, every pull request and by hand. The `backend` job runs
+`uv sync --locked`, `compileall` and `uv run pytest`, with a stub
+`OPENROUTER_API_KEY` and no LFS objects. The `frontend` job runs `npm ci`,
+`npx tsc --noEmit` and a lint ratchet. Both jobs block on any failure. No eval
+runs in CI; it spends credit (P5).
+
+**The lint count comes from ESLint's JSON report.** The step sums
+`errorCount + warningCount` and fails above `LINT_MAX: 27`, the count in
+`.claude/check-baseline.md`. ESLint exits 1 when it finds problems and 2 when it
+cannot run; only exit 2 fails the step directly, so a broken config cannot pass
+as zero problems. The lint config and the frontend files are unchanged.
+Rejected: parsing the text summary line, which a format change would break.
+Known limit: the ratchet counts, so fixing one problem and adding another
+passes; the file-and-rule table in the baseline catches that in review.
+
+**`--locked`, not `--frozen`.** `--frozen` installs from `uv.lock` without
+checking it against `pyproject.toml`, and a later `uv run` would re-resolve
+quietly. `UV_LOCKED: 1` in the job env makes every uv command fail on a stale
+lock. The task first specified `--frozen`; the owner chose `--locked` after the
+review.
+
+**Versions.** Node 20, to match `frontend/frontend.Dockerfile:2`; Node 22 on the
+dev machine is a separate change. Python comes from `.python-version` (3.12).
+`astral-sh/setup-uv` publishes no floating major tag after v7 (checked with
+`git ls-remote`), so it is pinned to `v10.3.2`; `checkout` and `setup-node` use
+`@v7`. Actions are pinned by tag, not by commit SHA.
+
+**The mirror does not wait for CI.** `sync_to_hub.yml` still deploys on every
+push to `main`; only its checkout moved from `@v3` to `@v7`, on the same line.
+The branch-first flow is the gate: CI runs on the branch, and `main`
+fast-forwards to the commit that passed. A direct push to `main` deploys before
+CI reports. Rejected for now: a `workflow_run` trigger that waits for CI
+success (slower deploys; it moves the citations at `sync_to_hub.yml:16, 20`),
+and moving the mirror into `ci.yml` (deletes the file those citations point
+at, and puts `HF_TOKEN` in a workflow that runs on pull requests).
+
+**Measured 2026-10-29.** In the sandbox: both files parse; the ratchet step,
+copied from `ci.yml`, passed at 27, failed at 28 with one added `any`, and
+failed with exit 2 on a broken config, all in a scratch copy of `frontend/`;
+`uv sync --locked --dry-run` failed on a scratch copy with a dependency added
+and not locked. On GitHub, run `40894313618` on `p2-ci`: frontend 37 s,
+`eslint: 27 problems (26 errors, 1 warnings); limit 27`; backend 1 m 4 s,
+`10 passed, 1 xfailed`. Node 20 itself ran only on GitHub; the dev machine has
+22.

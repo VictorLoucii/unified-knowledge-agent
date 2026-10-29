@@ -10,6 +10,7 @@ that moves a number, and say why.
 | Python syntax | `.venv/bin/python -m compileall -q backend` | exit 0 |
 | Core tests | `.venv/bin/python -m pytest --confcutdir=backend/tests backend/tests` (sandbox); `uv run pytest` (owner, CI) | 10 passed, 1 xfailed (the masking bug, kept as a strict expected failure). Added 2026-10-29 |
 | Fast-path drift | `.venv/bin/python -m backend.evals.check_fast_path` | exit 1, `JOB_HUNT` row only (owner runs it; needs `.env`) |
+| CI | `.github/workflows/ci.yml` (GitHub, every push and PR) | Run `40894313618` on `p2-ci` at `77ff34b`: both jobs green. Lint limit `LINT_MAX: 27`; lower it with the lint row. Added 2026-10-29 |
 | Eval suite | `uv run python -m backend.evals.eval --concurrency 1` | `latest_run_metrics.json` at `HEAD`: logic 95.74 (90/94), recall 100. Last written 2026-08-20, `0804bc6`; not re-run today |
 
 pytest runs the core tests in `backend/tests/`; no Python linter or type checker
