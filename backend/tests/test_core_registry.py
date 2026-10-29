@@ -153,7 +153,7 @@ def test_real_registry_refuses_a_thread_owned_by_another_browser(core):
 
 
 def test_cache_hit_path_starts_the_title_once(core, monkeypatch):
-    """Steps: registry on the cache-hit path (chat.py), title started there only."""
+    """Steps: registry (the shared save step), then a cache hit; the title starts once."""
     hit = (Document(page_content=QUESTION, metadata={"response": ANSWER}), 0.0)
     monkeypatch.setattr(core.cache, "similarity_search_with_score", lambda query, k=1: [hit])
     core.set_qa(rag_script(QUESTION, ANSWER))
@@ -165,7 +165,7 @@ def test_cache_hit_path_starts_the_title_once(core, monkeypatch):
 
 
 def test_triage_reply_path_starts_the_title_once(core):
-    """Steps: registry on the triage-reply path (chat.py), title started there only."""
+    """Steps: registry (the shared save step), then a triage reply; the title starts once."""
     core.set_fast_replies("Hello! Ask me about the knowledge base.", "IN_SCOPE")
     core.set_qa(rag_script(QUESTION, ANSWER))
 
@@ -176,7 +176,7 @@ def test_triage_reply_path_starts_the_title_once(core):
 
 
 def test_core_path_starts_the_title_once(core):
-    """Steps: registry on the graph path (chat.py), title started there only."""
+    """Steps: registry (the shared save step), then the graph path; the title starts once."""
     core.set_qa(rag_script(QUESTION, ANSWER))
 
     run_chat(core.graph, QUESTION)

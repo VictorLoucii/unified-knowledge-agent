@@ -8,7 +8,7 @@ that moves a number, and say why.
 | Frontend lint | `cd frontend && npm run lint` | 27 problems: 26 errors, 1 warning |
 | Frontend types | `cd frontend && npx tsc --noEmit` | 0 errors |
 | Python syntax | `.venv/bin/python -m compileall -q backend` | exit 0 |
-| Core tests | `.venv/bin/python -m pytest --confcutdir=backend/tests backend/tests` (sandbox); `uv run pytest` (owner, CI) | 20 passed, 1 xfailed (the masking bug, kept as a strict expected failure). Added 2026-10-29; 10 registry tests added the same day (`test_core_registry.py`, P2 item 3) |
+| Core tests | `.venv/bin/python -m pytest --confcutdir=backend/tests backend/tests` (sandbox); `uv run pytest` (owner, CI) | 39 passed, 1 xfailed (the masking bug, kept as a strict expected failure). Added 2026-10-29; 10 registry tests added the same day (`test_core_registry.py`, P2 item 3); 19 pre-step tests added the same day (`test_core_pre_steps.py`, P2 item 4) |
 | Fast-path drift | `.venv/bin/python -m backend.evals.check_fast_path` | exit 1, `JOB_HUNT` row only (owner runs it; needs `.env`) |
 | CI | `.github/workflows/ci.yml` (GitHub, every push and PR) | Run `40894313618` on `p2-ci` at `77ff34b`: both jobs green. Lint limit `LINT_MAX: 27`; lower it with the lint row. Added 2026-10-29 |
 | Eval suite | `uv run python -m backend.evals.eval --concurrency 1` | `latest_run_metrics.json` at `HEAD`: logic 95.74 (90/94), recall 100. Last written 2026-08-20, `0804bc6`; not re-run today |

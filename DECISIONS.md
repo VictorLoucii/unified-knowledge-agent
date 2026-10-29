@@ -388,7 +388,7 @@ now." The banner shows a failed variant.
 runs after the ownership check and before the semantic cache. A cache hit
 therefore cannot answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
-is a second copy of the guardrail refusal's event shape (`chat.py:94-102`).
+is a second copy of the guardrail refusal's event shape (`chat.py:133-139`).
 
 **No eval run, and why.** `eval.py:22-44` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
@@ -1153,7 +1153,9 @@ turn could spend a model call before it fails.
 **Known, not changed:** on the cache-hit and triage paths, `register_thread`
 sits inside the step's own `try`. A database failure there is logged as a cache
 or classifier failure and retried at the next step, as before the split. The
-pre-steps list (P2 item 4) is where that moves.
+pre-steps list (P2 item 4) is where that moves. *Resolved the same day:* one
+save step replaces the three sites; see "The chat pre-steps are one list"
+below.
 
 **Rejected:**
 - *A model title on every turn.* The core part would return one fact, not two.
@@ -1167,6 +1169,81 @@ pre-steps list (P2 item 4) is where that moves.
 - *One upsert returning the owner and `xmax = 0`.* It saves a round trip per
   follow-up, but changes the SQL beyond "keep behaviour" and relies on a
   Postgres internal.
+
+### The chat pre-steps are one list; the thread save is one step that fails closed
+
+**Chosen (2026-10-29, P2 item 4, REVAMP section 12 point 3):**
+`generate_chat_responses` runs `PRE_STEPS` (`chat.py:258`) in order, then the
+graph path. The steps are the input guardrail, the thread save, the semantic
+cache and triage. Each takes a `ChatTurn` and returns a `StepReply` (it handled
+the message) or `None` (pass it on). A `StepReply` holds finished SSE events
+without `[DONE]`; the runner sends them, pauses `pause` seconds after each,
+prints the dev line, then sends `[DONE]`. A step builds every event before it
+returns, so a step that fails has sent nothing.
+
+**Two failure policies, not one.** The cache and triage steps are optional:
+each keeps its own `try` and its exact warning text, and passes on when it
+fails. The guardrail and the thread save are core: they have no `try`, and the
+runner ends the turn with `_error_events` (`chat.py:111`), the same events and
+logs the graph path's `except` sends. A save that passed on would leave no
+`thread_metadata` row, so the next checkpoint write fails its foreign key, and
+with `durability="async"` (see "The thread registry is core") a model call can
+run first. Measured: with the runner's `except` replaced by `continue`,
+`test_failed_save_ends_the_turn_with_the_error_event` failed, and the fixture
+counted `fast_llm` calls beyond its script.
+
+**The thread save is one step, after the guardrail, before the cache** (option
+A, chosen by the owner). It replaces the three `register_thread` sites. This
+resolves the "Known, not changed" paragraph above. Behaviour changes, read from
+the code at `394ea8e`, not measured in production:
+1. The row is written, and the background title starts, before the cache
+   lookup and before the triage call. Before, on the graph path, both came
+   after triage.
+2. `register_thread` runs once per turn. Before, a cache hit that fell through
+   (M1) could call it three times; the title still started once.
+3. A thread another browser owns is refused before the cache lookup and the
+   triage call. `app.py` already refuses most of these before the generator
+   runs, so this matters only in a race.
+4. A database failure between `app.py`'s owner check and the save gets one
+   try and the error event. Before, the cache and triage steps caught it under
+   their own warnings ("Semantic cache lookup failed", "Fast classifier
+   failed"), triage could spend a model call, and the graph path tried again.
+   The final event was the same.
+5. Code that sat outside every `try` now ends in the error event and `[DONE]`
+   instead of a broken stream: `check_input_guardrail`, the cache gate
+   `is_excluded_from_cache`, and the call-time import of `fast_llm`.
+6. A cache or triage reply can no longer send some chunks and then fall
+   through, because its events are built before the first is sent. Read, not
+   probed.
+7. The cache and triage steps build their events first and write the
+   checkpoint (`aupdate_state`) last. Before, the write came first, so a
+   failure while building the reply left the turn in the history and the
+   graph path wrote it again. Found by `/code-review`; tested by
+   `test_cache_step_that_fails_building_events_writes_no_state`.
+
+Unchanged: the guardrail refusal writes no row; refusal text, chunk content,
+`run_id` names and `[DONE]` are byte-for-byte as before. *Read*; the tests
+check names, `run_id`s and text, and compare whole chunks only for the error
+event. The triage prompt is
+byte-identical to `394ea8e` (`test_triage_prompt_is_unchanged`, sha256).
+
+**No eval run, by the owner's decision.** `eval.py:44` calls `graph.ainvoke`
+and never runs the pre-steps, so the suite cannot measure this change.
+
+**Tests.** `backend/tests/test_core_pre_steps.py`: each step's handled and
+pass-on outcome, a raising optional step passes on, the guardrail writes no
+row, a raising guardrail or save ends the turn, a failed reply writes no
+state, the prompt bytes. Measured 2026-10-29: 15 mutations of `chat.py`, run
+against the 19 tests; each test failed under at least one.
+
+**Rejected:**
+- *A generic try/log/pass-on in the runner for every step.* The save would
+  fail open (above), and the guardrail would pass an unchecked message on.
+- *A reply object with format flags* (chunked, masked, sleep) for the runner to
+  build events from. Three shapes exist today; flags to rebuild them byte for
+  byte are more surface than one finished list per step.
+- *Streaming inside the step.* An `aupdate_state` failure (M1) after the first
+  chunk would end the turn mid-answer instead of falling through.
 
 ## CI
 

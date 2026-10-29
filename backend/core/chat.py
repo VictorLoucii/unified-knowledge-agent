@@ -41,14 +41,14 @@ def is_excluded_from_cache(message: str) -> bool:
 
 
 def _thread_refused_events():
-    """SSE events for a thread that belongs to another browser."""
+    """SSE events for a thread that belongs to another browser, without [DONE]; the runner sends it."""
     refused_event = {
         "event": "on_chat_model_stream",
         "name": "Ownership",
         "run_id": "thread_refused",
         "data": {"chunk": {"content": "This chat is not available."}},
     }
-    return [f"data: {json.dumps(refused_event)}\n\n", "data: [DONE]\n\n"]
+    return [f"data: {json.dumps(refused_event)}\n\n"]
 
 
 # Fixed reply when OpenRouter refuses a call because the key's credit limit is
@@ -82,14 +82,53 @@ def _demo_paused_event():
     return f"data: {json.dumps(paused_event)}\n\n"
 
 
-async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
+class ChatTurn:
+    """One user message on its way through PRE_STEPS."""
+
+    def __init__(self, user_message: str, thread_id: str, graph, async_pool, owner_id: str):
+        self.user_message = user_message
+        self.thread_id = thread_id
+        self.graph = graph
+        self.async_pool = async_pool
+        self.owner_id = owner_id
+
+
+class StepReply:
+    """A pre-step's finished answer: its SSE events, without [DONE].
+
+    The runner sends each event, waits `pause` seconds after each one, prints
+    the dev line when `log` is set, then sends [DONE]. A step builds every
+    event before it returns, so nothing reaches the client from a step that
+    fails.
     """
-    Handles input validation, LLM bypass check for direct problem queries,
-    and streams responses from the LangGraph workflow.
-    """
-    start_time = time.time()
+
+    def __init__(self, events: list[str], pause: float = 0.0, log: str | None = None):
+        self.events = events
+        self.pause = pause
+        self.log = log
+
+
+def _error_events(e: Exception, user_message: str, start_time: float) -> list[str]:
+    """Logs a failed turn and returns the events that end it. Call it inside an except block."""
+    import traceback
+
+    print("🚨 Backend Crash Details:")
+    traceback.print_exc()
+
+    print(f"🚨 Raw Error: {repr(e)}")
+    if is_credit_limit_refusal(e):
+        print("🔧 [__DEV__] generate_chat_responses | is_credit_limit_refusal matched (403, scope key_limit) | Response: demo paused line")
+        events = [_demo_paused_event()]
+    else:
+        events = [f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"]
+    print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Error")
+    return events + ["data: [DONE]\n\n"]
+
+
+async def _guardrail_step(turn: ChatTurn) -> StepReply | None:
+    """Core. Refuses a message the input guardrail flags, before any thread row is written."""
     # 1. Run Input Guardrail Check
-    refusal = check_input_guardrail(user_message)
+    refusal = check_input_guardrail(turn.user_message)
     if refusal:
         error_event = {
             "event": "on_chat_model_stream",
@@ -97,58 +136,71 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             "run_id": "guardrail_violation",
             "data": {"chunk": {"content": refusal}},
         }
-        yield f"data: {json.dumps(error_event)}\n\n"
-        print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Guardrail Refusal")
-        yield "data: [DONE]\n\n"
-        return
+        return StepReply([f"data: {json.dumps(error_event)}\n\n"], log="Guardrail Refusal")
+    return None
 
 
+async def _save_thread_step(turn: ChatTurn) -> StepReply | None:
+    """Core. Writes the thread row before any later step can checkpoint, or refuses a thread another browser owns.
+
+    It has no try of its own: a failed save ends the turn with the error
+    event. Passing on without the row would fail the checkpoint foreign key,
+    possibly after a model call.
+    """
+    # Save title before streaming starts
+    owned, created = await register_thread(turn.async_pool, turn.thread_id, turn.user_message, turn.owner_id)
+    if not owned:
+        return StepReply(_thread_refused_events())
+    if created:
+        start_title_generation(turn.async_pool, turn.thread_id, turn.user_message)
+    return None
+
+
+async def _cache_step(turn: ChatTurn) -> StepReply | None:
+    """Optional. Answers from the semantic cache on a close match; a failure is logged and passes on."""
+    user_message = turn.user_message
     # 2.5. Check Semantic Cache
-    if not is_excluded_from_cache(user_message):
-        try:
-            cached_response = None
-            results = cache_vectorstore.similarity_search_with_score(user_message, k=1)
-            if results:
-                match_doc, distance = results[0]
-                score = 1.0 - distance
-                if score >= SEMANTIC_CACHE_THRESHOLD:
-                    cached_response = match_doc.metadata.get("response")
-            if cached_response:
-                print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
-                # Save title before streaming starts
-                owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
-                if not owned:
-                    for event in _thread_refused_events():
-                        yield event
-                    return
-                if created:
-                    start_title_generation(async_pool, thread_id, user_message)
+    if is_excluded_from_cache(user_message):
+        return None
+    try:
+        cached_response = None
+        results = cache_vectorstore.similarity_search_with_score(user_message, k=1)
+        if results:
+            match_doc, distance = results[0]
+            score = 1.0 - distance
+            if score >= SEMANTIC_CACHE_THRESHOLD:
+                cached_response = match_doc.metadata.get("response")
+        if cached_response:
+            print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
 
-                # Persist state directly in PostgreSQL history
-                ai_msg = AIMessage(content=cached_response)
-                config = {"configurable": {"thread_id": thread_id}}
-                await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
+            # Stream the response chunk by chunk to simulate natural real-time streaming
+            events = []
+            chunk_size = 120
+            for i in range(0, len(cached_response), chunk_size):
+                chunk = cached_response[i:i+chunk_size]
+                safe_output = mask_sensitive_data(chunk)
+                stream_event = {
+                    "event": "on_chat_model_stream",
+                    "name": "chatbot",
+                    "run_id": "cache_stream",
+                    "data": {"chunk": {"content": safe_output}}
+                }
+                events.append(f"data: {json.dumps(stream_event)}\n\n")
 
-                # Stream the response chunk by chunk to simulate natural real-time streaming
-                chunk_size = 120
-                for i in range(0, len(cached_response), chunk_size):
-                    chunk = cached_response[i:i+chunk_size]
-                    safe_output = mask_sensitive_data(chunk)
-                    stream_event = {
-                        "event": "on_chat_model_stream",
-                        "name": "chatbot",
-                        "run_id": "cache_stream",
-                        "data": {"chunk": {"content": safe_output}}
-                    }
-                    yield f"data: {json.dumps(stream_event)}\n\n"
-                    await asyncio.sleep(0.01)
+            # Persist state directly in PostgreSQL history
+            ai_msg = AIMessage(content=cached_response)
+            config = {"configurable": {"thread_id": turn.thread_id}}
+            await turn.graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
 
-                print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{cached_response[:100].replace(chr(10), ' ')}...'")
-                yield "data: [DONE]\n\n"
-                return
-        except Exception as e:
-            print(f"⚠️ [WARNING] Semantic cache lookup failed: {e}")
+            return StepReply(events, pause=0.01, log=f"'{cached_response[:100].replace(chr(10), ' ')}...'")
+    except Exception as e:
+        print(f"⚠️ [WARNING] Semantic cache lookup failed: {e}")
+    return None
 
+
+async def _triage_step(turn: ChatTurn) -> StepReply | None:
+    """Optional. Answers simple chatter with fast_llm; a failure is logged and passes on."""
+    user_message = turn.user_message
     # 3. Input Classifier (Triage)
     from backend.core.config import fast_llm
     from langchain_core.messages import SystemMessage
@@ -171,21 +223,9 @@ Rules:
 
         if triage_content != "ROUTE_TO_CORE":
             print(f"⚡ [TRIAGE] Handled by fast classifier: {triage_content}")
-            # Save title before streaming starts
-            owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
-            if not owned:
-                for event in _thread_refused_events():
-                    yield event
-                return
-            if created:
-                start_title_generation(async_pool, thread_id, user_message)
             
-            # Persist to postgres memory
-            ai_msg = AIMessage(content=triage_content)
-            config = {"configurable": {"thread_id": thread_id}}
-            await graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
-
             # Stream chunks to client
+            events = []
             chunk_size = 120
             for i in range(0, len(triage_content), chunk_size):
                 chunk = triage_content[i:i+chunk_size]
@@ -196,30 +236,56 @@ Rules:
                     "run_id": "triage_stream",
                     "data": {"chunk": {"content": safe_output}}
                 }
-                yield f"data: {json.dumps(stream_event)}\n\n"
-                await asyncio.sleep(0.01)
+                events.append(f"data: {json.dumps(stream_event)}\n\n")
+
+            # Persist to postgres memory
+            ai_msg = AIMessage(content=triage_content)
+            config = {"configurable": {"thread_id": turn.thread_id}}
+            await turn.graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
                 
-            print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{triage_content[:100].replace(chr(10), ' ')}...'")
-            yield "data: [DONE]\n\n"
-            return
+            return StepReply(events, pause=0.01, log=f"'{triage_content[:100].replace(chr(10), ' ')}...'")
 
         print("🔍 [TRIAGE] Routing to CORE LangGraph Pipeline...")
     except Exception as e:
         print(f"⚠️ [WARNING] Fast classifier failed, falling back to core: {e}")
+    return None
+
+
+# The chat pre-steps, in order. Each returns a StepReply (it handled the
+# message) or None (pass it on); the core graph path runs when all pass on.
+# Core steps have no try of their own, so a failure ends the turn with the
+# error event; optional steps catch their own failure and pass on.
+PRE_STEPS = (_guardrail_step, _save_thread_step, _cache_step, _triage_step)
+
+
+async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
+    """
+    Handles input validation, LLM bypass check for direct problem queries,
+    and streams responses from the LangGraph workflow.
+    """
+    start_time = time.time()
+    turn = ChatTurn(user_message, thread_id, graph, async_pool, owner_id)
+    for step in PRE_STEPS:
+        try:
+            reply = await step(turn)
+        except Exception as e:
+            for event in _error_events(e, user_message, start_time):
+                yield event
+            return
+        if reply is not None:
+            for event in reply.events:
+                yield event
+                if reply.pause:
+                    await asyncio.sleep(reply.pause)
+            if reply.log is not None:
+                print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: {reply.log}")
+            yield "data: [DONE]\n\n"
+            return
 
     inputs = {"messages": [HumanMessage(content=user_message)]}
     config = {"configurable": {"thread_id": thread_id}}
 
     try:
-        # Save title before streaming starts
-        owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
-        if not owned:
-            for event in _thread_refused_events():
-                yield event
-            return
-        if created:
-            start_title_generation(async_pool, thread_id, user_message)
-
         # Get initial state to find if any tools ran in previous turns (for follow-ups)
         state = await graph.aget_state(config)
         last_tool_output_length = get_last_tool_output_length(state)
@@ -346,19 +412,8 @@ Rules:
         yield "data: [DONE]\n\n"
 
     except Exception as e:
-        import traceback
-
-        print("🚨 Backend Crash Details:")
-        traceback.print_exc()
-
-        print(f"🚨 Raw Error: {repr(e)}")
-        if is_credit_limit_refusal(e):
-            print("🔧 [__DEV__] generate_chat_responses | is_credit_limit_refusal matched (403, scope key_limit) | Response: demo paused line")
-            yield _demo_paused_event()
-        else:
-            yield f"data: {json.dumps({'event': 'on_error', 'name': 'error', 'run_id': 'error', 'data': {}})}\n\n"
-        print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: Error")
-        yield "data: [DONE]\n\n"
+        for event in _error_events(e, user_message, start_time):
+            yield event
 
 
 async def resume_graph_stream(thread_id: str, graph):
