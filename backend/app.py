@@ -101,6 +101,41 @@ app.add_middleware(
 # ==========================================
 # DEPLOYMENT HEALTH CHECK
 # ==========================================
+# A free Supabase project pauses after a week with too little database
+# activity, so /health runs SELECT 1 for the outside uptime ping (Supabase
+# docs, "Project Pausing"). The banner also polls /health from every open tab
+# (useIngestionState.ts), so one check runs at a time and its result is kept
+# for DB_CHECK_CACHE_S: at most one query per window, and a slow database holds
+# at most one pool connection. The timeout keeps /health under 5 s.
+DB_CHECK_TIMEOUT_S = 2.0
+DB_CHECK_CACHE_S = 10.0
+_db_check_lock = asyncio.Lock()
+_db_check_result: str | None = None
+_db_check_at = 0.0
+
+
+async def _select_one() -> None:
+    async with async_pool.connection() as conn:
+        await conn.execute("SELECT 1")
+
+
+async def check_database() -> str:
+    """Returns "reachable" or "unreachable"; never raises. The error text stays in the log: it can name the host."""
+    import time
+    global _db_check_result, _db_check_at
+    async with _db_check_lock:
+        if _db_check_result is not None and time.monotonic() - _db_check_at < DB_CHECK_CACHE_S:
+            return _db_check_result
+        try:
+            await asyncio.wait_for(_select_one(), DB_CHECK_TIMEOUT_S)
+            _db_check_result = "reachable"
+        except Exception as e:
+            print(f"🚨 /health database check failed: {type(e).__name__}: {e}")
+            _db_check_result = "unreachable"
+        _db_check_at = time.monotonic()
+        return _db_check_result
+
+
 @app.get("/health")
 async def health_check(request: Request):
     """
@@ -108,11 +143,13 @@ async def health_check(request: Request):
     and if the RAG brain has finished hydrating.
     """
     ingestion_state = get_ingestion_state()
+    database = await check_database()
     return {
         "status": "online",
         "version": "6.7-p1-task-b",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": ingestion_state == "done",  # see DECISIONS.md, "rag_hydrated means ingestion finished"
         "ingestion_state": ingestion_state,
+        "database": database,
         "provider": "Hugging Face Spaces",
     }
 

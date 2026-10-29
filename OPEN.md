@@ -300,7 +300,7 @@ only for the small residue below. The decision and the full mechanism are in
 one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
 files in the background thread at `app.py:78`.
 
-**How it was confirmed, at zero OpenRouter cost.** `app.py:104-117` exposes
+**How it was confirmed, at zero OpenRouter cost.** `app.py:139-154` exposes
 `/health`, which reports `rag_hydrated` by testing whether the docstore holds
 any key (`app.py:112`). An empty docstore was the entire bug, so this flag was
 `false` before.
@@ -385,7 +385,7 @@ key, `ingestion_state`, so the two questions stop sharing one answer:
 
 | Key | Question it answers | How |
 |---|---|---|
-| `rag_hydrated` | has loading **finished** (since 2026-10-28) | `ingestion_state == "done"`, `app.py:114` |
+| `rag_hydrated` | has loading **finished** (since 2026-10-28) | `ingestion_state == "done"`, `app.py:150` |
 | `ingestion_state` | has loading **finished** | module state in `ingest.py`, read through `get_ingestion_state()` |
 
 On 2026-08-21 `rag_hydrated` kept its former meaning, "is **anything**
@@ -800,7 +800,7 @@ missed the one in `app.py`:
 | `chat.py:163` triage | `chat.py:201-202` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
 | `agents.py:140` conversational | No local handler. Propagates to `chat.py:339-350`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
-| `app.py:233` `/refine_transcript` | `app.py:238-240` logs and returns the raw transcript unchanged. Graceful. |
+| `app.py:270` `/refine_transcript` | `app.py:275-277` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
 added the router log. Re-grep rather than trusting a line number in this file.
@@ -1074,7 +1074,7 @@ compatibility signal anyone has, and its cost is unknown.
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
    work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:163` and
-   `app.py:233` — **read from source**. None of them calls a tool, so none is
+   `app.py:270` — **read from source**. None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
    model with the agent that does tool calls and formatted answers. All four
    currently use one model, which is why this reads as a single decision.
@@ -1151,18 +1151,18 @@ caller.**
 
 | Route | Line | Reaches a model | Notes |
 |---|---|---|---|
-| `GET /health` | :104 | no | Reports `rag_hydrated` and `ingestion_state`. Harmless. |
-| `POST /chat_stream` | :181 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
-| `POST /refine_transcript` | :222 | **yes** | `fast_llm.ainvoke` at :233. **Length cap only**, `app.py:220`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
-| `GET /` | :244 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :256 | **yes** | Resumes an interrupted graph run for any `thread_id`. Rate-limited 2026-10-29 (approve only). |
-| `GET /history` | :294 | no | Lists **every** thread id and title, with `limit`/`offset`. |
-| `GET /history/{thread_id}` | :310 | no | Full message content of any conversation. |
-| `DELETE /history/{thread_id}` | :346 | no | Deletes all data for that thread. |
+| `GET /health` | :139 | no | Reports `rag_hydrated`, `ingestion_state` and `database` (one `SELECT 1`, cached 10 s). Harmless. |
+| `POST /chat_stream` | :218 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
+| `POST /refine_transcript` | :259 | **yes** | `fast_llm.ainvoke` at :270. **Length cap only**, `app.py:257`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
+| `GET /` | :281 | no | Serves `static/index.html` if present. |
+| `POST /chat_approve` | :293 | **yes** | Resumes an interrupted graph run for any `thread_id`. Rate-limited 2026-10-29 (approve only). |
+| `GET /history` | :331 | no | Lists **every** thread id and title, with `limit`/`offset`. |
+| `GET /history/{thread_id}` | :347 | no | Full message content of any conversation. |
+| `DELETE /history/{thread_id}` | :383 | no | Deletes all data for that thread. |
 
 **The three `/history` routes chain, and that is the data exposure.** `/history`
-at :294 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
-at :310 returns the messages; `DELETE /history/{id}` at :346 removes them. The
+at :331 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
+at :347 returns the messages; `DELETE /history/{id}` at :383 removes them. The
 stored conversations contain retrieved fragments of the personal knowledge base,
 because that is what the agent answers with.
 
@@ -1191,7 +1191,7 @@ length check, no cache. `app.py:150-151` was
 call reached the model. It was simultaneously the cheapest route to abuse and the
 only one with no brakes.
 
-**A length cap was added 2026-08-20.** `app.py:220` is now
+**A length cap was added 2026-08-20.** `app.py:257` is now
 `transcript: str = Field(..., max_length=8000)`. It bounds the cost of one model
 call and nothing else. There is still no guardrail and no cache on this route, so
 the asymmetry with `/chat_stream` stands.
@@ -1260,7 +1260,7 @@ exactly the route names the scanner was missing. **Closed 2026-08-20 by option
 **(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
 next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**(b) A length cap on `RefineRequest.transcript`, `app.py:219-220`. — APPLIED
+**(b) A length cap on `RefineRequest.transcript`, `app.py:256-257`. — APPLIED
 2026-08-20.** One line, purely additive, breaks no caller. Bounds the cost of one
 model call; does not stop abuse. The value is **8,000** characters. It is not the
 `1000` this option used to recommend for symmetry with `guardrails.py:13` — that
@@ -1317,7 +1317,7 @@ this section answers.
    `app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)`.
    **Measured:** `/openapi.json`, `/docs` and `/redoc` each return **404**,
    requested against the real `app` object.
-2. **`app.py:220`** now reads `transcript: str = Field(..., max_length=8000)`,
+2. **`app.py:257`** now reads `transcript: str = Field(..., max_length=8000)`,
    with `Field` added to the `pydantic` import already on `app.py:5`.
    **Measured:** a POST of 8,001 characters returns **422** with
    `string_too_long` and carries no `refined_transcript` key; 8,000 characters
@@ -1551,7 +1551,7 @@ The mechanism, in order, all `read` at `7a42773`:
    holds **exactly one** problem header — `Problem 42`. So the block runs to EOF.
 4. `agents.py:95` puts that string into an `AIMessage` unchanged. **There is no
    length cap on this path.** The only `max_length=8000` in the backend is on
-   `/refine_transcript` (`app.py:220`), a different route — see item 9.
+   `/refine_transcript` (`app.py:257`), a different route — see item 9.
 
 **Corrected 2026-08-22, after the commit that recorded it.** This item first
 said 867,756. That is the raw file slice from the header to EOF.
@@ -1581,7 +1581,7 @@ a user typing the question.
 
 - sort `get_data_file_paths()` so the choice is at least deterministic — makes
   the result stable, not correct, and would still return 867,746 characters;
-- cap the fast-path response the way `app.py:220` caps `/refine_transcript`;
+- cap the fast-path response the way `app.py:257` caps `/refine_transcript`;
 - end a block at the next heading of any level rather than only at the next
   `Problem N`, which is the actual cause and the largest change.
 
@@ -1598,7 +1598,7 @@ is why they read alike; the mechanisms are opposite and the fixes are separate.
 reproduce, so the fix is untested against what caused it.**
 
 An earlier local session saw `/history` hang after roughly 15 minutes idle, then
-return the empty error list (`app.py:305-307`), with
+return the empty error list (`app.py:342-344`), with
 `discarding closed connection ... [BAD]` in the backend log. *Stated* — taken
 from the task brief; the original log was not re-read.
 
