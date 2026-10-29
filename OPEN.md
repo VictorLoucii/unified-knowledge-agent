@@ -1125,12 +1125,14 @@ session from a container log pasted by the user; I did not read that log.*
   `APIKeyHeader`, `HTTPBearer`, `set_cookie`, `slowapi`, `RateLimit` and
   `Authorization` returned **zero matches**.
 - **Three public routes reach a paid model** — `/chat_stream`,
-  `/refine_transcript` and `/chat_approve`. None checks anything about the
-  caller. The full route table is below.
-- `app.py:92-98` sets `allow_origin_regex=".*"` with `allow_credentials=True`.
-  The comment at `app.py:88` calls this "Secure CORS" and `app.py:94` says it
-  "Allows any local origin format"; `.*` matches **every** origin, not local
-  ones.
+  `/refine_transcript` and `/chat_approve`. Until 2026-10-27 none checked
+  anything about the caller. Since then `/chat_stream` and `/chat_approve` check
+  the browser id (`98dae35`), and all three check the rate limit (`aaf026f`).
+  None authenticates. The full route table is below.
+- Until 2026-10-28, `app.py:92-98` set `allow_origin_regex=".*"` with
+  `allow_credentials=True`; `.*` matched **every** origin, not local ones. Since
+  `9d66aa9` it is an exact allowlist; see "Two pieces of dead configuration"
+  below.
 
 ### The assessment, and where it differs from the first reading
 
@@ -1139,20 +1141,21 @@ not data, and for a portfolio project a browsable schema may be exactly what is
 wanted.
 
 **The exposure that matters is not the schema.** It is that the spend routes
-are open to anyone with the URL, and that the three `/history` routes hand out
-stored conversations. Closing `/openapi.json` does **not** address either — the
+are open to anyone with the URL, and that, until G14 (2026-10-27), the three
+`/history` routes handed out stored conversations. Closing `/openapi.json` does **not** address either — the
 routes answer a plain `curl` whether or not their schema is published.
 
-**CORS is not the control here.** `allow_origin_regex=".*"` is wrong as written,
+**CORS is not the control here.** `allow_origin_regex=".*"` was wrong as written,
 but CORS only governs what browser JavaScript may *read*. It does not gate
 `curl`, a script, or a server-to-server call. Tightening it would not protect
-the balance. Worth fixing so the comment stops claiming something untrue; do not
-expect it to buy security.
+the balance. It was fixed 2026-10-28 (`9d66aa9`) so the comment stops claiming
+something untrue; it buys no security.
 
 ### The full public surface — every route, read from source 2026-08-19
 
-`app.py` declares eight routes. **None of them checks anything about the
-caller.**
+`app.py` declares eight routes. **None of them authenticates the caller.** Since
+2026-10-27 five check the browser id (`X-Browser-Id`), and since 2026-10-29 the
+three spend routes check the rate limit.
 
 | Route | Line | Reaches a model | Notes |
 |---|---|---|---|
@@ -1160,21 +1163,22 @@ caller.**
 | `POST /chat_stream` | :218 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
 | `POST /refine_transcript` | :259 | **yes** | `fast_llm.ainvoke` at :270. **Length cap only**, `app.py:257`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
 | `GET /` | :281 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :293 | **yes** | Resumes an interrupted graph run for any `thread_id`. Rate-limited 2026-10-29 (approve only). |
-| `GET /history` | :331 | no | Lists **every** thread id and title, with `limit`/`offset`. |
-| `GET /history/{thread_id}` | :347 | no | Full message content of any conversation. |
-| `DELETE /history/{thread_id}` | :383 | no | Deletes all data for that thread. |
+| `POST /chat_approve` | :293 | **yes** | Resumes an interrupted graph run for a `thread_id` the calling browser owns; any other gets 404 (`98dae35`). Rate-limited 2026-10-29 (approve only). |
+| `GET /history` | :331 | no | Lists the calling browser's thread ids and titles (`X-Browser-Id`), with `limit`/`offset`; no header gets an empty list. Scoped 2026-10-27 (`98dae35`). |
+| `GET /history/{thread_id}` | :347 | no | Full messages of a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
+| `DELETE /history/{thread_id}` | :383 | no | Deletes a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
 
-**The three `/history` routes chain, and that is the data exposure.** `/history`
-at :331 hands out the thread ids, so nothing has to be guessed; `/history/{id}`
-at :347 returns the messages; `DELETE /history/{id}` at :383 removes them. The
-stored conversations contain retrieved fragments of the personal knowledge base,
-because that is what the agent answers with.
+**Until G14 (`98dae35`, 2026-10-27), the three `/history` routes chained, and that
+was the data exposure.** `/history` at :331 handed out the thread ids, so nothing
+had to be guessed; `/history/{id}` at :347 returned the messages; `DELETE
+/history/{id}` at :383 removed them. The stored conversations contain retrieved
+fragments of the personal knowledge base, because that is what the agent answers
+with.
 
-**`/chat_approve` extends the chain to a fourth spend route.** It takes a
-`thread_id` and calls `resume_graph_stream`, so a thread id obtained from
-`/history` can be used to resume someone else's interrupted run — which spends
-credit. **An earlier version of this item counted two spend routes. There are
+**Until G14, `/chat_approve` extended the chain to a fourth spend route.** It
+takes a `thread_id` and calls `resume_graph_stream`, so a thread id obtained from
+`/history` could be used to resume someone else's interrupted run — which spends
+credit. Since G14 it resumes only a thread the calling browser owns. **An earlier version of this item counted two spend routes. There are
 three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 
 ### The guardrails are asymmetric, and `/refine_transcript` is the soft target
@@ -1212,14 +1216,19 @@ only what routes through `chat.py`.
 and never reaches a browser. The exposure is not key theft — it is that public
 routes make model calls on behalf of whoever asks.
 
-### Two pieces of dead configuration
+### Two pieces of dead configuration — wired in 2026-10-28
 
-- **`app.py:90` reads `VERCEL_FRONTEND_URL` into `frontend_url`, and nothing
-  ever uses it.** A grep across `backend/` returns that single line and no other
-  hit — read. The CORS middleware at `app.py:92-98` uses
-  `allow_origin_regex=".*"` with `allow_credentials=True` instead. **So the
-  allowlist the comment at `app.py:88` calls "Secure CORS" was written and never
-  wired in.**
+- **Until 2026-10-28, `app.py:90` read `VERCEL_FRONTEND_URL` into `frontend_url`,
+  and nothing used it.** The CORS middleware used `allow_origin_regex=".*"` with
+  `allow_credentials=True`, so the allowlist the comment at `app.py:88` calls
+  "Secure CORS" was written and never wired in.
+- **Since `9d66aa9` the allowlist is wired in.** `app.py:94` sets `allow_origins`
+  to `frontend_url` plus `http://localhost:3000`, exact match; `app.py:95` sets
+  `allow_credentials=False`. Measured locally: `Origin: https://evil.example` got
+  400 and no `access-control-allow-origin`. **On the Space it does not hold:** the
+  same origin got its own `access-control-allow-origin` (curl, 2026-10-28).
+  Inferred: the HuggingFace proxy answers CORS before the
+  app. Not checked: HF's documentation.
 - CORS is not the control here regardless. It governs what browser JavaScript
   may *read*, not what `curl` or a server may call.
 
@@ -1294,6 +1303,10 @@ thing as (c).** The frontend calls `/history` from the browser at
 `page.tsx:75` and `useChatStream.ts:62`, so any credential it carries is equally
 public. Narrowing the scope does not escape the problem: this frontend has no
 server-side session to hold anything.
+**Partly answered 2026-10-27 by G14 (`98dae35`):** the routes are scoped to a
+random browser id. This is not authentication; anyone who
+sends the same browser id and thread id reads that thread. The reasoning above
+still holds for real authentication.
 
 **The real dependency, stated plainly.** (c) and (e) are not backend tasks. They
 need a server-side component the frontend does not currently have. Doing either
