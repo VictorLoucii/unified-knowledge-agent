@@ -1024,3 +1024,26 @@ and the next session would read a judge-noise point as a regression.
 
 **Rejected — deleting them.** Git never tracked them, so a deleted file could
 not be recovered.
+
+### `/health` checks the database at most once per 10 s, behind one lock
+
+**Chosen (2026-10-29, `c22df0f`):** `/health` reports `database`, `"reachable"`
+or `"unreachable"`, from one `SELECT 1` through `async_pool`. One check runs at a
+time, its result is kept for 10 s, and a 2 s `asyncio.wait_for` bounds it. A
+failure returns 200 and logs the error. The response never carries the error
+text, which can name the host. Reason: a free Supabase project pauses after a
+week with too little activity, and the outside ping calls `/health`.
+
+**Rejected — a query on every call.** The banner polls `/health` from every open
+tab, every 3 s while loading. With a slow database, each call would hold one of
+the 10 pool connections for up to the timeout. *Not measured:* how many loading
+tabs it would take to drain the pool.
+
+**Rejected — a separate route that only the ping calls.** It keeps banner traffic
+off the database. But it adds a public route, and close check 8 would no longer
+test `/health`.
+
+**Measured locally 2026-10-29:** reachable in 4–5 ms. With the check aimed at an
+address that never answers, every answer was 200, the slowest took 1192 ms, and
+the log showed `TimeoutError`. A call that arrives during a check waits for it,
+so the worst case is about one timeout.

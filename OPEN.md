@@ -379,6 +379,11 @@ half of the premise is established.** *The sleep behaviour itself is still
 general knowledge, not verified for this Space.* If it holds, it matters most
 for the case the project exists to serve: a recruiter opening the demo cold.
 
+**A keep-alive ping runs since 2026-10-29.** cron-job.org sends `GET /health` at
+06:00 and 18:00 UTC; its test run got 200 in 1.16 s. *Not checked:* that this
+keeps a `cpu-basic` Space awake, since the sleep itself is unverified here; and
+Hugging Face's policy on keep-alive pings.
+
 **The reporting half is fixed — 2026-08-21.** The option recorded here as
 "cheapest honest option, not applied" was applied. `/health` now carries a second
 key, `ingestion_state`, so the two questions stop sharing one answer:
