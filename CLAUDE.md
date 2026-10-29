@@ -29,6 +29,7 @@ mirrors to a HuggingFace Space (`.github/workflows/sync_to_hub.yml`).
 | Lint | `cd frontend && npm run lint` | Claude |
 | Types | `cd frontend && npx tsc --noEmit` | Claude |
 | Python syntax | `.venv/bin/python -m compileall -q backend` | Claude |
+| Core tests | `.venv/bin/python -m pytest --confcutdir=backend/tests backend/tests` | Claude |
 | Fast-path drift | `.venv/bin/python -m backend.evals.check_fast_path` | owner |
 | Eval | `uv run python -m backend.evals.eval --concurrency 1` | owner |
 

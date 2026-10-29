@@ -14,8 +14,8 @@ COPY pyproject.toml uv.lock ./
 
 # Step 2: Install dependencies.
 # The --frozen flag forces uv to strictly use the uv.lock file (guaranteeing the CPU-only PyTorch!).
-# The --no-install-project flag skips installing the project directory itself as a package.
-RUN uv sync --frozen --no-install-project
+# The --no-install-project flag skips installing the project directory itself as a package; --no-dev leaves out dev tools such as pytest.
+RUN uv sync --frozen --no-install-project --no-dev
 
 # Step 3: Copy your actual backend application code
 COPY backend/ ./backend/

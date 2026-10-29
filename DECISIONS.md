@@ -951,12 +951,12 @@ Every measurement, date and hash from the old bullet, and its single home now:
 
 | Item | Now |
 |---|---|
-| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:76` |
+| bare-citation examples `\| :102 \|` and `at :210` | `CLAUDE.md:77` |
 | their location, OPEN.md item 9's route table and the prose below it | `.claude/skills/citation-sweep/SKILL.md:39-40` |
-| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:76-77` |
-| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:77-79` |
-| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:79-81` |
-| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:82` and `SKILL.md:46-48` |
+| 12 bare refs into `app.py` against 44 found by the filename grep, 2026-08-21 | `CLAUDE.md:77-78` |
+| the `/health` range in OPEN.md whose end moved by one, 2026-08-21; one session filed it safe, the other caught it | `CLAUDE.md:78-80` |
+| `247dd15`: a 10-line `app.py` block replaced by a 17-line comment; eight citations across two records wrong by exactly 7; found by accident, weeks later | `CLAUDE.md:80-82` |
+| leave past-tense citations to deleted code alone; they are history | `CLAUDE.md:83` and `SKILL.md:46-48` |
 
 `OPEN.md:729` cited `CLAUDE.md` "Frontend rules" by title and now names
 `frontend/CLAUDE.md`. The other four title references into the root
@@ -1072,3 +1072,40 @@ limit bound it.
 
 **Not checked:** a real `POST` with that origin on the Space, and HuggingFace's
 documentation of the proxy.
+
+## Tests
+
+### The core tests swap modules before `config.py` loads; `config.py` is unchanged
+
+**Chosen (2026-10-29, P2 item 1):** `backend/tests/conftest.py` prepares the
+process before any backend import. It sets a stub `OPENROUTER_API_KEY`, makes
+`dotenv.load_dotenv` a no-op, blocks Phoenix, and puts stand-in modules for
+`langchain_chroma` and `langchain_huggingface` into `sys.modules`. The fake
+models (`GenericFakeChatModel`, `FakeMessagesListChatModel`) and the fake
+registry, retriever, reranker and cache are patched as module attributes per
+test. The graph is compiled with `MemorySaver`, as `app.py:73` compiles it with
+`AsyncPostgresSaver`. Guards record every Python-level connect, DNS lookup and
+`open()` of a file named `.env`, and fail the test that made one.
+
+**Rejected — making `config.py` build its models and stores lazily.** It would
+remove the stand-ins, but the task allowed no source change; a stand-in called
+in a new way fails loudly rather than reaching the real module.
+
+**Rejected — patching attributes of the real `langchain_chroma`.** Importing it
+imports `chromadb`, whose `Settings()` reads `.env` from the working directory.
+Measured 2026-10-29: in the sandbox the import raised `PermissionError` on
+`.env`. The phoenix package does the same through `fastmcp`. For that reason
+`pyproject.toml` also turns off the `phoenix` and `langsmith_plugin` pytest
+plugins that the environment installs.
+
+**Measured 2026-10-29:** 10 passed, 1 strict expected failure, in the sandbox,
+with no `.env` readable and no network. Breaking the key regex at
+`guardrails.py:96` failed one test, which showed the leaked key. A probe showed
+the guards record a refused connect and an open of a decoy `.env`. The expected
+failure measures M10: a key placed before the last 120 characters of a streamed
+answer reaches the browser whole and unmasked.
+
+**Not covered:** the `app.py` routes, the registry SQL in `memory.py`, the
+foreign key from the checkpoint tables to `thread_metadata` (`memory.py:41-59`;
+it needs Postgres), and real retrieval quality. Sockets opened inside native
+code are not seen by the guards.

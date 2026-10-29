@@ -8,11 +8,15 @@ that moves a number, and say why.
 | Frontend lint | `cd frontend && npm run lint` | 27 problems: 26 errors, 1 warning |
 | Frontend types | `cd frontend && npx tsc --noEmit` | 0 errors |
 | Python syntax | `.venv/bin/python -m compileall -q backend` | exit 0 |
+| Core tests | `.venv/bin/python -m pytest --confcutdir=backend/tests backend/tests` (sandbox); `uv run pytest` (owner, CI) | 10 passed, 1 xfailed (the masking bug, kept as a strict expected failure). Added 2026-10-29 |
 | Fast-path drift | `.venv/bin/python -m backend.evals.check_fast_path` | exit 1, `JOB_HUNT` row only (owner runs it; needs `.env`) |
 | Eval suite | `uv run python -m backend.evals.eval --concurrency 1` | `latest_run_metrics.json` at `HEAD`: logic 95.74 (90/94), recall 100. Last written 2026-08-20, `0804bc6`; not re-run today |
 
-No Python test suite, linter or type checker is installed. The root `test_*.py`
-and `scratch/test_*.py` files are one-off scripts, not a suite.
+pytest runs the core tests in `backend/tests/`; no Python linter or type checker
+is installed. The root `test_*.py` and `scratch/test_*.py` files are one-off
+scripts, not a suite; `testpaths` in `pyproject.toml` keeps pytest out of them.
+In the sandbox, pytest needs `--confcutdir=backend/tests`: without it, collection
+stats the repo-root `.env` and the sandbox refuses (`PermissionError`).
 
 Lint problems by file and rule (compare the set, not only the count):
 

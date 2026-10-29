@@ -40,3 +40,16 @@ explicit = true
 [tool.uv.sources]
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
+
+[tool.pytest.ini_options]
+# Only the core contract tests; the root and scratch test_*.py files are one-off scripts.
+testpaths = ["backend/tests"]
+pythonpath = ["."]
+# These installed plugins import phoenix (whose fastmcp import reads .env) and langsmith; the tests stay offline.
+# cacheprovider is off so a run leaves no .pytest_cache at the repo root.
+addopts = "-p no:phoenix -p no:langsmith_plugin -p no:cacheprovider"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.2.0",
+]

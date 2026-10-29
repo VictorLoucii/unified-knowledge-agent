@@ -89,3 +89,7 @@ test_*.py
 # OS noise.
 .DS_Store
 **/.DS_Store
+
+# Core contract tests. Run in development and CI only; pytest is a dev
+# dependency and `uv sync --no-dev` leaves it out of the image.
+backend/tests/
