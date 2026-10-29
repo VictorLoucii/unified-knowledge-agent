@@ -12,6 +12,8 @@ def test_graph_answers_a_rag_question_and_checkpoints_it(core):
     core.set_fast_replies("IN_SCOPE")
     core.set_qa(rag_script(QUESTION, ANSWER))
     config = {"configurable": {"thread_id": "graph-thread"}}
+    # chat.py registers the thread before the graph runs; the checkpointer requires the row
+    core.registry.rows["graph-thread"] = {"title": QUESTION[:40], "owner_id": "owner-1"}
 
     result = asyncio.run(core.graph.ainvoke({"messages": [HumanMessage(content=QUESTION)]}, config))
 

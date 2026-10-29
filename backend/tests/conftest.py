@@ -11,6 +11,7 @@ even when app code swallows the error. Sockets opened inside native code (for
 example a C extension's own client) are not seen by these guards.
 """
 import asyncio
+import contextlib
 import itertools
 import json
 import os
@@ -120,8 +121,10 @@ from langchain_core.language_models.fake_chat_models import (  # noqa: E402
 from langchain_core.messages import AIMessage  # noqa: E402
 from langchain_core.retrievers import BaseRetriever  # noqa: E402
 from langgraph.checkpoint.memory import MemorySaver  # noqa: E402
+from psycopg.errors import ForeignKeyViolation  # noqa: E402
 from pydantic import Field  # noqa: E402
 
+from backend import memory  # noqa: E402
 from backend.core import agents, chat, config  # noqa: E402
 from backend.core.tools import search  # noqa: E402
 
@@ -225,6 +228,97 @@ class NoPostgres:
         raise AssertionError(f"Postgres reached: async_pool.{name}")
 
 
+def _one_line(sql):
+    return " ".join(sql.split())
+
+
+class FakeRegistryPool:
+    """Stands in for async_pool on the statements register_thread and start_title_generation run.
+
+    rows maps thread_id to {"title": ..., "owner_id": ...}. Any other statement,
+    or a reworded one, fails the test.
+    """
+
+    INSERT = _one_line("""
+        INSERT INTO thread_metadata (thread_id, title, owner_id)
+        VALUES (%s, %s, %s)
+        ON CONFLICT (thread_id) DO NOTHING
+        RETURNING thread_id
+    """)
+    SELECT_OWNER = "SELECT owner_id FROM thread_metadata WHERE thread_id = %s"
+    UPDATE_TITLE = "UPDATE thread_metadata SET title = %s WHERE thread_id = %s"
+
+    def __init__(self):
+        self.rows = {}
+
+    @contextlib.asynccontextmanager
+    async def connection(self):
+        yield self
+
+    @contextlib.asynccontextmanager
+    async def cursor(self):
+        yield _FakeRegistryCursor(self.rows)
+
+
+class _FakeRegistryCursor:
+    def __init__(self, rows):
+        self.rows = rows
+        self.result = None
+
+    async def execute(self, sql, params):
+        sql = _one_line(sql)
+        if sql == FakeRegistryPool.INSERT:
+            thread_id, title, owner_id = params
+            if thread_id in self.rows:
+                self.result = None
+            else:
+                self.rows[thread_id] = {"title": title, "owner_id": owner_id}
+                self.result = (thread_id,)
+        elif sql == FakeRegistryPool.SELECT_OWNER:
+            row = self.rows.get(params[0])
+            self.result = (row["owner_id"],) if row else None
+        elif sql == FakeRegistryPool.UPDATE_TITLE:
+            title, thread_id = params
+            if thread_id in self.rows:
+                self.rows[thread_id]["title"] = title
+            self.result = None
+        else:
+            raise AssertionError(f"unexpected SQL in FakeRegistryPool: {sql}")
+
+    async def fetchone(self):
+        return self.result
+
+
+class FkMemorySaver(MemorySaver):
+    """MemorySaver that refuses a write for a thread with no registry row.
+
+    Mimics the checkpoint foreign keys to thread_metadata (memory.py,
+    setup_database_tables). Measured 2026-10-29 on postgres:16: each of the
+    three checkpoint tables raises this error, sqlstate 23503.
+    """
+
+    def __init__(self, registry):
+        super().__init__()
+        self.registry = registry
+
+    def _require_row(self, config, table, constraint):
+        thread_id = config["configurable"]["thread_id"]
+        if thread_id not in self.registry.rows:
+            raise ForeignKeyViolation(
+                f'insert or update on table "{table}" violates foreign key constraint '
+                f'"{constraint}"\nDETAIL:  Key (thread_id)=({thread_id}) '
+                f'is not present in table "thread_metadata".'
+            )
+
+    def put(self, config, checkpoint, metadata, new_versions):
+        self._require_row(config, "checkpoints", "fk_cascade_metadata_checkpoints")
+        return super().put(config, checkpoint, metadata, new_versions)
+
+    def put_writes(self, config, writes, task_id, task_path=""):
+        self._require_row(config, "checkpoint_writes", "fk_cascade_metadata_writes")
+        return super().put_writes(config, writes, task_id, task_path)
+
+
 def tool_call_turn(query: str) -> FakeMessagesListChatModel:
     """A qa_node step that calls search_knowledge_base with the query."""
     return FakeMessagesListChatModel(responses=[AIMessage(
@@ -259,11 +353,22 @@ def core(monkeypatch):
     Returns a namespace the test can adjust before it runs a turn.
     """
     registry_calls = []
+    title_calls = []
     state = SimpleNamespace(registry_result=True)
+    registry = FakeRegistryPool()
 
-    async def fake_save_thread_title(async_pool, thread_id, user_message, owner_id):
+    async def fake_register_thread(async_pool, thread_id, user_message, owner_id):
         registry_calls.append((thread_id, user_message, owner_id))
-        return state.registry_result
+        if not state.registry_result:
+            return False, False
+        # Writes the row FkMemorySaver checks, as the real INSERT would
+        created = thread_id not in registry.rows
+        title = user_message[:40] + ("..." if len(user_message) > 40 else "")
+        registry.rows.setdefault(thread_id, {"title": title, "owner_id": owner_id})
+        return True, created
+
+    def fake_start_title_generation(async_pool, thread_id, user_message):
+        title_calls.append((thread_id, user_message))
 
     retriever = FakeRetriever(docs=[Document(
         page_content=RETRIEVED_TEXT,
@@ -278,7 +383,8 @@ def core(monkeypatch):
         name="Expansion_LLM",
     )
 
-    monkeypatch.setattr(chat, "save_thread_title", fake_save_thread_title)
+    monkeypatch.setattr(chat, "register_thread", fake_register_thread)
+    monkeypatch.setattr(chat, "start_title_generation", fake_start_title_generation)
     monkeypatch.setattr(chat, "cache_vectorstore", cache)
     monkeypatch.setattr(config, "fast_llm", fast_llm)
     monkeypatch.setattr(agents, "fast_llm", fast_llm)
@@ -290,6 +396,8 @@ def core(monkeypatch):
     ns = SimpleNamespace(
         state=state,
         registry_calls=registry_calls,
+        title_calls=title_calls,
+        registry=registry,
         retriever=retriever,
         reranker=reranker,
         cache=cache,
@@ -307,19 +415,36 @@ def core(monkeypatch):
         fast_llm.i = 0
         fast_llm.calls = 0
 
+    def use_real_registry(title_model):
+        # The real register_thread and start_title_generation, on the fake pool
+        monkeypatch.setattr(chat, "register_thread", memory.register_thread)
+        monkeypatch.setattr(chat, "start_title_generation", memory.start_title_generation)
+        monkeypatch.setattr(config, "llm", title_model)
+
     ns.set_qa = set_qa
     ns.set_fast_replies = set_fast_replies
-    # Same compile as app.py:73, with MemorySaver in place of AsyncPostgresSaver.
-    ns.graph = agents.workflow.compile(checkpointer=MemorySaver(), interrupt_before=["sensitive_tools"])
+    ns.use_real_registry = use_real_registry
+    # Same compile as app.py:73, with FkMemorySaver in place of AsyncPostgresSaver.
+    ns.graph = agents.workflow.compile(checkpointer=FkMemorySaver(registry), interrupt_before=["sensitive_tools"])
     yield ns
+    # A test that failed before run_chat drained its title task leaves it here; never carry it over
+    memory._title_tasks.clear()
     assert fast_llm.extra_calls == 0, f"fast_llm got {fast_llm.extra_calls} call(s) beyond its script"
 
 
-def run_chat(graph, message, thread_id="thread-1", owner_id="owner-1"):
-    """Runs generate_chat_responses to the end and returns the raw SSE chunks."""
+def run_chat(graph, message, thread_id="thread-1", owner_id="owner-1", pool=None):
+    """Runs generate_chat_responses to the end and returns the raw SSE chunks.
+
+    Then waits for every background title task, so a test sees its outcome
+    and none is cancelled when the event loop closes.
+    """
 
     async def collect():
-        return [c async for c in chat.generate_chat_responses(message, thread_id, graph, NoPostgres(), owner_id)]
+        async_pool = pool if pool is not None else NoPostgres()
+        chunks = [c async for c in chat.generate_chat_responses(message, thread_id, graph, async_pool, owner_id)]
+        while memory._title_tasks:
+            await asyncio.gather(*memory._title_tasks)
+        return chunks
 
     return asyncio.run(collect())
 

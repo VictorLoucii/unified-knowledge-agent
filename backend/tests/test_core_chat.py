@@ -76,7 +76,7 @@ def test_rag_turn_runs_the_whole_core_path(core):
 
 
 def test_query_expansion_text_stays_out_of_the_stream(core):
-    """Steps: stream (the Expansion_LLM filter at chat.py:236)."""
+    """Steps: stream (the Expansion_LLM filter at chat.py:245)."""
     core.set_qa(rag_script(QUESTION, ANSWER))
 
     chunks = run_chat(core.graph, QUESTION)
@@ -86,7 +86,7 @@ def test_query_expansion_text_stays_out_of_the_stream(core):
 
 
 def test_secret_in_the_last_120_characters_is_masked(core):
-    """Steps: mask. The whole answer fits in the final buffer flush (chat.py:293-310)."""
+    """Steps: mask. The whole answer fits in the final buffer flush (chat.py:302-319)."""
     answer = f"Key {FAKE_ROUTER_KEY} and env {STUB_OPENROUTER_KEY} end."
     core.set_qa(rag_script(QUESTION, answer))
 
@@ -115,7 +115,7 @@ def test_secret_early_in_a_long_answer_is_masked(core):
 
 
 def test_long_answer_is_cut_at_the_length_cap(core):
-    """Steps: cap. max_allowed is max(2000, tool output + 1500) (chat.py:222, :268)."""
+    """Steps: cap. max_allowed is max(2000, tool output + 1500) (chat.py:231, :277)."""
     long_answer = "word " * 600
     core.set_qa(rag_script(QUESTION, long_answer))
 
@@ -131,7 +131,7 @@ def test_long_answer_is_cut_at_the_length_cap(core):
 
 
 def test_thread_owned_by_another_browser_is_refused(core):
-    """Steps: registry. save_thread_title returns False for a foreign thread."""
+    """Steps: registry. register_thread returns owned=False for a foreign thread."""
     core.state.registry_result = False
     core.set_qa(ScriptedModel())
 
@@ -163,7 +163,7 @@ def test_second_turn_sees_the_first_turn(core):
 
 
 def test_out_of_scope_query_streams_the_fallback_text(core):
-    """Steps: route (scope router says OUT_OF_SCOPE), stream (on_chain_end branch, chat.py:271)."""
+    """Steps: route (scope router says OUT_OF_SCOPE), stream (on_chain_end branch, chat.py:280)."""
     core.set_fast_replies("ROUTE_TO_CORE", "OUT_OF_SCOPE")
     core.set_qa(ScriptedModel())
 

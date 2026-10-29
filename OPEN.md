@@ -802,9 +802,9 @@ missed the one in `app.py`:
 
 | Site | Behaviour on failure |
 |---|---|
-| `chat.py:163` triage | `chat.py:201-202` logs and falls through to the core pipeline. Graceful. |
+| `chat.py:166` triage | `chat.py:207-208` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:140` conversational | No local handler. Propagates to `chat.py:339-350`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
+| `agents.py:140` conversational | No local handler. Propagates to `chat.py:348-359`, which sends `{'error': ...}` to the browser. Hard failure, but visible. |
 | `app.py:270` `/refine_transcript` | `app.py:275-277` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
@@ -1078,7 +1078,7 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:163` and
+   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:166` and
    `app.py:270` — **read from source**. None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
    model with the agent that does tool calls and formatted answers. All four
@@ -1189,7 +1189,7 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 - `chat.py:92` calls `check_input_guardrail`. `guardrails.py:13` refuses any
   message over 1,000 characters, and `guardrails.py:20-25` blocks jailbreak and
   key-extraction phrases.
-- `chat.py:107-143` checks the semantic cache first. A repeated or near-identical
+- `chat.py:107-146` checks the semantic cache first. A repeated or near-identical
   question is answered with **no model call**.
 - The fast-path table intercepts 53 known questions before any model call.
   *(Taken from CLAUDE.md as a record; the count is not re-derived here.)*
@@ -1420,7 +1420,7 @@ applies.
 `MemorySaver` — which is what `eval.py:35` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
-  input for __start__` and produces zero events. `chat.py:485-494` catches it and
+  input for __start__` and produces zero events. `chat.py:494-503` catches it and
   yields `{"error": ...}` then `[DONE]`, so the stream terminates cleanly.
 - A thread with `state.next == ()` raises nothing and yields two events,
   `on_chain_start` and `on_chain_end`. No `on_chat_model_*` event appears, so no

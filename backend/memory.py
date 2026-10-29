@@ -100,13 +100,18 @@ async def generate_title_from_llm(user_message: str) -> str:
         return user_message[:40] + ("..." if len(user_message) > 40 else "")
 
 
-async def save_thread_title(
+async def register_thread(
     async_pool: AsyncConnectionPool, thread_id: str, user_message: str, owner_id: str
-) -> bool:
-    """Generates and saves a title for a new thread if it doesn't exist.
+) -> tuple[bool, bool]:
+    """Inserts the thread's metadata row with a fallback title, or checks its owner.
 
-    Returns True when the thread belongs to owner_id (newly created or already
-    owned), False when another owner, or no owner, holds it.
+    Core: every checkpoint table has a foreign key to thread_metadata
+    (setup_database_tables), so this row must exist before any checkpoint
+    write. Makes no model call.
+
+    Returns (owned, created). owned is True when the thread belongs to owner_id
+    (newly created or already owned), False when another owner, or no owner,
+    holds it. created is True only when this call inserted the row.
     """
     async with async_pool.connection() as conn:
         async with conn.cursor() as cur:
@@ -127,23 +132,45 @@ async def save_thread_title(
                     "SELECT owner_id FROM thread_metadata WHERE thread_id = %s", (thread_id,)
                 )
                 row = await cur.fetchone()
-                return row is not None and row[0] == owner_id
-            else:
-                # Kick off background LLM call to update it to a meaningful title
-                async def update_title_bg():
-                    try:
-                        clean_title = await generate_title_from_llm(user_message)
-                        async with async_pool.connection() as conn_bg:
-                            async with conn_bg.cursor() as cur_bg:
-                                await cur_bg.execute(
-                                    "UPDATE thread_metadata SET title = %s WHERE thread_id = %s",
-                                    (clean_title, thread_id),
-                                )
-                    except Exception as e:
-                        print(f"⚠️ [WARNING] Background title update failed: {e}")
+                return (row is not None and row[0] == owner_id), False
+            return True, True
 
-                asyncio.create_task(update_title_bg())
-                return True
+
+# The event loop keeps only a weak reference to a task, so a running title task
+# is held here until it finishes
+_title_tasks: set[asyncio.Task] = set()
+
+
+def start_title_generation(async_pool: AsyncConnectionPool, thread_id: str, user_message: str) -> None:
+    """Replaces the fallback title of a new thread with a model-made one, in the background.
+
+    Optional: never raises, so a failure here cannot block or fail a chat turn.
+    """
+    coro = None
+    try:
+        # Kick off background LLM call to update it to a meaningful title
+        async def update_title_bg():
+            try:
+                clean_title = await generate_title_from_llm(user_message)
+                async with async_pool.connection() as conn_bg:
+                    async with conn_bg.cursor() as cur_bg:
+                        await cur_bg.execute(
+                            "UPDATE thread_metadata SET title = %s WHERE thread_id = %s",
+                            (clean_title, thread_id),
+                        )
+            except Exception as e:
+                print(f"⚠️ [WARNING] Background title update failed: {e}")
+
+        coro = update_title_bg()
+        task = asyncio.create_task(coro)
+        coro = None
+        _title_tasks.add(task)
+        task.add_done_callback(_title_tasks.discard)
+    except Exception as e:
+        # A coroutine that never became a task is closed, so it is not left unawaited
+        if coro is not None:
+            coro.close()
+        print(f"⚠️ [WARNING] Background title update could not start: {e}")
 
 
 async def get_thread_owner(async_pool: AsyncConnectionPool, thread_id: str) -> tuple[bool, str | None]:

@@ -11,7 +11,7 @@ from backend.core.guardrails import (
     get_content_length,
     get_last_tool_output_length,
 )
-from backend.memory import save_thread_title
+from backend.memory import register_thread, start_title_generation
 import time
 
 def is_excluded_from_cache(message: str) -> bool:
@@ -116,10 +116,13 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
             if cached_response:
                 print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
                 # Save title before streaming starts
-                if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+                owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
+                if not owned:
                     for event in _thread_refused_events():
                         yield event
                     return
+                if created:
+                    start_title_generation(async_pool, thread_id, user_message)
 
                 # Persist state directly in PostgreSQL history
                 ai_msg = AIMessage(content=cached_response)
@@ -169,10 +172,13 @@ Rules:
         if triage_content != "ROUTE_TO_CORE":
             print(f"⚡ [TRIAGE] Handled by fast classifier: {triage_content}")
             # Save title before streaming starts
-            if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+            owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
+            if not owned:
                 for event in _thread_refused_events():
                     yield event
                 return
+            if created:
+                start_title_generation(async_pool, thread_id, user_message)
             
             # Persist to postgres memory
             ai_msg = AIMessage(content=triage_content)
@@ -206,10 +212,13 @@ Rules:
 
     try:
         # Save title before streaming starts
-        if not await save_thread_title(async_pool, thread_id, user_message, owner_id):
+        owned, created = await register_thread(async_pool, thread_id, user_message, owner_id)
+        if not owned:
             for event in _thread_refused_events():
                 yield event
             return
+        if created:
+            start_title_generation(async_pool, thread_id, user_message)
 
         # Get initial state to find if any tools ran in previous turns (for follow-ups)
         state = await graph.aget_state(config)

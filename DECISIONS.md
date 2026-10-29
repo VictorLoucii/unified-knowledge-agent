@@ -1110,6 +1110,64 @@ foreign key from the checkpoint tables to `thread_metadata` (`memory.py:41-59`;
 it needs Postgres), and real retrieval quality. Sockets opened inside native
 code are not seen by the guards.
 
+### The thread registry is core; the model-made title is optional
+
+**Chosen (2026-10-29, P2 item 3, coupling 1):** `save_thread_title` is split in
+`backend/memory.py`. `register_thread` inserts the `thread_metadata` row with
+the fallback title, or re-reads the owner when the row exists, and returns
+`(owned, created)`. It calls no model. `start_title_generation` starts the model
+title in the background and never raises. `chat.py` calls the first at each of
+its three sites, refuses a thread it does not own, and calls the second only
+when the row is new, as before the split.
+
+**Why the INSERT is core. Measured 2026-10-29** on a throwaway `postgres:16`
+with the foreign keys from `setup_database_tables()`: each write for a thread
+with no `thread_metadata` row fails with `psycopg.errors.ForeignKeyViolation`,
+sqlstate 23503. A checkpoint with a stored value hits
+`fk_cascade_metadata_blobs` (the saver writes blobs first), a plain checkpoint
+hits `fk_cascade_metadata_checkpoints`, and pending writes hit
+`fk_cascade_metadata_writes`. With the row present, the same write succeeds.
+
+**Why the owner check is core.** It is the same statement as the INSERT: only
+the `ON CONFLICT` branch knows the row was already there. `owns_thread` in
+`app.py` checks first, with `allow_new`, but two browsers can pass that check
+for one new thread; the re-read after the conflict refuses the second.
+
+**Running title tasks are held in `_title_tasks`** until they finish, because
+the event loop keeps only a weak reference to a task. A coroutine that never
+became a task is closed. Measured: without the close, a refused
+`create_task` left `update_title_bg` never awaited (`RuntimeWarning`).
+
+**Tests.** `FkMemorySaver` refuses a checkpoint write for a thread with no row,
+with the measured error, and `FakeRegistryPool` runs the real `register_thread`
+and `start_title_generation`. This covers part of the "Not covered" line above:
+the foreign key is mimicked, not run. Measured on the 20-test suite: removing
+the INSERT failed 6 tests; removing the registry call from `chat.py` failed 13;
+removing the title start at any one site failed at least one.
+
+**Measured on the fake checkpointer, not in production:** the graph ran
+`qa_node` before the refused write surfaced. LangGraph 1.1.3 defaults to
+`durability="async"` (`langgraph/pregel/main.py:2430`), so without the row a
+turn could spend a model call before it fails.
+
+**Known, not changed:** on the cache-hit and triage paths, `register_thread`
+sits inside the step's own `try`. A database failure there is logged as a cache
+or classifier failure and retried at the next step, as before the split. The
+pre-steps list (P2 item 4) is where that moves.
+
+**Rejected:**
+- *A model title on every turn.* The core part would return one fact, not two.
+  Every follow-up would cost a model call and rename the sidebar entry.
+- *One `_claim_thread` helper in `chat.py`* for the three sites. The task asked
+  for the core call, then the optional call, at each site. A test per site
+  catches a site that loses its title start.
+- *A module-level title coroutine passed straight to `create_task`.* The
+  coroutine is built before `create_task` can raise, so the measured
+  "never awaited" warning comes back.
+- *One upsert returning the owner and `xmax = 0`.* It saves a round trip per
+  follow-up, but changes the SQL beyond "keep behaviour" and relies on a
+  Postgres internal.
+
 ## CI
 
 ### One workflow, two jobs; lint is a counted ratchet, not a pass/fail lint
