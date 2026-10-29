@@ -237,7 +237,7 @@ LFS rules that already sit unused at `.gitattributes:4-6`.
 
 **Why:** three reasons, in order of weight.
 
-1. **The startup cost is already absorbed.** `app.py:75-77` runs
+1. **The startup cost is already absorbed.** `app.py:76-78` runs
    `initialize_rag` in a background thread precisely so HuggingFace health
    checks pass instantly — the comment there says so. The ingest never blocks
    the port bind, and the Space does answer from the first second.
@@ -349,9 +349,9 @@ returned, not that all 26 files are present. Both remain open in
 ### `rag_hydrated` means ingestion finished, and `/chat_stream` waits for it
 
 **Chosen (2026-10-28):** `/health` computes `rag_hydrated` as
-`ingestion_state == "done"` (`app.py:113`), and no longer looks at the docstore.
+`ingestion_state == "done"` (`app.py:114`), and no longer looks at the docstore.
 While the state is not `done`, `/chat_stream` returns one fixed line as a normal
-stream (`app.py:192-194`, built at `app.py:156-172`). It makes no model call and
+stream (`app.py:195-197`, built at `app.py:157-173`). It makes no model call and
 saves nothing to history. The frontend polls `/health` and shows a banner until
 `done`.
 
@@ -428,7 +428,7 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:359`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:367`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
 `search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
@@ -647,7 +647,7 @@ while letting the environment win.
 
 ### The refine cap is 8,000 characters, not 1,000
 
-**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:217`.
+**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:220`.
 
 **Rejected:** `1000`, matching the message cap at `guardrails.py:13`, so the two
 routes would read consistently.
@@ -662,7 +662,7 @@ rejects it before it can be trimmed. `ChatInput.tsx:89-91` reads
 the user is told nothing when that happens — the feature just stops refining.
 
 The second half of the reason: a per-call cap does not bound total spend, because
-nothing bounds call count. There is no rate limiting anywhere in `backend/`. So
+nothing bounds call count. There is no rate limiting anywhere in `backend/` (true when written; a rate limit exists since 2026-10-29). So
 the tighter number buys nothing measurable and costs a path that works.
 
 **Anyone tidying `8000` down to match `guardrails.py:13` is undoing this.** The
