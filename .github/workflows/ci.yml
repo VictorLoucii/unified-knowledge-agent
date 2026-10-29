@@ -1,0 +1,84 @@
+name: CI
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    env:
+      # A stub, not a secret. config.py raises on import without a key;
+      # backend/tests/conftest.py also sets its own stub, so this is a backstop.
+      OPENROUTER_API_KEY: ci-stub-not-a-key
+      # Every uv command fails when uv.lock no longer matches pyproject.toml.
+      UV_LOCKED: 1
+    steps:
+      # No LFS: the core tests do not read data/.
+      - uses: actions/checkout@v7
+      # setup-uv publishes no floating major tag after v7; pin the exact release.
+      - uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+      - name: Install (dev group included)
+        run: uv sync --locked
+      - name: Python syntax
+        run: uv run python -m compileall -q backend
+      - name: Core tests
+        run: uv run pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          # Matches frontend/frontend.Dockerfile:2.
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install
+        run: npm ci
+      - name: Types
+        run: npx tsc --noEmit
+      # LINT_MAX is the count in .claude/check-baseline.md; lower both together.
+      - name: Lint ratchet (blocks above 27 problems)
+        env:
+          LINT_MAX: 27
+        run: |
+          # eslint exits 1 when it finds problems and 2 when it cannot run.
+          # Only exit 2 fails here; the count below decides the rest.
+          status=0
+          npx eslint --format json -o "$RUNNER_TEMP/eslint.json" || status=$?
+          if [ "$status" -gt 1 ]; then
+            echo "eslint could not run (exit $status)"
+            exit "$status"
+          fi
+          node -e '
+            const report = require(process.argv[1]);
+            const max = Number(process.env.LINT_MAX);
+            let errors = 0, warnings = 0;
+            for (const file of report) {
+              errors += file.errorCount;
+              warnings += file.warningCount;
+              for (const m of file.messages) {
+                console.log(`${file.filePath}:${m.line}:${m.column} ${m.ruleId ?? "fatal"} ${m.message}`);
+              }
+            }
+            const total = errors + warnings;
+            console.log(`eslint: ${total} problems (${errors} errors, ${warnings} warnings); limit ${max}`);
+            if (total > max) {
+              console.log(`::error::Lint count ${total} is above the ratchet limit ${max}`);
+              process.exit(1);
+            }
+          ' "$RUNNER_TEMP/eslint.json"
