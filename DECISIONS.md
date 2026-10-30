@@ -385,10 +385,10 @@ So `failed` answers "The knowledge base did not load, so I cannot answer right
 now." The banner shows a failed variant.
 
 **The gate sits in `app.py`, not in `generate_chat_responses`.** In `app.py` it
-runs after the ownership check and before the semantic cache. A cache hit
-therefore cannot answer during loading. It also adds no latency line, and it
+runs after the ownership check and before the chat pre-steps. No pre-step can
+therefore answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
-is a second copy of the guardrail refusal's event shape (`chat.py:133-139`).
+is a second copy of the guardrail refusal's event shape (`chat.py:107-113`).
 
 **No eval run, and why.** `eval.py:22-44` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
@@ -613,7 +613,7 @@ and declined.
 **Why the minimal swap is not enough.** Established while checking the fast-path
 table for that edit: **the vector index is the only path this text takes to a
 reader.** `extract_problem_block` never serves this file — its regex at
-`config.py:177-179` is `^\s*(?:#|//|\*)` and every heading in the file is
+`config.py:168-170` is `^\s*(?:#|//|\*)` and every heading in the file is
 pandoc-escaped as `\#`, giving **0 matches** when run against it. No fast-path
 key concerns tracing either. So a reader gets a *retrieved chunk*, not the
 section.
@@ -626,7 +626,7 @@ either.** The note is the only place that reasoning can reach a reader through
 this system.
 
 **The honest limit.** The bullets help only if they land in the same retrieved
-chunk as the fence. `config.py:114` sets the parent chunk size to 1000 and the
+chunk as the fence. `config.py:105` sets the parent chunk size to 1000 and the
 section runs to roughly 1,600 characters, so they probably do not. Recorded
 rather than resolved.
 
@@ -903,7 +903,7 @@ so four of the six looked like marker-only differences.
 **Two latent defects were closed in the same commit, neither reachable today.**
 The action column could name a file and no repair when a difference was
 whitespace `_body` strips; a `whitespace` flag now covers that. And a live block
-with an empty body — which `config.py:198-200` can emit for a header with
+with an empty body — which `config.py:189-191` can emit for a header with
 nothing under it — has the same empty body as any one-line short answer, so the
 two collided and the short answer was reported as a header difference; the body
 test now requires a non-empty body or a problem heading. `data/` holds 118
@@ -1173,18 +1173,19 @@ below.
 ### The chat pre-steps are one list; the thread save is one step that fails closed
 
 **Chosen (2026-10-29, P2 item 4, REVAMP section 12 point 3):**
-`generate_chat_responses` runs `PRE_STEPS` (`chat.py:258`) in order, then the
-graph path. The steps are the input guardrail, the thread save, the semantic
-cache and triage. Each takes a `ChatTurn` and returns a `StepReply` (it handled
+`generate_chat_responses` runs `PRE_STEPS` (`chat.py:190`) in order, then the
+graph path. The steps are the input guardrail, the thread save and triage.
+Until 2026-10-30 the semantic cache was a fourth step, between the save and
+triage (see "The semantic cache is removed, not fixed"). Each takes a `ChatTurn` and returns a `StepReply` (it handled
 the message) or `None` (pass it on). A `StepReply` holds finished SSE events
 without `[DONE]`; the runner sends them, pauses `pause` seconds after each,
 prints the dev line, then sends `[DONE]`. A step builds every event before it
 returns, so a step that fails has sent nothing.
 
-**Two failure policies, not one.** The cache and triage steps are optional:
-each keeps its own `try` and its exact warning text, and passes on when it
-fails. The guardrail and the thread save are core: they have no `try`, and the
-runner ends the turn with `_error_events` (`chat.py:111`), the same events and
+**Two failure policies, not one.** The triage step is optional (the cache step
+was too): it keeps its own `try` and its exact warning text, and passes on when
+it fails. The guardrail and the thread save are core: they have no `try`, and the
+runner ends the turn with `_error_events` (`chat.py:85`), the same events and
 logs the graph path's `except` sends. A save that passed on would leave no
 `thread_metadata` row, so the next checkpoint write fails its foreign key, and
 with `durability="async"` (see "The thread registry is core") a model call can
@@ -1219,7 +1220,9 @@ the code at `394ea8e`, not measured in production:
    checkpoint (`aupdate_state`) last. Before, the write came first, so a
    failure while building the reply left the turn in the history and the
    graph path wrote it again. Found by `/code-review`; tested by
-   `test_cache_step_that_fails_building_events_writes_no_state`.
+   `test_cache_step_that_fails_building_events_writes_no_state` (removed
+   2026-10-30 with the cache; the triage half is tested by
+   `test_triage_step_that_fails_building_events_writes_no_state`).
 
 Unchanged: the guardrail refusal writes no row; refusal text, chunk content,
 `run_id` names and `[DONE]` are byte-for-byte as before. *Read*; the tests
@@ -1244,6 +1247,67 @@ against the 19 tests; each test failed under at least one.
   byte are more surface than one finished list per step.
 - *Streaming inside the step.* An `aupdate_state` failure (M1) after the first
   chunk would end the turn mid-answer instead of falling through.
+
+### The semantic cache is removed, not fixed
+
+**Chosen (2026-10-30, by the owner; P2 item 5, REVAMP section 12 "How a
+removal is done"):** the semantic cache is deleted: its pre-step, its exclusion
+rule, both stores (graph path and resume path), `cache_vectorstore` and
+`SEMANTIC_CACHE_THRESHOLD` in `config.py`, and the root script
+`clear_cache.py`, which imported `cache_vectorstore`.
+
+**Why remove, not fix:**
+1. Visitors never log in (owner, 2026-10-27), so a cache scoped per browser
+   would rarely hit.
+2. A shared cache serves one visitor's answer to the next (G17).
+3. The fast-path table already answers 53 known questions with no model call.
+4. The cache never served an answer (M1). *Measured 2026-10-30 offline*, on
+   the real compiled graph with a hit forced: the log printed `CACHE HIT`, then
+   `Semantic cache lookup failed: Node chatbot does not exist`, then
+   `CACHE STORE`; the cached text was not in the stream, and the graph
+   answered. Not seen on the live stack.
+
+**Behaviour changes, read from the code at `6d36466`:** a message the
+exclusion rule let through paid a lookup before triage (one local embedding,
+one Chroma query); an answer that passed the store rule paid one more
+embedding and one Chroma write before `[DONE]`. Both are gone. The four cache
+log lines are gone; `config.py` no longer
+opens or creates the `semantic_cache_v2` collection. A visitor sees the same
+answers.
+
+**Left alone, on purpose:**
+- The on-disk collection `semantic_cache_v2`. It shares `persist_directory`
+  with the main index (`config.py:86`), so deleting files there can destroy the
+  index. Nothing opens it now. To drop it later, call `delete_collection()`
+  on a `Chroma` opened on that collection name, once, as the deleted
+  `clear_cache.py` did; never delete files. Whether `backend/chroma_db` on the
+  Space holds this collection is not checked.
+- A `SEMANTIC_CACHE_THRESHOLD` set in any environment. Nothing reads it now.
+- `parse_problem_id` and `extract_problem_block` in `config.py`. `chat.py`
+  no longer imports them; `agents.py`, `semantic_router.py` and
+  `check_fast_path.py` still use them (Problem-N is P2 item 12).
+
+**No eval run, by the owner's decision.** `eval.py:44` calls `graph.ainvoke`
+and never runs the pre-steps; the cache is not prompt, router, tools or
+retrieval.
+
+**Tests.** Seven cache tests removed with the feature (six in
+`test_core_pre_steps.py`, one in `test_core_registry.py`), and `FakeCache`
+with them. Added: `test_no_semantic_cache_names_remain` (no name with "cache"
+in `chat` or `config`, except `__cached__`; `config.py` opens only
+`nexteir_internship`, once), `test_full_turn_makes_no_vector_store_call`
+(sync and async lookup and store methods), and
+`test_triage_step_that_fails_building_events_writes_no_state`, which takes
+over point 7 of the pre-steps entry from the deleted cache test. Measured
+2026-10-30: eight mutations, each failed its target test. A future name with
+"cache" in it that is not the semantic cache goes on the exception list in
+the test, by name.
+
+**Rejected:**
+- *Fix M1 and scope the cache per browser.* It lands G17's fix and M1's fix
+  together for a cache that rarely hits without a login.
+- *An env switch to turn the cache off* (REVAMP section 12 point 4). A switch
+  keeps dead code and a latent leak behind one variable.
 
 ## CI
 

@@ -94,15 +94,6 @@ vectorstore = Chroma(
     embedding_function=embeddings,
 )
 
-cache_vectorstore = Chroma(
-    collection_name="semantic_cache_v2",
-    persist_directory=persist_directory,
-    embedding_function=embeddings,
-    collection_metadata={"hnsw:space": "cosine"}
-)
-
-SEMANTIC_CACHE_THRESHOLD = float(os.getenv("SEMANTIC_CACHE_THRESHOLD", "0.92"))
-
 # [THE FIX] Wrap the raw store so it decodes bytes into Document objects
 raw_store = LocalFileStore(store_directory)
 store = create_kv_docstore(raw_store)

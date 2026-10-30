@@ -3,7 +3,7 @@
 Run from the repo root:
     uv run python -m backend.evals.check_fast_path
 Imports backend.core.config so the environment is loaded the way the app loads
-it. That import is not free — config.py:14-124 runs load_dotenv, registers
+it. That import is not free — config.py:14-115 runs load_dotenv, registers
 Phoenix tracing, builds three ChatOpenAI clients and loads the all-MiniLM-L6-v2
 embedding model — but no model call is made. This script only reads files.
 
@@ -79,7 +79,7 @@ def classify(stored: str, live: str | None) -> tuple[str, str]:
         return "NO_LIVE_BLOCK", "data/: no '# Problem <id>' header exists"
     if stored == live:
         return "IDENTICAL", "nothing"
-    # `_body(live)` guards a vacuous equality. config.py:198-200 emits a bare
+    # `_body(live)` guards a vacuous equality. config.py:189-191 emits a bare
     # header for a block with no newline, whose body is "" — and every one-line
     # short answer also has a body of "". Without the guard those two collide
     # here and a short answer is reported as a header difference. No such block

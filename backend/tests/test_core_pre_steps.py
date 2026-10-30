@@ -2,18 +2,19 @@
 """Core contract tests for the chat pre-steps (chat.PRE_STEPS).
 
 Each step returns a StepReply (it handled the message) or None (pass it on).
-Core steps (guardrail, thread save) end the turn on a failure; optional steps
-(cache, triage) log their failure and pass on.
+Core steps (guardrail, thread save) end the turn on a failure; the optional
+step (triage) logs its failure and passes on.
 """
 import asyncio
 import hashlib
 
-from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, SystemMessage
+from langchain_core.vectorstores import InMemoryVectorStore
 
 from backend.core import chat, config
 from conftest import (
     ANSWER,
+    CHROMA_COLLECTIONS,
     DONE,
     QUESTION,
     FakeRegistryPool,
@@ -63,14 +64,47 @@ def run_step(step, t):
     return asyncio.run(step(t))
 
 
-def cache_hit(monkeypatch, core, response=ANSWER):
-    hit = (Document(page_content=QUESTION, metadata={"response": response}), 0.0)
-    monkeypatch.setattr(core.cache, "similarity_search_with_score", lambda query, k=1: [hit])
-
-
 def test_pre_steps_run_in_the_agreed_order():
     """Guardrail first, so a refused message writes no row; the save before any step that checkpoints."""
-    assert chat.PRE_STEPS == (chat._guardrail_step, chat._save_thread_step, chat._cache_step, chat._triage_step)
+    assert chat.PRE_STEPS == (chat._guardrail_step, chat._save_thread_step, chat._triage_step)
+
+
+# ------------------------------------------------------------------
+# Semantic cache (removed 2026-10-30)
+# ------------------------------------------------------------------
+def test_no_semantic_cache_names_remain():
+    """chat and config define no name with "cache" in it, and config opens only the knowledge-base collection."""
+    for module in (chat, config):
+        names = [n for n in dir(module) if "cache" in n.lower() and n != "__cached__"]
+        assert names == [], (module.__name__, names)
+    assert CHROMA_COLLECTIONS == ["nexteir_internship"]
+
+
+def test_full_turn_makes_no_vector_store_call(core, monkeypatch):
+    """The retriever is a fake, so any vector store call in a turn would be a cache lookup or store."""
+    calls = []
+
+    def recorder(method):
+        def record(self, *args, **kwargs):
+            calls.append(method)
+            return []
+        return record
+
+    def async_recorder(method):
+        async def record(self, *args, **kwargs):
+            calls.append(method)
+            return []
+        return record
+
+    for method in ("add_texts", "add_documents", "similarity_search", "similarity_search_with_score"):
+        monkeypatch.setattr(InMemoryVectorStore, method, recorder(method))
+        monkeypatch.setattr(InMemoryVectorStore, "a" + method, async_recorder("a" + method))
+    core.set_qa(rag_script(QUESTION, ANSWER))
+
+    chunks = run_chat(core.graph, QUESTION)
+
+    assert streamed_text(chunks) == ANSWER and chunks[-1] == DONE
+    assert calls == []
 
 
 # ------------------------------------------------------------------
@@ -128,13 +162,10 @@ def test_save_step_handles_a_thread_another_browser_owns(core):
 
 def test_failed_save_ends_the_turn_with_the_error_event(core, monkeypatch):
     """A save failure must not pass on: later steps would checkpoint with no row, after model calls."""
-    queried = []
-
     async def failing_register_thread(async_pool, thread_id, user_message, owner_id):
         raise ConnectionError("fake database outage")
 
     monkeypatch.setattr(chat, "register_thread", failing_register_thread)
-    monkeypatch.setattr(core.cache, "similarity_search_with_score", lambda query, k=1: queried.append(query) or [])
 
     chunks = run_chat(core.graph, QUESTION)
 
@@ -142,7 +173,7 @@ def test_failed_save_ends_the_turn_with_the_error_event(core, monkeypatch):
         'data: {"event": "on_error", "name": "error", "run_id": "error", "data": {}}\n\n',
         DONE,
     ]
-    assert queried == [] and core.fast_llm.calls == 0
+    assert core.fast_llm.calls == 0
 
 
 def test_guardrail_that_raises_ends_the_turn_with_the_error_event(core, monkeypatch):
@@ -159,68 +190,6 @@ def test_guardrail_that_raises_ends_the_turn_with_the_error_event(core, monkeypa
         DONE,
     ]
     assert core.registry_calls == [] and core.fast_llm.calls == 0
-
-
-# ------------------------------------------------------------------
-# Semantic cache (optional)
-# ------------------------------------------------------------------
-def test_cache_step_handles_a_close_match(core, monkeypatch):
-    cache_hit(monkeypatch, core)
-    graph = RecordingGraph()
-
-    reply = run_step(chat._cache_step, turn(graph=graph))
-
-    assert reply is not None and reply.pause == 0.01
-    assert streamed_text(reply.events) == ANSWER
-    assert {e["run_id"] for e in parse_events(reply.events)} == {"cache_stream"}
-    assert [(t, node) for t, _, node in graph.updates] == [("thread-1", "chatbot")]
-
-
-def test_cache_step_passes_on_a_miss(core):
-    assert run_step(chat._cache_step, turn()) is None
-
-
-def test_cache_step_passes_on_an_excluded_message_even_with_a_match(core, monkeypatch):
-    cache_hit(monkeypatch, core)
-
-    assert run_step(chat._cache_step, turn("hi")) is None
-
-
-def test_cache_step_that_raises_passes_on_with_its_warning(core, monkeypatch, capsys):
-    def broken_search(query, k=1):
-        raise RuntimeError("fake vector store outage")
-
-    monkeypatch.setattr(core.cache, "similarity_search_with_score", broken_search)
-
-    assert run_step(chat._cache_step, turn()) is None
-    assert "⚠️ [WARNING] Semantic cache lookup failed: fake vector store outage" in capsys.readouterr().out
-
-
-def test_cache_step_that_fails_building_events_writes_no_state(core, monkeypatch):
-    """The step writes state last, so a failure before it leaves no turn behind for the graph path to repeat."""
-    cache_hit(monkeypatch, core)
-    graph = RecordingGraph()
-
-    def broken_mask(text):
-        raise RuntimeError("fake masking bug")
-
-    monkeypatch.setattr(chat, "mask_sensitive_data", broken_mask)
-
-    assert run_step(chat._cache_step, turn(graph=graph)) is None
-    assert graph.updates == []
-
-
-def test_cache_failure_still_reaches_the_core_answer(core, monkeypatch):
-    """End to end: the cache raises, the message passes on, the graph answers."""
-    def broken_search(query, k=1):
-        raise RuntimeError("fake vector store outage")
-
-    monkeypatch.setattr(core.cache, "similarity_search_with_score", broken_search)
-    core.set_qa(rag_script(QUESTION, ANSWER))
-
-    chunks = run_chat(core.graph, QUESTION)
-
-    assert streamed_text(chunks) == ANSWER and chunks[-1] == DONE
 
 
 # ------------------------------------------------------------------
@@ -249,6 +218,20 @@ def test_triage_step_that_raises_passes_on_with_its_warning(monkeypatch, capsys)
 
     assert run_step(chat._triage_step, turn()) is None
     assert "⚠️ [WARNING] Fast classifier failed, falling back to core: fake provider outage" in capsys.readouterr().out
+
+
+def test_triage_step_that_fails_building_events_writes_no_state(monkeypatch):
+    """The step writes state last, so a failure before it leaves no turn behind for the graph path to repeat."""
+    monkeypatch.setattr(config, "fast_llm", RecordingModel(GREETING_REPLY))
+    graph = RecordingGraph()
+
+    def broken_mask(text):
+        raise RuntimeError("fake masking bug")
+
+    monkeypatch.setattr(chat, "mask_sensitive_data", broken_mask)
+
+    assert run_step(chat._triage_step, turn("hello there", graph=graph)) is None
+    assert graph.updates == []
 
 
 def test_triage_prompt_is_unchanged(monkeypatch):

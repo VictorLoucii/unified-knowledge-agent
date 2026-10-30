@@ -4,7 +4,6 @@ import asyncio
 import openai
 from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
 
-from backend.core.config import parse_problem_id, extract_problem_block, cache_vectorstore, SEMANTIC_CACHE_THRESHOLD
 from backend.core.guardrails import (
     check_input_guardrail,
     mask_sensitive_data,
@@ -13,31 +12,6 @@ from backend.core.guardrails import (
 )
 from backend.memory import register_thread, start_title_generation
 import time
-
-def is_excluded_from_cache(message: str) -> bool:
-    """Checks if a user query should be excluded from semantic caching."""
-    if not message:
-        return True
-    
-    # Exclude exact problem-log requests (since they are handled deterministically by Programmatic Bypass)
-    if parse_problem_id(message):
-        return True
-    
-    # Exclude short general phrases (e.g., "hi", "ok", "yes")
-    clean_msg = message.strip().lower()
-    common_short_phrases = {
-        "hi", "hello", "hey", "ok", "yes", "no", "thanks", "thank you", "bye", "goodbye", "help",
-        "yep", "yup", "sure", "correct", "perfect", "awesome", "great"
-    }
-    if len(clean_msg) < 4 or clean_msg in common_short_phrases:
-        return True
-    
-    # Exclude time-sensitive and dynamic stat queries
-    dynamic_keywords = ["time", "stats", "statistics"]
-    if any(kw in clean_msg for kw in dynamic_keywords):
-        return True
-    
-    return False
 
 
 def _thread_refused_events():
@@ -156,48 +130,6 @@ async def _save_thread_step(turn: ChatTurn) -> StepReply | None:
     return None
 
 
-async def _cache_step(turn: ChatTurn) -> StepReply | None:
-    """Optional. Answers from the semantic cache on a close match; a failure is logged and passes on."""
-    user_message = turn.user_message
-    # 2.5. Check Semantic Cache
-    if is_excluded_from_cache(user_message):
-        return None
-    try:
-        cached_response = None
-        results = cache_vectorstore.similarity_search_with_score(user_message, k=1)
-        if results:
-            match_doc, distance = results[0]
-            score = 1.0 - distance
-            if score >= SEMANTIC_CACHE_THRESHOLD:
-                cached_response = match_doc.metadata.get("response")
-        if cached_response:
-            print(f"🎯 [CACHE HIT] Found match with score {score:.4f} for: {user_message}")
-
-            # Stream the response chunk by chunk to simulate natural real-time streaming
-            events = []
-            chunk_size = 120
-            for i in range(0, len(cached_response), chunk_size):
-                chunk = cached_response[i:i+chunk_size]
-                safe_output = mask_sensitive_data(chunk)
-                stream_event = {
-                    "event": "on_chat_model_stream",
-                    "name": "chatbot",
-                    "run_id": "cache_stream",
-                    "data": {"chunk": {"content": safe_output}}
-                }
-                events.append(f"data: {json.dumps(stream_event)}\n\n")
-
-            # Persist state directly in PostgreSQL history
-            ai_msg = AIMessage(content=cached_response)
-            config = {"configurable": {"thread_id": turn.thread_id}}
-            await turn.graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
-
-            return StepReply(events, pause=0.01, log=f"'{cached_response[:100].replace(chr(10), ' ')}...'")
-    except Exception as e:
-        print(f"⚠️ [WARNING] Semantic cache lookup failed: {e}")
-    return None
-
-
 async def _triage_step(turn: ChatTurn) -> StepReply | None:
     """Optional. Answers simple chatter with fast_llm; a failure is logged and passes on."""
     user_message = turn.user_message
@@ -255,7 +187,7 @@ Rules:
 # message) or None (pass it on); the core graph path runs when all pass on.
 # Core steps have no try of their own, so a failure ends the turn with the
 # error event; optional steps catch their own failure and pass on.
-PRE_STEPS = (_guardrail_step, _save_thread_step, _cache_step, _triage_step)
+PRE_STEPS = (_guardrail_step, _save_thread_step, _triage_step)
 
 
 async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
@@ -395,18 +327,6 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                 "data": {"waiting_for": "tool_approval"}
             }
             yield f"data: {json.dumps(interrupt_event)}\n\n"
-        else:
-            # Save successful response to cache if not truncated and not excluded
-            is_fallback = "I'm sorry, but that information is not available" in full_response
-            if generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message) and not is_fallback:
-                try:
-                    cache_vectorstore.add_texts(
-                        texts=[user_message],
-                        metadatas=[{"response": full_response}]
-                    )
-                    print(f"💾 [CACHE STORE] Saved query and response to semantic cache.")
-                except Exception as e:
-                    print(f"⚠️ [WARNING] Failed to save query to semantic cache: {e}")
 
         print(f"🔧 [__DEV__] Query: '{user_message}' | Latency: {time.time() - start_time:.2f}s | Response: '{full_response[:100].replace(chr(10), ' ')}...'")
         yield "data: [DONE]\n\n"
@@ -524,25 +444,6 @@ async def resume_graph_stream(thread_id: str, graph):
                 "data": {"waiting_for": "tool_approval"}
             }
             yield f"data: {json.dumps(interrupt_event)}\n\n"
-        else:
-            # Resolve the original user message from the thread history
-            user_message = ""
-            if state and hasattr(state, "values") and "messages" in state.values:
-                for msg in reversed(state.values["messages"]):
-                    if msg.type == "human":
-                        user_message = msg.content
-                        break
-            # Save successful response to cache if not truncated and not excluded
-            is_fallback = "I'm sorry, but that information is not available" in full_response
-            if user_message and generated_chars_count <= max_allowed and full_response.strip() and not is_excluded_from_cache(user_message) and not is_fallback:
-                try:
-                    cache_vectorstore.add_texts(
-                        texts=[user_message],
-                        metadatas=[{"response": full_response}]
-                    )
-                    print(f"💾 [CACHE STORE] Saved query and response to semantic cache from resume.")
-                except Exception as e:
-                    print(f"⚠️ [WARNING] Failed to save query to semantic cache from resume: {e}")
 
         yield "data: [DONE]\n\n"
 

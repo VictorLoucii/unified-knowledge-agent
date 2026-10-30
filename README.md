@@ -58,7 +58,6 @@ This system is built for deterministic reliability, performance optimization, an
 * **High-Speed Input Classifier:** Triage routing runs on a non-streaming setup of Gemini 3.6 Flash to direct out-of-scope queries instantly, saving tokens and reducing overall latency. It must not run on Flash Lite, which marks plain Python questions out of scope (measured, six eval cases).
 * **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
 * **Direct Query Bypass for Search Expansion:** Intercepts searches referencing specific problem IDs to bypass the query expansion LLM entirely, conserving OpenRouter API credits.
-* **Semantic Caching:** Employs a dedicated local Chroma collection (`semantic_cache`) using Cosine similarity to intercept repeating queries, serving cached hits instantly and bypassing LLM calls.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
 * **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
 * **Hyper-Local Weather & AQI Integration (HITL Protected):** Seamlessly answers dynamic environmental queries using Open-Meteo's APIs. Features a custom-built algorithm to calculate the **Indian National AQI (CPCB)** from raw pollutant data, entirely protected by LangGraph's Human-in-the-Loop pause/resume functionality to prevent unwarranted API requests.
@@ -117,7 +116,6 @@ This system is built for deterministic reliability, performance optimization, an
 │   │   └── qa_dataset.json # Golden Dataset (80+ cases)
 │   ├── memory.py          # Persistence logic
 │   ├── scratch/           # Experimental & testing scripts
-│   │   └── test_semantic_cache.py # Semantic cache integration test (gitignored, not in a clone)
 │   └── static/            # Static assets for the backend
 ├── data/                  
 │   ├── *.md / *.docx      # Dynamic multi-file knowledge bases ingested on startup
@@ -186,17 +184,6 @@ Verify retrieval recall against expanding database sizes:
 ```bash
 uv run python -m backend.evals.eval_corpus_growth
 ```
-
-### Running the Semantic Cache Integration Test
-
-Verifies the hit, miss, and exclusion behaviour of the semantic cache locally:
-```bash
-uv run python -m backend.scratch.test_semantic_cache
-```
-
-> [!NOTE]
-> `backend/scratch/` is gitignored, so this script is **not** part of a fresh
-> clone. The command works only in a working copy that already has it.
 
 ### Running the Application Locally
 

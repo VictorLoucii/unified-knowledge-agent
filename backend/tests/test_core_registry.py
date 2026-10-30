@@ -9,7 +9,6 @@ still registers its thread and streams its answer.
 import asyncio
 
 import pytest
-from langchain_core.documents import Document
 from langchain_core.messages import AIMessage, HumanMessage
 from psycopg.errors import ForeignKeyViolation
 
@@ -150,18 +149,6 @@ def test_real_registry_refuses_a_thread_owned_by_another_browser(core):
     assert title_model.calls == []
     assert core.registry.rows["thread-1"] == {"title": "Someone else's chat", "owner_id": "owner-2"}
     assert checkpoint_messages(core.graph) == []
-
-
-def test_cache_hit_path_starts_the_title_once(core, monkeypatch):
-    """Steps: registry (the shared save step), then a cache hit; the title starts once."""
-    hit = (Document(page_content=QUESTION, metadata={"response": ANSWER}), 0.0)
-    monkeypatch.setattr(core.cache, "similarity_search_with_score", lambda query, k=1: [hit])
-    core.set_qa(rag_script(QUESTION, ANSWER))
-
-    run_chat(core.graph, QUESTION)
-
-    # Whether the cached turn then falls through (M1) does not change this count
-    assert core.title_calls == [("thread-1", QUESTION)]
 
 
 def test_triage_reply_path_starts_the_title_once(core):

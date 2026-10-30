@@ -28,8 +28,7 @@ STUB_OPENROUTER_KEY = "test-stub-openrouter-key"
 os.environ["OPENROUTER_API_KEY"] = STUB_OPENROUTER_KEY
 for _name in (
     "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY", "OPENAI_API_KEY",
-    "WAQI_API_KEY", "MODEL_NAME", "EVAL_MODE", "SEMANTIC_CACHE_THRESHOLD",
-    "PHOENIX_COLLECTOR_ENDPOINT",
+    "WAQI_API_KEY", "MODEL_NAME", "EVAL_MODE", "PHOENIX_COLLECTOR_ENDPOINT",
 ):
     os.environ.pop(_name, None)
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -76,7 +75,7 @@ def _audit_dotenv_opens(event, args):
 sys.addaudithook(_audit_dotenv_opens)
 
 # ------------------------------------------------------------------
-# 3. Import-time fakes for config.py (config.py:14, :23-44, :89-108)
+# 3. Import-time fakes for config.py (config.py:14, :23-44, :89-99)
 # ------------------------------------------------------------------
 DOTENV_CALLS: list = []
 
@@ -107,7 +106,16 @@ import langchain_classic.storage  # noqa: E402
 _fake_huggingface = ModuleType("langchain_huggingface")
 _fake_huggingface.HuggingFaceEmbeddings = lambda **kwargs: DeterministicFakeEmbedding(size=32)
 _fake_chroma = ModuleType("langchain_chroma")
-_fake_chroma.Chroma = lambda **kwargs: InMemoryVectorStore(embedding=kwargs["embedding_function"])
+# Every collection name config.py opens, in order; the tests check the set.
+CHROMA_COLLECTIONS: list = []
+
+
+def _fake_chroma_store(**kwargs):
+    CHROMA_COLLECTIONS.append(kwargs.get("collection_name"))
+    return InMemoryVectorStore(embedding=kwargs["embedding_function"])
+
+
+_fake_chroma.Chroma = _fake_chroma_store
 sys.modules["langchain_huggingface"] = _fake_huggingface
 sys.modules["langchain_chroma"] = _fake_chroma
 langchain_classic.storage.LocalFileStore = lambda *args, **kwargs: InMemoryByteStore()
@@ -162,19 +170,6 @@ class FakeReranker:
     def predict(self, pairs):
         self.pairs.extend(pairs)
         return [0.5 for _ in pairs]
-
-
-class FakeCache:
-    """Stands in for chat.cache_vectorstore; never hits, records stores."""
-
-    def __init__(self):
-        self.stored = []
-
-    def similarity_search_with_score(self, query, k=1):
-        return []
-
-    def add_texts(self, texts, metadatas=None):
-        self.stored.append((list(texts), metadatas))
 
 
 class StrictFakeMessagesListChatModel(FakeMessagesListChatModel):
@@ -375,7 +370,6 @@ def core(monkeypatch):
         metadata={"source": "data/notes.md", "Header 1": "Retrieval"},
     )])
     reranker = FakeReranker()
-    cache = FakeCache()
     # Triage (chat.py) then the scope router (agents.py) share fast_llm, in that order.
     fast_llm = StrictFakeMessagesListChatModel(responses=[AIMessage(content="ROUTE_TO_CORE"), AIMessage(content="IN_SCOPE")])
     expansion_llm = GenericFakeChatModel(
@@ -385,7 +379,6 @@ def core(monkeypatch):
 
     monkeypatch.setattr(chat, "register_thread", fake_register_thread)
     monkeypatch.setattr(chat, "start_title_generation", fake_start_title_generation)
-    monkeypatch.setattr(chat, "cache_vectorstore", cache)
     monkeypatch.setattr(config, "fast_llm", fast_llm)
     monkeypatch.setattr(agents, "fast_llm", fast_llm)
     monkeypatch.setattr(search, "expansion_llm", expansion_llm)
@@ -400,7 +393,6 @@ def core(monkeypatch):
         registry=registry,
         retriever=retriever,
         reranker=reranker,
-        cache=cache,
         fast_llm=fast_llm,
         qa=None,
     )
