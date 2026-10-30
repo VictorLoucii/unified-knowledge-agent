@@ -795,16 +795,17 @@ wording of the error message, not from OpenRouter's documented routing.
 ### `fast_llm` is the sharper exposure
 
 `config.py:78` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
-It makes the first model call on every request and carries the lowest retry
-count of the four, `max_retries=2` at `config.py:75`. **Four call sites** — an
-earlier version of this item said three, having grepped only `backend/core/` and
-missed the one in `app.py`:
+As the scope router it makes the graph's first model call on every request
+that misses the fast path, and it carries the lowest retry count of the four,
+`max_retries=2` at `config.py:75`. **Three call sites** since triage was removed
+on 2026-10-30 (P2 item 6). Before that there were four; an earlier version of
+this item said three, having grepped only `backend/core/` and missed the one in
+`app.py`:
 
 | Site | Behaviour on failure |
 |---|---|
-| `chat.py:150` triage | `chat.py:181-182` logs and falls through to the core pipeline. Graceful. |
 | `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:140` conversational | No local handler. Propagates to `chat.py:334-336`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `agents.py:140` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
 | `app.py:270` `/refine_transcript` | `app.py:275-277` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
@@ -1078,10 +1079,11 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at four sites — `agents.py:41`, `agents.py:140`, `chat.py:150` and
-   `app.py:270` — **read from source**. None of them calls a tool, so none is
+   work at three sites — `agents.py:41`, `agents.py:140` and `app.py:270` —
+   **read from source**. A fourth, triage in `chat.py`, was removed on
+   2026-10-30 (P2 item 6). None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
-   model with the agent that does tool calls and formatted answers. All four
+   model with the agent that does tool calls and formatted answers. All three
    currently use one model, which is why this reads as a single decision.
    **It is not one decision.**
 
@@ -1421,7 +1423,7 @@ applies.
 `MemorySaver` — which is what `eval.py:35` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
-  input for __start__` and produces zero events. `chat.py:450-459` catches it and
+  input for __start__` and produces zero events. `chat.py:397-406` catches it and
   yielded `{"error": ...}` then `[DONE]` (since `ad7b286`, the `on_error` event
   then `[DONE]`), so the stream terminates cleanly.
 - A thread with `state.next == ()` raises nothing and yields two events,

@@ -120,7 +120,7 @@ def test_second_turn_skips_the_title_and_keeps_the_thread(core):
     second_answer = "It uses a cross-encoder."
     title_model = TitleModel("Reranker Context")
     core.use_real_registry(title_model)
-    core.set_fast_replies("ROUTE_TO_CORE", "IN_SCOPE", "ROUTE_TO_CORE", "IN_SCOPE")
+    core.set_fast_replies("IN_SCOPE", "IN_SCOPE")
     core.set_qa(ScriptedModel(
         *rag_script(QUESTION, ANSWER).models,
         *rag_script(second_question, second_answer).models,
@@ -149,17 +149,6 @@ def test_real_registry_refuses_a_thread_owned_by_another_browser(core):
     assert title_model.calls == []
     assert core.registry.rows["thread-1"] == {"title": "Someone else's chat", "owner_id": "owner-2"}
     assert checkpoint_messages(core.graph) == []
-
-
-def test_triage_reply_path_starts_the_title_once(core):
-    """Steps: registry (the shared save step), then a triage reply; the title starts once."""
-    core.set_fast_replies("Hello! Ask me about the knowledge base.", "IN_SCOPE")
-    core.set_qa(rag_script(QUESTION, ANSWER))
-
-    run_chat(core.graph, QUESTION)
-
-    # Whether the triage turn then falls through (M1) does not change this count
-    assert core.title_calls == [("thread-1", QUESTION)]
 
 
 def test_core_path_starts_the_title_once(core):

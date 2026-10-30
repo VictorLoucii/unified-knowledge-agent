@@ -2,7 +2,7 @@
 import json
 import asyncio
 import openai
-from langchain_core.messages import HumanMessage, ToolMessage, AIMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 
 from backend.core.guardrails import (
     check_input_guardrail,
@@ -130,64 +130,11 @@ async def _save_thread_step(turn: ChatTurn) -> StepReply | None:
     return None
 
 
-async def _triage_step(turn: ChatTurn) -> StepReply | None:
-    """Optional. Answers simple chatter with fast_llm; a failure is logged and passes on."""
-    user_message = turn.user_message
-    # 3. Input Classifier (Triage)
-    from backend.core.config import fast_llm
-    from langchain_core.messages import SystemMessage
-
-    triage_sys_prompt = """You are a high-speed triage classifier for a technical knowledge base agent.
-Your job is to determine if a user query requires searching the technical knowledge base OR analyzing the chat history.
-
-Rules:
-1. If the query is simple conversational chatter (e.g., "hello", "hi", "thanks", "how are you"), respond with a short, friendly, and helpful reply.
-2. If the query asks about what you can do or your general capabilities (e.g., "what can you help me with?", "what do you do?"), and does NOT explicitly ask for an example, provide a short 1-2 sentence summary: you are Victor's AI assistant, trained on over 20+ internal documentation files covering agentic theory, Python, React Native, UI/UX guidelines, and detailed internship logs.
-3. If the query requires ANY technical knowledge, log retrieval, debugging, code explanations, explicitly asks for an example of what you can help with (e.g., "give me an example"), asks about the current chat session/history, asks what kind of logs you have, or repeats your fallback messages, you MUST respond with EXACTLY the string "ROUTE_TO_CORE" and nothing else.
-"""
-
-    try:
-        triage_response = await fast_llm.ainvoke([
-            SystemMessage(content=triage_sys_prompt), 
-            HumanMessage(content=user_message)
-        ])
-        triage_content = triage_response.content.strip()
-
-        if triage_content != "ROUTE_TO_CORE":
-            print(f"⚡ [TRIAGE] Handled by fast classifier: {triage_content}")
-            
-            # Stream chunks to client
-            events = []
-            chunk_size = 120
-            for i in range(0, len(triage_content), chunk_size):
-                chunk = triage_content[i:i+chunk_size]
-                safe_output = mask_sensitive_data(chunk)
-                stream_event = {
-                    "event": "on_chat_model_stream",
-                    "name": "chatbot",
-                    "run_id": "triage_stream",
-                    "data": {"chunk": {"content": safe_output}}
-                }
-                events.append(f"data: {json.dumps(stream_event)}\n\n")
-
-            # Persist to postgres memory
-            ai_msg = AIMessage(content=triage_content)
-            config = {"configurable": {"thread_id": turn.thread_id}}
-            await turn.graph.aupdate_state(config, {"messages": [HumanMessage(content=user_message), ai_msg]}, as_node="chatbot")
-                
-            return StepReply(events, pause=0.01, log=f"'{triage_content[:100].replace(chr(10), ' ')}...'")
-
-        print("🔍 [TRIAGE] Routing to CORE LangGraph Pipeline...")
-    except Exception as e:
-        print(f"⚠️ [WARNING] Fast classifier failed, falling back to core: {e}")
-    return None
-
-
 # The chat pre-steps, in order. Each returns a StepReply (it handled the
 # message) or None (pass it on); the core graph path runs when all pass on.
 # Core steps have no try of their own, so a failure ends the turn with the
 # error event; optional steps catch their own failure and pass on.
-PRE_STEPS = (_guardrail_step, _save_thread_step, _triage_step)
+PRE_STEPS = (_guardrail_step, _save_thread_step)
 
 
 async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):

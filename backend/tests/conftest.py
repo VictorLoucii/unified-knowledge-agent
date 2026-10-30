@@ -370,8 +370,8 @@ def core(monkeypatch):
         metadata={"source": "data/notes.md", "Header 1": "Retrieval"},
     )])
     reranker = FakeReranker()
-    # Triage (chat.py) then the scope router (agents.py) share fast_llm, in that order.
-    fast_llm = StrictFakeMessagesListChatModel(responses=[AIMessage(content="ROUTE_TO_CORE"), AIMessage(content="IN_SCOPE")])
+    # The scope router (agents.py) makes the turn's one fast_llm call.
+    fast_llm = StrictFakeMessagesListChatModel(responses=[AIMessage(content="IN_SCOPE")])
     expansion_llm = GenericFakeChatModel(
         messages=itertools.cycle([AIMessage(content="EXPANSIONMARKER reranking\ncross encoder scores")]),
         name="Expansion_LLM",

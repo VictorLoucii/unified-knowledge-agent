@@ -1173,18 +1173,19 @@ below.
 ### The chat pre-steps are one list; the thread save is one step that fails closed
 
 **Chosen (2026-10-29, P2 item 4, REVAMP section 12 point 3):**
-`generate_chat_responses` runs `PRE_STEPS` (`chat.py:190`) in order, then the
-graph path. The steps are the input guardrail, the thread save and triage.
-Until 2026-10-30 the semantic cache was a fourth step, between the save and
-triage (see "The semantic cache is removed, not fixed"). Each takes a `ChatTurn` and returns a `StepReply` (it handled
+`generate_chat_responses` runs `PRE_STEPS` (`chat.py:137`) in order, then the
+graph path. The steps are the input guardrail and the thread save. Until
+2026-10-30 the semantic cache and triage followed the save (see "The semantic
+cache is removed, not fixed" and "Triage is removed; the router is the one
+scope classifier"). Each takes a `ChatTurn` and returns a `StepReply` (it handled
 the message) or `None` (pass it on). A `StepReply` holds finished SSE events
 without `[DONE]`; the runner sends them, pauses `pause` seconds after each,
 prints the dev line, then sends `[DONE]`. A step builds every event before it
 returns, so a step that fails has sent nothing.
 
-**Two failure policies, not one.** The triage step is optional (the cache step
-was too): it keeps its own `try` and its exact warning text, and passes on when
-it fails. The guardrail and the thread save are core: they have no `try`, and the
+**Two failure policies, not one.** An optional step keeps its own `try` and its
+exact warning text, and passes on when it fails. Triage and the cache were the
+optional steps; both were removed 2026-10-30, so the list holds none today. The guardrail and the thread save are core: they have no `try`, and the
 runner ends the turn with `_error_events` (`chat.py:85`), the same events and
 logs the graph path's `except` sends. A save that passed on would leave no
 `thread_metadata` row, so the next checkpoint write fails its foreign key, and
@@ -1221,14 +1222,17 @@ the code at `394ea8e`, not measured in production:
    failure while building the reply left the turn in the history and the
    graph path wrote it again. Found by `/code-review`; tested by
    `test_cache_step_that_fails_building_events_writes_no_state` (removed
-   2026-10-30 with the cache; the triage half is tested by
-   `test_triage_step_that_fails_building_events_writes_no_state`).
+   2026-10-30 with the cache; the triage half was tested by
+   `test_triage_step_that_fails_building_events_writes_no_state`, removed
+   2026-10-30 with triage). Since then no step writes state, so no test
+   guards this point; a future step that writes state needs its own.
 
 Unchanged: the guardrail refusal writes no row; refusal text, chunk content,
 `run_id` names and `[DONE]` are byte-for-byte as before. *Read*; the tests
 check names, `run_id`s and text, and compare whole chunks only for the error
 event. The triage prompt is
-byte-identical to `394ea8e` (`test_triage_prompt_is_unchanged`, sha256).
+byte-identical to `394ea8e` (`test_triage_prompt_is_unchanged`, sha256;
+removed 2026-10-30 with triage).
 
 **No eval run, by the owner's decision.** `eval.py:44` calls `graph.ainvoke`
 and never runs the pre-steps, so the suite cannot measure this change.
@@ -1298,7 +1302,8 @@ in `chat` or `config`, except `__cached__`; `config.py` opens only
 `nexteir_internship`, once), `test_full_turn_makes_no_vector_store_call`
 (sync and async lookup and store methods), and
 `test_triage_step_that_fails_building_events_writes_no_state`, which takes
-over point 7 of the pre-steps entry from the deleted cache test. Measured
+over point 7 of the pre-steps entry from the deleted cache test (itself removed
+the same day with triage). Measured
 2026-10-30: eight mutations, each failed its target test. A future name with
 "cache" in it that is not the semantic cache goes on the exception list in
 the test, by name.
@@ -1308,6 +1313,64 @@ the test, by name.
   together for a cache that rarely hits without a login.
 - *An env switch to turn the cache off* (REVAMP section 12 point 4). A switch
   keeps dead code and a latent leak behind one variable.
+
+### Triage is removed; the router is the one scope classifier
+
+**Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
+12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
+its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
+thread save (`chat.py:137`). The scope router in the graph (`agents.py:41-48`)
+stays and is now the only model that classifies scope.
+
+**Why:**
+1. Two scope classifiers with different prompts can disagree, and the eval
+   sees only the router (`eval.py:44` calls `graph.ainvoke`).
+2. Triage cost one `fast_llm` call per message.
+3. Its reply never reached the visitor (M1). It wrote state with
+   `as_node="chatbot"`, a node the graph does not have; LangGraph raised, the
+   step logged the error and passed on, and the graph answered. *Seen live
+   2026-10-30* on a `hello`: `⚠️ [WARNING] Fast classifier failed, falling
+   back to core: Node chatbot does not exist`, then the graph's answer. This
+   closes M1's last half; the cache half closed with "The semantic cache is
+   removed, not fixed".
+
+**Behaviour changes, read from the code at `f6d66be`:** every triage outcome
+(a reply, `ROUTE_TO_CORE`, a failure) already ended in the graph path, so a
+visitor sees the same answers. Gone: one `fast_llm` call for every message
+that passes the guardrail and the thread save (a fast-path hit included), the
+`[TRIAGE]` log lines and the `Fast classifier failed` warning. Triage rule 2
+gave a fixed capabilities summary that nobody received; a "what can you do?"
+question now goes, as before, to `route_query` and then the router, which
+sends it to `conversational_node` or to retrieval, where the capabilities
+interceptor in `search.py` can fire. *Seen live 2026-10-30* (P2 close check
+5): the router sent "what can you do?" to `conversational_node` (one
+`[ROUTER]` line, no retrieval lines), which answered from general knowledge
+without the knowledge-base summary that triage rule 2 described. Changing that
+is a router or prompt change, so it is eval-driven.
+
+**No eval run, by the owner's decision.** `eval.py:44` never runs the
+pre-steps; triage is not the router, prompt, tools or retrieval.
+
+**Tests.** Six triage tests removed with the feature (five in
+`test_core_pre_steps.py`, including the prompt-hash test and its constants;
+one in `test_core_registry.py`). The default `fast_llm` script in
+`conftest.py` and the tests that put a triage reply first now script the
+router alone. `test_pre_steps_run_in_the_agreed_order` asserts the two steps.
+Added: `test_full_turn_calls_fast_llm_once_with_the_router_prompt` and
+`test_greeting_is_answered_by_the_graph`. Measured 2026-10-30: swapping the
+two steps failed the order test; restoring `chat.py` from `main` failed both
+new tests and the order test, and the strict `fast_llm` fake errored 14 more
+tests on its extra call; dropping `conversational_node` from the stream list
+in `generate_chat_responses` failed the greeting test alone.
+
+**Left alone, on purpose:** the notes in `data/` that describe triage as a
+live feature (`data/` is not edited; the owner decides). The `README.md`
+project-tree labels "Fast Path & Triage" (on `semantic_router.py`) and
+"Librarian Triage" (on `tools/`) do not name this step.
+
+**Rejected:**
+- *Keep triage and fix M1* by writing as an existing node. It keeps a second
+  scope classifier the eval cannot see, at one model call per message.
 
 ## CI
 
