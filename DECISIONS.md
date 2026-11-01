@@ -46,7 +46,7 @@ effort chose the search tool for a weather question; `low` chose the weather
 tool and spent about 60 reasoning tokens.
 
 **Flash Lite is rejected as `fast_llm` by measurement, not by taste.** The scope
-router at `agents.py:40-52` runs on `fast_llm`. With Lite it answered
+router at `agents.py:49-61` runs on `fast_llm`. With Lite it answered
 `OUT_OF_SCOPE` for tests 46, 58, 59, 60, 93 and `CONVERSATIONAL` for test 42;
 2.5 Flash and 3.6 Flash both answer `IN_SCOPE` on all six. Those cases then
 never reached `qa_node`, called no tool, and scored 87/94 and 33/34. Raising
@@ -481,7 +481,7 @@ was in the knowledge base. Keep the feature; fix the retrieval.
 
 ### The scope router keeps failing open; only its silence was fixed
 
-**Chosen (2026-08-18):** `agents.py:54` logs the exception and still falls
+**Chosen (2026-08-18):** `agents.py:63` logs the exception and still falls
 through to `retrieval_node`. Behaviour is unchanged.
 
 **Rejected — failing closed.** Refusing the query when the router model is
@@ -492,8 +492,8 @@ worse product than answering an out-of-scope one.
 rule against empty catch blocks, and its real cost was that nothing in the
 container log recorded that the guardrail had been skipped.
 
-**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:41`,
-the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:50-51`. The
+**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:50`,
+the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:59-60`. The
 refusal recorded above under "OUT_OF_SCOPE takes precedence in the router
 prompt" therefore stops firing. That guardrail was fixed deliberately once
 already, so a future session finding this fall-through should know it was seen
@@ -833,7 +833,7 @@ different things and only one of them needed relaxing.
 rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries carry a `target_id`, and 20
 of those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
 only in the first line or the trailing `<END OF PROBLEM>` marker.
-`agents.py:36-38` consults that table before any model call, so editing `data/`
+`agents.py:37-47` consults that table before any model call, so editing `data/`
 cannot change what those queries return. Measured 2026-08-22 by
 `backend/evals/check_fast_path.py`. See [OPEN.md](OPEN.md) item 5.
 
@@ -879,7 +879,7 @@ Also rejected: splitting the header/marker tier in two, one tier for a mangled
 header and one for a missing marker.
 
 **Why not strict:** `target_id` is a recall label before it is a copy claim.
-When it is truthy, `agents.py:87-93` synthesises the `ToolMessage` that
+When it is truthy, `agents.py:95-101` synthesises the `ToolMessage` that
 `eval.py:47-55` scrapes and `eval.py:143-147` scores for Recall@k. Five entries
 carry one and hold a short answer *about* a problem rather than a copy of it, so
 a strict rule measures them against something they never claimed to equal and
@@ -1319,7 +1319,7 @@ the test, by name.
 **Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
 12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
 its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
-thread save (`chat.py:137`). The scope router in the graph (`agents.py:41-48`)
+thread save (`chat.py:137`). The scope router in the graph (`agents.py:50-57`)
 stays and is now the only model that classifies scope.
 
 **Why:**
@@ -1371,6 +1371,94 @@ project-tree labels "Fast Path & Triage" (on `semantic_router.py`) and
 **Rejected:**
 - *Keep triage and fix M1* by writing as an existing node. It keeps a second
   scope classifier the eval cannot see, at one model call per message.
+
+### `route_query` runs once per message; `Send` carries the result
+
+**Chosen (2026-11-01, by the owner; P2 item 7, REVAMP coupling 2):**
+`route_input_node` is the only caller of `route_query` (`agents.py:37`). On a
+hit it returns `Send("fast_path_node", ...)` with the last message, the stored
+answer and the target id (`agents.py:39-47`). `retrieval_node` returns the
+constant `RAG` (`agents.py:107-111`).
+
+**Why:** the repeat at the old `:76` and `:101` did the same lookup again. The
+gain is small and is not a model-call saving: `route_query` calls no model
+(`semantic_router.py:5-35`). Read from the code at `043609e`, a table hit or a
+Problem-N hit ran it twice, and so did any message the scope router sent to
+`retrieval_node`. Each now runs it once. A message the scope router marks
+CONVERSATIONAL or OUT_OF_SCOPE ran it once already. On the routes that ran it twice,
+each message prints one `[ROUTER]` line, not two, except a Problem-N id with no
+block, which prints none. A Problem-N hit makes one pass over the data files, not
+two; so does an id with no block that reaches `retrieval_node`.
+
+**Why the hint stays:** if nothing wrote `route_category`, the hint in `qa_node`
+would change from `RAG` to `UNKNOWN`. That is a prompt change, and it would turn
+the eval's cached calls into misses. The constant keeps the text byte-identical;
+`test_rag_prompt_hint_text_stays_the_same` holds it.
+
+**Why only the last message goes in the payload:** measured 2026-11-01 on a test
+graph with `MemorySaver`, not on Postgres. After 20 earlier turns of 10,000
+characters, one hit added 419,969 bytes with the last message and 835,774 with
+the whole history.
+
+**The cost, against the code before this change:** the `Send` payload is stored
+in the checkpoint, so each hit stores its answer twice. Measured 2026-11-01 on the
+real graph with `MemorySaver`, a 1,000,000-character answer: 2,003,888 bytes before,
+4,004,352 after. On Postgres, measured the same day, two hits in one live thread (a
+303-character table answer and Problem 14) wrote 2,002 bytes to `__pregel_tasks` in
+`checkpoint_writes` and 2,006 in `checkpoint_blobs`: two more copies of each payload.
+The code before this change was not measured on Postgres. Table answers are small (53 rows, median
+305 characters, largest 7,973). The large case is Problem-N: `OPEN.md` item 12 records
+a block of 867,746 characters. P2 item 12 of `REVAMP.md` removes the Problem-N feature.
+The owner accepted this cost on 2026-11-01, at gate 3, after seeing these figures.
+
+**Behaviour changes:** the counts above. `retrieval_node` can no longer write
+`FAST_PATH` if a data file changes between two lookups, because there is no second
+lookup. `fast_path_node` now reads the result from its `Send` payload, not from
+`State`; a key `State` does not declare still reaches it (measured on a test graph,
+and `test_fast_path_hit_keeps_the_target_id_marker` holds it on the real graph).
+A run resumed between the route and `fast_path_node` replays the answer in its
+payload and does not look it up again. No interrupt is set at that point. A crash
+or a dropped connection might stop a run there (inferred; not measured).
+
+**Tests:** 8 added, 0 removed, 0 changed (31 + 8 = 39). Measured 2026-11-01:
+restoring the call in `fast_path_node` failed the table-hit and Problem-N tests;
+restoring it in `retrieval_node` failed the RAG test; adding one in
+`conversational_node` or `fallback_node` failed that route's test; dropping the
+target id failed the marker test; making `retrieval_node` write nothing failed the
+hint test and the existing RAG graph test; sending the whole history failed the
+last-message test.
+
+**Eval, measured 2026-11-01:** before (`043609e`) 91/94 logic, 34/34 recall. After
+(this change) 91/94, 34/34. All 94 verdicts match, with the same three failures: 22,
+42, 93. The 33 search queries the agent chose are identical, which is what a
+byte-identical prompt predicts. The two runs are not identical: 13 of the 94 case
+reports differ in text (1, 3, 5, 6, 46, 58, 77, 78, 80, 81, 83, 92, 94), and 9 of 33
+rerank lists differ, 6 by at most 1.7e-06 and 3 in documents or order. `search.py` did
+not change, so noise in retrieval is the likely cause. *That is a hypothesis:* it was
+not tested by repeating a run on unchanged code. The file `latest_run_metrics.json`
+stays at the committed 95.74, by the owner's decision, for the reason under "Rejected —
+committing 96.8" above: the cause of the extra pass is still unexplained.
+
+**Live check, 2026-11-01, throwaway Postgres on 5434, Claude in Chrome:** a table
+question, a Problem-N question and a technical question in one thread, then a reload,
+then `hello` in a new thread. All four got an answer and the reload kept the thread.
+The backend log shows one `[ROUTER]` line per message, and 0 `WARNING`, `Traceback`,
+`ERROR`, `IN_SCOPE` or `Failed to update span` lines. The technical question followed
+two fast-path answers: see `OPEN.md` item 15.
+
+**Rejected:**
+- *The lookup as the first node, which writes the messages itself.* It has no
+  storage cost (2,003,235 bytes on a test graph), but a node would run on every
+  message and do nothing on a miss, and it needs the node name to change or to lie.
+- *A router node that writes state.* It adds a node and one more checkpoint per
+  turn, needs a new `State` field for the target id, and leaves the answer in state
+  until the next turn overwrites it. Measured on the same test graph: 4,005,165
+  bytes against 4,003,437 for a 1,000,000-character answer, so storage does not
+  separate the two options.
+- *A lookup in `chat.py` before the graph.* `eval.py:44` calls the graph directly
+  and would skip it.
+- *A cache inside `semantic_router.py`.* It is hidden global state that goes stale
+  when `data/` changes.
 
 ## CI
 

@@ -5,6 +5,7 @@ from langgraph.graph.message import add_messages
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
+from langgraph.types import Send
 import re
 
 from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block
@@ -22,7 +23,7 @@ class State(TypedDict):
     fast_path_response: str
     retrieved_context: str
 
-async def route_input_node(state: State) -> str:
+async def route_input_node(state: State) -> str | Send:
     if state["messages"][-1].type != "human":
         return "qa_node"
 
@@ -35,7 +36,15 @@ async def route_input_node(state: State) -> str:
     # Skipping the classifier for these queries also removes one model call per hit.
     route_result = await route_query(user_msg)
     if route_result.get("route_category") == "FAST_PATH":
-        return "fast_path_node"
+        # This is the message's one route_query call. A conditional entry function
+        # cannot write state, so Send hands the result to fast_path_node as its input.
+        # Only the last message goes in: the payload is stored in the checkpoint, and
+        # the whole history would be stored again on every hit.
+        return Send("fast_path_node", {
+            "messages": state["messages"][-1:],
+            "fast_path_response": route_result["fast_path_response"],
+            "fast_path_target_id": route_result.get("fast_path_target_id", ""),
+        })
 
     try:
         legacy_router = await fast_llm.ainvoke([
@@ -73,9 +82,8 @@ async def route_input_node(state: State) -> str:
 async def fast_path_node(state: State):
     user_msg = state["messages"][-1].content if state["messages"] else ""
     
-    route_result = await route_query(user_msg)
-    final_output = route_result.get("fast_path_response", "")
-    target_id = route_result.get("fast_path_target_id", "")
+    final_output = state["fast_path_response"]
+    target_id = state.get("fast_path_target_id", "")
     
     # Fallback just in case
     if not target_id:
@@ -97,10 +105,10 @@ async def fast_path_node(state: State):
     return {"messages": msgs}
 
 async def retrieval_node(state: State):
-    user_msg = state["messages"][-1].content
-    route_result = await route_query(user_msg)
-    category = route_result.get("route_category", "UNKNOWN")
-    return {"route_category": category}
+    # route_input_node already ran route_query, and a FAST_PATH result never reaches
+    # this node, so the category is always RAG. qa_node puts it into the prompt hint:
+    # without this write the hint would read UNKNOWN, a silent prompt change.
+    return {"route_category": "RAG"}
 
 async def qa_node(state: State):
     user_msg = ""

@@ -14,7 +14,7 @@ problem. So one problem can reach a user by two paths, and every difference this
 script prints is a difference between what those two paths return.
 
 target_id carries two meanings and only one of them is a copy claim. When it is
-truthy, agents.py:87-93 synthesises the ToolMessage that eval.py:47-55 scrapes
+truthy, agents.py:95-101 synthesises the ToolMessage that eval.py:47-55 scrapes
 and eval.py:143-147 scores for Recall@k, so target_id is a recall label first.
 For 20 entries the stored output is also a copy of that problem's block. For 5 it
 is a short answer *about* the problem and was never a copy, and the 26th

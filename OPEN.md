@@ -95,7 +95,7 @@ its own; a directive overrides it.
 **3. The fix works, and its mechanism is still a hypothesis.**
 
   before  argument 21 chars, `RETRIEVED_PROBLEM_IDS: []`, answered from general
-          knowledge via the disclaimer at `agents.py:119`
+          knowledge via the disclaimer at `agents.py:127`
   after   argument 76 chars and verbatim, `RETRIEVED_PROBLEM_IDS: ['12', '4',
           'Statement']`, answer built from retrieval
 
@@ -578,7 +578,7 @@ Read from source:
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
 **The permanently stale path wins when a table key matches, and only then.**
-`agents.py:36-38` calls `route_query` first and returns `fast_path_node` on a
+`agents.py:37-47` calls `route_query` first and sends `fast_path_node` the result on a
 hit, before any model call, and `semantic_router.py:9` matches the key as a
 *substring* of the user's query.
 **Taken from DECISIONS.md, not source:** that ordering is deliberate, recorded
@@ -592,7 +592,7 @@ and serves the live block. So the same problem reaches a user by two paths, and
 which one answers depends on how the question was phrased.
 
 **Measured 2026-08-22, `route_query` awaited directly, no model call** — the
-router itself never calls a model, the classifier does, at `agents.py:41`. "Can
+router itself never calls a model, the classifier does, at `agents.py:50`. "Can
 you provide the complete details and code for Problem 14?" is a table key and
 returns the stored string, whose first line is `**# Problem 1**4`. "Tell me
 about Problem 14 please" matches no table key, falls through to
@@ -612,7 +612,7 @@ the `<END OF PROBLEM>` marker. 27 entries are short answers with
 `target_id: None`.
 
 **`target_id` is a recall label before it is a copy claim.** When it is truthy,
-`agents.py:87-93` synthesises the `ToolMessage` that `eval.py:47-55` scrapes and
+`agents.py:95-101` synthesises the `ToolMessage` that `eval.py:47-55` scrapes and
 `eval.py:143-147` scores for Recall@k. That is why five entries carry one and
 are still not copies, and why a byte-for-byte check of all 26 would measure them
 against something they never claimed to equal.
@@ -804,8 +804,8 @@ this item said three, having grepped only `backend/core/` and missed the one in
 
 | Site | Behaviour on failure |
 |---|---|
-| `agents.py:41` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:140` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `agents.py:50` scope router | Falls through to `retrieval_node`. **See below.** |
+| `agents.py:148` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
 | `app.py:270` `/refine_transcript` | `app.py:275-277` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
@@ -821,9 +821,9 @@ is not exposed. That import is dead.
 CLAUDE.md's rule against empty catch blocks. It now logs.
 
 **Not fixed, and deliberately so:** the behaviour is unchanged. When
-`fast_llm` fails at `agents.py:41`, control reaches `agents.py:71` and returns
-`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:50-51` and
-the `CONVERSATIONAL` branch at `agents.py:52-53`. So a query that should be
+`fast_llm` fails at `agents.py:50`, control reaches `agents.py:80` and returns
+`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:59-60` and
+the `CONVERSATIONAL` branch at `agents.py:61-62`. So a query that should be
 refused is answered instead, for as long as the model is unavailable.
 
 **Taken from DECISIONS.md, not source:** that refusal is deliberate and
@@ -1079,7 +1079,7 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at three sites — `agents.py:41`, `agents.py:140` and `app.py:270` —
+   work at three sites — `agents.py:50`, `agents.py:148` and `app.py:270` —
    **read from source**. A fourth, triage in `chat.py`, was removed on
    2026-10-30 (P2 item 6). None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
@@ -1431,7 +1431,7 @@ applies.
   model call is made.
 
 The settled-thread probe wrote its state with `as_node="fast_path_node"`, because
-`agents.py:188` edges that node straight to `END` and the write therefore leaves
+`agents.py:196` edges that node straight to `END` and the write therefore leaves
 nothing to run. **A first attempt wrote the `messages` channel with no `as_node`,
 which re-triggered the entry node and spent one real model call.** Recorded
 because the fault was in the probe's design, not in the code under test, and the
@@ -1528,7 +1528,7 @@ defect.
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
 - **The weather wording in the `qa_node` prompt is ambiguous and still
-  unfixed.** `agents.py:114-123` says "You MUST call `search_knowledge_base`"
+  unfixed.** `agents.py:122-131` says "You MUST call `search_knowledge_base`"
   and "Always call the tool first" before it mentions the weather tool. GPT-5
   Mini at `minimal` effort followed the words and searched; at `low` it chose
   the weather tool, and test 94 passes. A first rewording was probed and
@@ -1722,3 +1722,34 @@ The CI design is in `DECISIONS.md` "## CI". Both items were found by
   could leave the older commit on the Space if its run ends last. The job holds
   `HF_TOKEN` and has no `permissions:` block. Adding either block changes the
   file's line count and moves the citations at `sync_to_hub.yml:16, 20`.
+
+## 15. A follow-up after a fast-path answer is rejected by the main model (2026-11-01, P2 item 7)
+
+**Found by `/code-review high` on task `p2-route-once`. Not caused by that task:
+the code before it builds the same messages. Not fixed.**
+
+`fast_path_node` writes a `ToolMessage` with `tool_call_id="bypass_tool_call_id"`
+(`agents.py:95-101`), with no earlier `AIMessage` holding that tool call. `eval.py`
+scrapes it for Recall@k. It stays in the thread, and `qa_node` sends the whole thread
+to the model (`agents.py:133`).
+
+**Measured 2026-11-01, one message list sent to `primary_llm` alone:** a normal list
+was accepted. This one got a 400:
+`No tool call found for function call output with call_id bypass_tool_call_id.`
+
+**Seen live the same day, throwaway Postgres on 5434:** a table hit, a Problem-N hit
+and then a RAG question in one thread. The RAG question got an answer, and the backend
+log has no error line.
+
+*A hypothesis, labelled as one:* the fallback at `config.py:78` served that answer, so
+a visitor gets a different model and nothing records it. The log cannot show this. To
+test it, read the OpenRouter activity page for that call, or log the fallback.
+
+**Reach, read from source:** a follow-up to a RAG route, after any table row with a
+target id (26 of 53) or any Problem-N hit, in the same thread. `conversational_node`
+sends only the current message, so it is not exposed. The eval cannot see this: it
+uses a new thread per case (`eval.py:41-42`).
+
+**Before a fix, note:** the marker is what `eval.py:47-55` reads for recall, so moving
+it needs a change in the eval too. P2 item 12 removes the Problem-N part, not the table
+rows.
