@@ -29,7 +29,7 @@ evaluation by setting `MODEL_NAME`, but not as the driver.
 `reasoning_effort="low"` for `primary_llm` (`config.py:49`);
 `google/gemini-3.6-flash` for `fallback_llm` (`config.py:60`) and `fast_llm`
 (`config.py:70`); `google/gemini-3.5-flash-lite` for `expansion_llm`
-(`search.py:16`) only. The judge at `eval.py:67` is unchanged.
+(`search.py:16`) only. The judge at `eval.py:71` is unchanged.
 
 **Rejected:** `google/gemini-3.6-flash` as the driver; `gemini-3.5-flash-lite`
 as `fast_llm`; `reasoning_effort` of `minimal` or `medium`.
@@ -46,7 +46,7 @@ effort chose the search tool for a weather question; `low` chose the weather
 tool and spent about 60 reasoning tokens.
 
 **Flash Lite is rejected as `fast_llm` by measurement, not by taste.** The scope
-router at `agents.py:49-61` runs on `fast_llm`. With Lite it answered
+router at `agents.py:55-67` runs on `fast_llm`. With Lite it answered
 `OUT_OF_SCOPE` for tests 46, 58, 59, 60, 93 and `CONVERSATIONAL` for test 42;
 2.5 Flash and 3.6 Flash both answer `IN_SCOPE` on all six. Those cases then
 never reached `qa_node`, called no tool, and scored 87/94 and 33/34. Raising
@@ -390,7 +390,7 @@ therefore answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
 is a second copy of the guardrail refusal's event shape (`chat.py:107-113`).
 
-**No eval run, and why.** `eval.py:22-44` compiles its own graph and calls
+**No eval run, and why.** `eval.py:26-48` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
 `initialize_rag`, so no eval input or output can change. The change touches no
 prompt, router, tool or retrieval code. *Inferred from the read; the owner
@@ -428,7 +428,7 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:404`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:407`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
 `search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
@@ -481,7 +481,7 @@ was in the knowledge base. Keep the feature; fix the retrieval.
 
 ### The scope router keeps failing open; only its silence was fixed
 
-**Chosen (2026-08-18):** `agents.py:63` logs the exception and still falls
+**Chosen (2026-08-18):** `agents.py:69` logs the exception and still falls
 through to `retrieval_node`. Behaviour is unchanged.
 
 **Rejected — failing closed.** Refusing the query when the router model is
@@ -492,8 +492,8 @@ worse product than answering an out-of-scope one.
 rule against empty catch blocks, and its real cost was that nothing in the
 container log recorded that the guardrail had been skipped.
 
-**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:50`,
-the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:59-60`. The
+**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:56`,
+the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:65-66`. The
 refusal recorded above under "OUT_OF_SCOPE takes precedence in the router
 prompt" therefore stops firing. That guardrail was fixed deliberately once
 already, so a future session finding this fall-through should know it was seen
@@ -746,7 +746,7 @@ defect turned out to be — and it turned out not to be the one named above, whi
 is the argument for keeping the two changes apart, not against it. It is written
 up as `OPEN.md` item 1 instead.
 
-**Consequence:** `eval.py:232` still gates on `recall_score == 100.0`, so the
+**Consequence:** `eval.py:236` still gates on `recall_score == 100.0`, so the
 suite reports `PIPELINE FAILED` at this baseline. That is expected until index
 83 is fixed. Do not relax the gate to make the message go away.
 
@@ -833,7 +833,7 @@ different things and only one of them needed relaxing.
 rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries carry a `target_id`, and 20
 of those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
 only in the first line or the trailing `<END OF PROBLEM>` marker.
-`agents.py:37-47` consults that table before any model call, so editing `data/`
+`agents.py:43-53` consults that table before any model call, so editing `data/`
 cannot change what those queries return. Measured 2026-08-22 by
 `backend/evals/check_fast_path.py`. See [OPEN.md](OPEN.md) item 5.
 
@@ -879,8 +879,8 @@ Also rejected: splitting the header/marker tier in two, one tier for a mangled
 header and one for a missing marker.
 
 **Why not strict:** `target_id` is a recall label before it is a copy claim.
-When it is truthy, `agents.py:95-101` synthesises the `ToolMessage` that
-`eval.py:47-55` scrapes and `eval.py:143-147` scores for Recall@k. Five entries
+When it is truthy, `agents.py:101-107` synthesises the `ToolMessage` that
+`eval.py:51-59` scrapes and `eval.py:147-151` scores for Recall@k. Five entries
 carry one and hold a short answer *about* a problem rather than a copy of it, so
 a strict rule measures them against something they never claimed to equal and
 they can never pass. The second reason is the exit code. Repairing the rest
@@ -1234,7 +1234,7 @@ event. The triage prompt is
 byte-identical to `394ea8e` (`test_triage_prompt_is_unchanged`, sha256;
 removed 2026-10-30 with triage).
 
-**No eval run, by the owner's decision.** `eval.py:44` calls `graph.ainvoke`
+**No eval run, by the owner's decision.** `eval.py:48` calls `graph.ainvoke`
 and never runs the pre-steps, so the suite cannot measure this change.
 
 **Tests.** `backend/tests/test_core_pre_steps.py`: each step's handled and
@@ -1291,7 +1291,7 @@ answers.
   no longer imports them; `agents.py`, `semantic_router.py` and
   `check_fast_path.py` still use them (Problem-N is P2 item 12).
 
-**No eval run, by the owner's decision.** `eval.py:44` calls `graph.ainvoke`
+**No eval run, by the owner's decision.** `eval.py:48` calls `graph.ainvoke`
 and never runs the pre-steps; the cache is not prompt, router, tools or
 retrieval.
 
@@ -1319,12 +1319,12 @@ the test, by name.
 **Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
 12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
 its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
-thread save (`chat.py:137`). The scope router in the graph (`agents.py:50-57`)
+thread save (`chat.py:137`). The scope router in the graph (`agents.py:56-63`)
 stays and is now the only model that classifies scope.
 
 **Why:**
 1. Two scope classifiers with different prompts can disagree, and the eval
-   sees only the router (`eval.py:44` calls `graph.ainvoke`).
+   sees only the router (`eval.py:48` calls `graph.ainvoke`).
 2. Triage cost one `fast_llm` call per message.
 3. Its reply never reached the visitor (M1). It wrote state with
    `as_node="chatbot"`, a node the graph does not have; LangGraph raised, the
@@ -1348,7 +1348,7 @@ interceptor in `search.py` can fire. *Seen live 2026-10-30* (P2 close check
 without the knowledge-base summary that triage rule 2 described. Changing that
 is a router or prompt change, so it is eval-driven.
 
-**No eval run, by the owner's decision.** `eval.py:44` never runs the
+**No eval run, by the owner's decision.** `eval.py:48` never runs the
 pre-steps; triage is not the router, prompt, tools or retrieval.
 
 **Tests.** Six triage tests removed with the feature (five in
@@ -1375,14 +1375,14 @@ project-tree labels "Fast Path & Triage" (on `semantic_router.py`) and
 ### `route_query` runs once per message; `Send` carries the result
 
 **Chosen (2026-11-01, by the owner; P2 item 7, REVAMP coupling 2):**
-`route_input_node` is the only caller of `route_query` (`agents.py:37`). On a
+`route_input_node` is the only caller of `route_query` (`agents.py:43`). On a
 hit it returns `Send("fast_path_node", ...)` with the last message, the stored
-answer and the target id (`agents.py:39-47`). `retrieval_node` returns the
-constant `RAG` (`agents.py:107-111`).
+answer and the target id (`agents.py:45-53`). `retrieval_node` returns the
+constant `RAG` (`agents.py:113-117`).
 
 **Why:** the repeat at the old `:76` and `:101` did the same lookup again. The
 gain is small and is not a model-call saving: `route_query` calls no model
-(`semantic_router.py:5-35`). Read from the code at `043609e`, a table hit or a
+(`semantic_router.py:5-40`). Read from the code at `043609e`, a table hit or a
 Problem-N hit ran it twice, and so did any message the scope router sent to
 `retrieval_node`. Each now runs it once. A message the scope router marks
 CONVERSATIONAL or OUT_OF_SCOPE ran it once already. On the routes that ran it twice,
@@ -1455,7 +1455,7 @@ two fast-path answers: see `OPEN.md` item 15.
   until the next turn overwrites it. Measured on the same test graph: 4,005,165
   bytes against 4,003,437 for a 1,000,000-character answer, so storage does not
   separate the two options.
-- *A lookup in `chat.py` before the graph.* `eval.py:44` calls the graph directly
+- *A lookup in `chat.py` before the graph.* `eval.py:48` calls the graph directly
   and would skip it.
 - *A cache inside `semantic_router.py`.* It is hidden global state that goes stale
   when `data/` changes.
@@ -1463,9 +1463,9 @@ two fast-path answers: see `OPEN.md` item 15.
 ### The main model gets the thread without unmatched tool messages
 
 **Chosen (2026-11-02, by the owner; `OPEN.md` item 15):** `qa_node` sends the thread through
-`drop_unmatched_tool_messages` (`agents.py:113-129`, called at `:151`). It drops a tool message
+`drop_unmatched_tool_messages` (`agents.py:119-135`, called at `:158`). It drops a tool message
 when no earlier AI tool call holds its id, and prints one `[__DEV__]` line per drop. The
-checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:47-55`
+checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:51-59`
 still reads recall from it.
 
 **Why:** the marker has no matching tool call, and the main model rejects that list with a 400.
@@ -1488,7 +1488,7 @@ what is stored, so threads saved before it need no migration.
   nothing before the fix either, so `model_name` is the witness.
 - Eval: two runs before (`1e5416c`) and one after, each 91/94 logic, 34/34 recall, with the same
   failures, 22, 42 and 93. All 94 verdicts match. The filter fired 0 times, because each case is
-  one turn on a new thread (`eval.py:40-42`). `latest_run_metrics.json` stays at 95.74, for the
+  one turn on a new thread (`eval.py:44-46`). `latest_run_metrics.json` stays at 95.74, for the
   reason under "Rejected — committing 96.8".
 
 **The eval cannot show this fix.** It can only show no harm. `.claude/rules/evals.md` rule 5
@@ -1562,3 +1562,66 @@ and not locked. On GitHub, run `40894313618` on `p2-ci`: frontend 37 s,
 `eslint: 27 problems (26 errors, 1 warnings); limit 27`; backend 1 m 4 s,
 `10 passed, 1 xfailed`. Node 20 itself ran only on GitHub; the dev machine has
 22.
+
+## Feature switches
+
+### Three env switches
+
+**Chosen 2026-11-02 (P2 item 8, task `p2-env-switches`):** `FAST_PATH_ENABLED`,
+`TRANSCRIPT_REFINE_ENABLED` and `WEATHER_TOOL_ENABLED`, read by three functions at the end of
+`config.py`. With no variable set, every feature stays on.
+
+**Only `false` turns a feature off** (`config.py:204`). A `NAME=` line parses to an empty string
+(`dotenv_values`, run), and `getenv`'s default does not apply to it, so the pattern at `config.py:46`
+turned to default-on would switch a feature off silently. The cost, accepted by the owner: `off`, `0`
+or a value holding literal quote marks, such as `"false"` typed in the Space settings, leaves a feature on and spending. A startup line prints the three states.
+
+**Read at call time.** A test flips a switch between a pause and a resume in one process. Reading at
+import needs a reload, which recreates the clients and leaves `chat.py` and `eval.py` holding old names.
+The process environment is fixed until a restart, so the running app sees one value per process.
+
+**What off does:**
+- **Fast path:** one check at the top of `route_query` covers the table and the Problem-N lookup. It
+  stays one `route_query` call per message. `check_fast_path.py` imports the table directly and is not
+  affected. Two costs, by the owner's decision: `OPEN.md` items 18 and 20.
+- **Refine:** returns the raw text before the rate limit (`app.py:262-265`). No credit is spent, as with
+  Cancel. The frontend needs no change.
+- **Weather:** the graph keeps its shape, so the four compile sites do not change. `qa_node` uses a second
+  binding without the tool (`agents.py:20`, `:159`), and a replacing prompt line (`agents.py:153`) is meant to
+  stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:187`), which returns an error message
+  and shows no panel (`OPEN.md` item 19). A thread paused before the switch went off can still be approved
+  from an open tab, so the tool itself checks the switch (`weather_aqi.py:21`). Router RULES 2 and 3 stay.
+
+**Rejected:**
+- *Any unknown value means off.* A value that looks like yes (`1`, `True `) would silently lose a visible
+  feature.
+- *A guard in `/chat_approve` writing a `ToolMessage`.* It overlaps M5 and touches `app.py` for one case.
+- *Removing the node when off.* It changes four compile sites. What LangGraph does with a checkpoint whose
+  next node is missing was not read.
+- *Skipping the router, or new router wording, for Problem-N when off.* Either adds logic to a feature item
+  12 removes, or a second router prompt (owner, 2026-11-02).
+- *A CI matrix.* About 5 m 20 s against 1 m 4 s (inferred); a parametrized fixture covers the same states.
+
+**The eval sets each switch to on** (`eval.py:18-19`) with `setdefault`, before the backend loads. A line left
+in the ignored environment file then cannot change what the eval measures, because `load_dotenv` does not
+override a name already set. A variable set in the shell still applies, for P5's on/off run.
+
+**Measured 2026-11-02:**
+- Core tests: 195 passed, 5 xfailed, in five states (all off, each one on, no variable). Five fast-path tests
+  run in two states, because off is not what they assert. 20 of 20 chosen mutations caught. The first map
+  said 17 of 17 and had missed "always the off binding"; the advisor session found it.
+- Golden hashes taken on `main` at `6e5c4b8` pin the tool list and the answer, router and conversational
+  prompts with no variable set.
+- Eval before and after, no variable: 91/94, 34/34, failures 22, 42, 93, all 94 verdicts the same, 171.81 s
+  and 118.74 s. Judge reason text differs in 13 cases. Rerank documents or order differ in 6 of 33 lists, and
+  only scores in 4 more (the advisor session's parse), against 4 and 5 of 33 under "`route_query` runs once
+  per message". So: similar, slightly larger. The printed "Top Docs contained Problems" set also differs in 11
+  cases, in order only in 10 of them (the advisor session's parse). *Why the reasons changed is a hypothesis:*
+  12 of the 13 fall in one of those two measures, case 94 calls a live API, and the log prints no agent output.
+- Live, throwaway Postgres on 5434. All off: table question through `search_knowledge_base`, refine raw,
+  weather with no panel and no figure, each `openai/gpt-5-mini`. No variable: refine corrected the text, the
+  table answered in 0.08 s, the panel showed, approval answered. A thread paused with no variable, restarted
+  with weather off, then approved: tool text "Live weather and air quality data is not available.", which the
+  tool returns before any request, `openai/gpt-5-mini`. A follow-up on a thread holding an older weather
+  call, with the tool not bound: `openai/gpt-5-mini`, so the fallback did not hide a rejection. One sample of each.
+  The three logs hold 0 `WARNING`, `Traceback`, `ERROR`, `🚨`, `Failed to` or `Error code` lines.

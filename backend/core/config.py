@@ -194,3 +194,31 @@ def extract_problem_block(problem_id: str) -> str | None:
     except Exception as e:
         print(f"🚨 [ERROR] extract_problem_block failed: {e}")
     return None
+
+
+# ==========================================
+# 3. FEATURE SWITCHES
+# ==========================================
+# Read at call time, so a test can flip one between a pause and a resume. The process
+# environment is fixed until a restart, so the deployed app sees one value per process.
+def _switch_on(name: str) -> bool:
+    """Only "false" turns a feature off. Unset or empty means on, so a copied `NAME=` line changes nothing."""
+    return os.getenv(name, "true").strip().lower() != "false"
+
+
+def fast_path_enabled() -> bool:
+    return _switch_on("FAST_PATH_ENABLED")
+
+
+def transcript_refine_enabled() -> bool:
+    return _switch_on("TRANSCRIPT_REFINE_ENABLED")
+
+
+def weather_tool_enabled() -> bool:
+    return _switch_on("WEATHER_TOOL_ENABLED")
+
+
+print(
+    f"🎚️ Feature switches: fast path {fast_path_enabled()}, "
+    f"transcript refine {transcript_refine_enabled()}, weather tool {weather_tool_enabled()}"
+)

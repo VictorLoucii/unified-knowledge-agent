@@ -68,6 +68,7 @@ def test_graph_answers_a_rag_question_and_checkpoints_it(core):
     assert [m.type for m in checkpoint_messages(core.graph, "graph-thread")] == ["human", "ai", "tool", "ai"]
 
 
+@pytest.mark.switch_states("fast_path_on", "no_variable")
 def test_fast_path_table_hit_routes_once(core, route_calls, planted_table):
     """Steps: route (table hit), fast_path_node, stream; no model call."""
     core.set_fast_replies()
@@ -80,6 +81,7 @@ def test_fast_path_table_hit_routes_once(core, route_calls, planted_table):
     assert core.fast_llm.calls == 0 and core.qa.calls == []
 
 
+@pytest.mark.switch_states("fast_path_on", "no_variable")
 def test_problem_id_hit_routes_once(core, route_calls, planted_table, monkeypatch):
     """Steps: route (Problem-N block found), fast_path_node, stream; no model call."""
     monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)
@@ -129,6 +131,7 @@ def test_out_of_scope_message_routes_once(core, route_calls):
     assert streamed_text(chunks) == FALLBACK_TEXT
 
 
+@pytest.mark.switch_states("fast_path_on", "no_variable")
 def test_fast_path_hit_keeps_the_target_id_marker(core, planted_table):
     """eval.py reads recall from this marker. The key has no "problem X" text, so the id comes from the router."""
     core.set_fast_replies()
@@ -155,6 +158,7 @@ def assert_follow_up_sent_a_valid_list(core, marker_id):
     assert f"<!-- RETRIEVED_PROBLEM_IDS: [{marker_id}] -->" in stored
 
 
+@pytest.mark.switch_states("fast_path_on", "no_variable")
 def test_rag_question_after_a_table_hit_sends_a_valid_list(core, planted_table):
     """OPEN.md item 15: the main model rejects a tool message with no matching tool call."""
     core.set_fast_replies("IN_SCOPE")
@@ -167,6 +171,7 @@ def test_rag_question_after_a_table_hit_sends_a_valid_list(core, planted_table):
     assert_follow_up_sent_a_valid_list(core, PLANTED_TARGET_ID)
 
 
+@pytest.mark.switch_states("fast_path_on", "no_variable")
 def test_rag_question_after_a_problem_id_hit_sends_a_valid_list(core, planted_table, monkeypatch):
     """OPEN.md item 15, the same fault through the Problem-N route."""
     monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)

@@ -18,7 +18,7 @@ uv run python -m backend.evals.eval --concurrency 1
 
 - **Never set `MODEL_NAME`.** Three places read it: `config.py:49` (agent,
   default `openai/gpt-5-mini`), `search.py:16` (query expansion,
-  `google/gemini-3.5-flash-lite`) and `eval.py:67` (judge,
+  `google/gemini-3.5-flash-lite`) and `eval.py:71` (judge,
   `deepseek/deepseek-chat`). Setting it also swaps the judge, which invalidates
   every cached judgment and makes the run far more expensive. A model migration
   changes the default strings in source (`OPEN.md` item 8).
@@ -28,7 +28,7 @@ uv run python -m backend.evals.eval --concurrency 1
   Apple-GPU backend.
 - **Every run overwrites `backend/evals/latest_run_metrics.json`**, a partial
   `--indices` run too. Back it up before a partial run; restore it after.
-- `--indices` is 1-based (`eval.py:124`). `eval.py:130` sizes the totals from the
+- `--indices` is 1-based (`eval.py:128`). `eval.py:134` sizes the totals from the
   sliced dataset.
 - The run needs `.env`, which the sandbox blocks. The owner starts it.
 
@@ -74,7 +74,7 @@ dataset changes.
 
 ## Runtime proves nothing
 
-- `eval.py:31` caches every model call in `.langchain.db` (gitignored, ~100 MB).
+- `eval.py:35` caches every model call in `.langchain.db` (gitignored, ~100 MB).
   A warm run makes no network calls. Any prompt, retrieval or model-string edit
   turns hits into misses. Do not read a slow run as a regression or a fast one
   as a pass.

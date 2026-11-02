@@ -2,6 +2,10 @@ import os
 import requests
 from langchain_core.tools import tool
 
+from backend.core.config import weather_tool_enabled
+
+WEATHER_OFF_RESULT = "Live weather and air quality data is not available."
+
 @tool
 def get_weather_and_aqi(location: str) -> str:
     """
@@ -13,6 +17,10 @@ def get_weather_and_aqi(location: str) -> str:
     Returns:
         str: A string containing the weather conditions and AQI for the requested location.
     """
+    # A thread paused before the switch went off can still be approved from an open tab.
+    if not weather_tool_enabled():
+        return WEATHER_OFF_RESULT
+
     try:
         # 1. Geocoding
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location}&count=1"

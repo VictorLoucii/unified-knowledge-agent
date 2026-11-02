@@ -221,7 +221,7 @@ docker compose up --build
 > differs, so the two can run at once without colliding.
 
 The frontend's API URL is baked into its browser bundle at build time, so
-`docker-compose.yml:62` passes it as a **build argument**, not an environment
+`docker-compose.yml:66` passes it as a **build argument**, not an environment
 variable. Changing it requires `docker compose build frontend`, not a restart.
 
 > [!NOTE]

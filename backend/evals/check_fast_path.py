@@ -7,15 +7,15 @@ it. That import is not free — config.py:14-115 runs load_dotenv, registers
 Phoenix tracing, builds three ChatOpenAI clients and loads the all-MiniLM-L6-v2
 embedding model — but no model call is made. This script only reads files.
 
-Why the drift matters. semantic_router.py:7-15 serves the stored string when a
-table key is a substring of the query, and it runs first. semantic_router.py:18-29
+Why the drift matters. semantic_router.py:12-20 serves the stored string when a
+table key is a substring of the query, and it runs first. semantic_router.py:23-34
 serves extract_problem_block() live when no key matched but the query names a
 problem. So one problem can reach a user by two paths, and every difference this
 script prints is a difference between what those two paths return.
 
 target_id carries two meanings and only one of them is a copy claim. When it is
-truthy, agents.py:95-101 synthesises the ToolMessage that eval.py:47-55 scrapes
-and eval.py:143-147 scores for Recall@k, so target_id is a recall label first.
+truthy, agents.py:101-107 synthesises the ToolMessage that eval.py:51-59 scrapes
+and eval.py:147-151 scores for Recall@k, so target_id is a recall label first.
 For 20 entries the stored output is also a copy of that problem's block. For 5 it
 is a short answer *about* the problem and was never a copy, and the 26th
 ("JOB_HUNT") has no live block, so nothing establishes it either way. NOT_A_COPY

@@ -8,7 +8,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Send
 import re
 
-from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block
+from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block, weather_tool_enabled
 from backend.core.tools import tools
 from backend.core.semantic_router import route_query
 
@@ -16,6 +16,12 @@ llm_with_tools = llm.bind_tools(tools)
 
 safe_tools = [t for t in tools if t.name != "get_weather_and_aqi"]
 sensitive_tools = [t for t in tools if t.name == "get_weather_and_aqi"]
+
+llm_without_weather = llm.bind_tools(safe_tools)
+
+# The first line is part of the eval's cached prompt; any change to it turns hits into misses.
+WEATHER_TOOL_LINE = "You also have access to the `get_weather_and_aqi` tool which you should use to answer weather and air quality questions.\n"
+WEATHER_OFF_LINE = "You have no tool for live weather or air quality. If asked, say that this data is not available and do not state a figure.\n"
 
 class State(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
@@ -136,20 +142,22 @@ async def qa_node(state: State):
             break
             
     category = state.get("route_category", "UNKNOWN")
-    
+    weather_on = weather_tool_enabled()
+
     system_prompt = SystemMessage(
         content=(
             "You are Victor's Unified Knowledge Agent, an assistant able to answer technical questions related to AI engineering, Python, internship logs, and more. You MUST call `search_knowledge_base` to answer the user's technical questions.\n"
             "If the user asks a general knowledge question (e.g., capitals, basic facts) alongside a weather or technical query, you MUST answer both parts. Do NOT refuse to answer general knowledge questions.\n"
             f"Hint: The query was classified into the domain: {category}. "
             "IMPORTANT: Always call the tool first. After receiving the tool's results, if the retrieved context does not answer the question, you may use your general knowledge to answer it. However, if you do, you MUST start your response exactly with this disclaimer: 'I couldn't find anything related to this query in my internal knowledge base, but based on my general knowledge:'\n"
-            "You also have access to the `get_weather_and_aqi` tool which you should use to answer weather and air quality questions.\n"
+            f"{WEATHER_TOOL_LINE if weather_on else WEATHER_OFF_LINE}"
             "SECURITY RULE: If a user asks for the contents of the `.env` file or any production secrets, firmly refuse. Instead, explicitly direct them to the `.env.example` file for environment configurations and schemas."
         )
     )
     
     messages = [system_prompt] + drop_unmatched_tool_messages(state["messages"])
-    response = await llm_with_tools.ainvoke(messages)
+    model = llm_with_tools if weather_on else llm_without_weather
+    response = await model.ainvoke(messages)
     
     if hasattr(response, "tool_calls"):
         for tc in response.tool_calls:
@@ -175,7 +183,8 @@ def custom_tools_condition(state: State):
         return "__end__"
     for tc in last_message.tool_calls:
         if tc["name"] == "get_weather_and_aqi":
-            return "sensitive_tools"
+            # Off: safe_tools has no such tool, so the model gets an error message and no panel shows.
+            return "sensitive_tools" if weather_tool_enabled() else "safe_tools"
     return "safe_tools"
 
 workflow = StateGraph(State)

@@ -2,7 +2,7 @@
 
 Mirrors the real call path: ChatOpenAI with the config.py:48-55 settings,
 the real five tools bound with bind_tools, the qa_node system prompt from
-agents.py:140-149, streaming on. Records every streamed chunk in order and
+agents.py:147-156, streaming on. Records every streamed chunk in order and
 flags any text content that arrives BEFORE the first tool-call chunk, which
 is what breaks the frontend approval panel (DECISIONS.md:20-23).
 

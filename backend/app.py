@@ -259,9 +259,12 @@ class RefineRequest(BaseModel):
 @app.post("/refine_transcript")
 async def refine_transcript(request: RefineRequest, http_request: Request):
     """Refines a raw voice transcript using a fast LLM."""
+    from backend.core.config import fast_llm, transcript_refine_enabled
+    # Off: no model call, so no credit is spent and the request is not counted.
+    if not transcript_refine_enabled():
+        return {"refined_transcript": request.transcript}
     if limited := check_rate_limit(http_request):
         return limited
-    from backend.core.config import fast_llm
     from langchain_core.messages import SystemMessage, HumanMessage
     
     sys_prompt = "You are a transcription refinement assistant. Fix any spelling mistakes (especially tech jargon like 'markdown', 'tech stack', 'semantically') and ensure proper punctuation (e.g., adding a question mark if it's a question) in the following text. Only return the corrected text, nothing else. Do not wrap in quotes or add preamble."

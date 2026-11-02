@@ -13,6 +13,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 os.environ["EVAL_MODE"] = "true"
+# A switch left in .env must not change what the eval measures. load_dotenv does not override
+# a name that is already set; a variable set in the shell still applies, for an on/off run.
+for _switch in ("FAST_PATH_ENABLED", "TRANSCRIPT_REFINE_ENABLED", "WEATHER_TOOL_ENABLED"):
+    os.environ.setdefault(_switch, "true")
 
 # 2. NOW IT IS SAFE TO IMPORT LOCAL MODULES AND 3RD PARTY LIBS
 from pydantic import BaseModel, Field

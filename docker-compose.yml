@@ -32,6 +32,10 @@ services:
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - DATABASE_URL=${DATABASE_URL}
+      # Empty means on (config.py, _switch_on).
+      - FAST_PATH_ENABLED=${FAST_PATH_ENABLED:-}
+      - TRANSCRIPT_REFINE_ENABLED=${TRANSCRIPT_REFINE_ENABLED:-}
+      - WEATHER_TOOL_ENABLED=${WEATHER_TOOL_ENABLED:-}
     # No volumes. The index is baked into the image by `COPY backend/ ./backend/`
     # (.dockerignore keeps backend/chroma_db and backend/docstore in the build
     # context on purpose). The two mounts removed here named ./chroma_db and

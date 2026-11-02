@@ -25,10 +25,12 @@ import pytest
 # 1. Environment: a stub key, no real secrets, no database URL
 # ------------------------------------------------------------------
 STUB_OPENROUTER_KEY = "test-stub-openrouter-key"
+SWITCH_NAMES = ("FAST_PATH_ENABLED", "TRANSCRIPT_REFINE_ENABLED", "WEATHER_TOOL_ENABLED")
 os.environ["OPENROUTER_API_KEY"] = STUB_OPENROUTER_KEY
 for _name in (
     "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY", "OPENAI_API_KEY",
     "WAQI_API_KEY", "MODEL_NAME", "EVAL_MODE", "PHOENIX_COLLECTOR_ENDPOINT",
+    *SWITCH_NAMES,
 ):
     os.environ.pop(_name, None)
 os.environ["HF_HUB_OFFLINE"] = "1"
@@ -341,8 +343,39 @@ def offline_only():
     assert not DOTENV_OPENS, f".env opened: {DOTENV_OPENS}"
 
 
+def _only_on(on_name=None):
+    return {name: "true" if name == on_name else "false" for name in SWITCH_NAMES}
+
+
+# P2 closing check 1: the core tests pass with all three off, with each one on, and with no variable.
+SWITCH_STATES = {
+    "all_off": _only_on(),
+    "fast_path_on": _only_on("FAST_PATH_ENABLED"),
+    "refine_on": _only_on("TRANSCRIPT_REFINE_ENABLED"),
+    "weather_on": _only_on("WEATHER_TOOL_ENABLED"),
+    "no_variable": {},
+}
+
+
+def pytest_configure(config):
+    config.addinivalue_line("markers", "switch_states(*names): runs only in the named states of SWITCH_STATES")
+
+
+def pytest_generate_tests(metafunc):
+    """Every test that uses core runs in each switch state, unless a marker names its states."""
+    if "core" in metafunc.fixturenames:
+        marker = metafunc.definition.get_closest_marker("switch_states")
+        metafunc.parametrize("switch_state", list(marker.args) if marker else list(SWITCH_STATES), indirect=True)
+
+
 @pytest.fixture
-def core(monkeypatch):
+def switch_state(request, monkeypatch):
+    for name, value in SWITCH_STATES[getattr(request, "param", "no_variable")].items():
+        monkeypatch.setenv(name, value)
+
+
+@pytest.fixture
+def core(monkeypatch, switch_state):
     """Patches every model, store and Postgres call on the core path.
 
     Returns a namespace the test can adjust before it runs a turn.
@@ -400,6 +433,7 @@ def core(monkeypatch):
     def set_qa(model):
         ns.qa = model
         monkeypatch.setattr(agents, "llm_with_tools", model)
+        monkeypatch.setattr(agents, "llm_without_weather", model)
 
     def set_fast_replies(*replies):
         # fast_llm belongs to this fixture call, so plain assignment needs no undo.

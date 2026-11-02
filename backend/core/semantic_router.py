@@ -1,8 +1,13 @@
-from backend.core.config import fast_llm
+from backend.core.config import fast_llm, fast_path_enabled
 from backend.core.fast_path_routes import FAST_PATH_INTERCEPTS
 import re
 
 async def route_query(user_query: str) -> dict:
+    # Off covers both lookups below, the table and the Problem-N block.
+    if not fast_path_enabled():
+        print("🔀 [ROUTER] Fast path is off (Delegating to ChromaDB)")
+        return {"route_category": "RAG"}
+
     # 1. Exact Match Intercepts (O(1) lookup)
     for exact_q, fast_data in FAST_PATH_INTERCEPTS.items():
         # Case insensitive exact match or contains logic based on the original override logic
