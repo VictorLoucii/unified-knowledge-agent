@@ -110,6 +110,24 @@ async def retrieval_node(state: State):
     # without this write the hint would read UNKNOWN, a silent prompt change.
     return {"route_category": "RAG"}
 
+def drop_unmatched_tool_messages(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Returns the list without any tool message that no earlier AI tool call asked for.
+
+    fast_path_node stores such a message, and eval.py reads recall from it, so it stays
+    in the checkpoint. The main model answers it with a 400 (OPEN.md item 15). This reads
+    what is stored, so it also covers threads saved before it was added. It goes one way
+    only: an AI tool call with no result is left as it is.
+    """
+    called_ids = set()
+    kept = []
+    for msg in messages:
+        if msg.type == "tool" and msg.tool_call_id not in called_ids:
+            print(f"🔧 [__DEV__] Not sending a tool message with no matching call to the model: {msg.tool_call_id}")
+            continue
+        called_ids.update(tool_call["id"] for tool_call in getattr(msg, "tool_calls", None) or [])
+        kept.append(msg)
+    return kept
+
 async def qa_node(state: State):
     user_msg = ""
     for msg in reversed(state["messages"]):
@@ -130,7 +148,7 @@ async def qa_node(state: State):
         )
     )
     
-    messages = [system_prompt] + state["messages"]
+    messages = [system_prompt] + drop_unmatched_tool_messages(state["messages"])
     response = await llm_with_tools.ainvoke(messages)
     
     if hasattr(response, "tool_calls"):

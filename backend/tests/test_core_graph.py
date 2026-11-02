@@ -140,6 +140,67 @@ def test_fast_path_hit_keeps_the_target_id_marker(core, planted_table):
     assert [m.content for m in tool_messages] == [f"<!-- RETRIEVED_PROBLEM_IDS: [{PLANTED_TARGET_ID}] -->"]
 
 
+def assert_follow_up_sent_a_valid_list(core, marker_id):
+    """Every model call of the follow-up has no unmatched tool message, and the marker stays stored."""
+    assert len(core.qa.calls) == 2
+    for call in core.qa.calls:
+        called_ids = set()
+        for message in call:
+            if isinstance(message, ToolMessage):
+                assert message.tool_call_id in called_ids
+            called_ids.update(tc["id"] for tc in getattr(message, "tool_calls", None) or [])
+    assert [m.type for m in core.qa.calls[0]] == ["system", "human", "ai", "human"]
+    assert RETRIEVED_TEXT in core.qa.calls[1][-1].content
+    stored = [m.content for m in checkpoint_messages(core.graph) if isinstance(m, ToolMessage)]
+    assert f"<!-- RETRIEVED_PROBLEM_IDS: [{marker_id}] -->" in stored
+
+
+def test_rag_question_after_a_table_hit_sends_a_valid_list(core, planted_table):
+    """OPEN.md item 15: the main model rejects a tool message with no matching tool call."""
+    core.set_fast_replies("IN_SCOPE")
+    core.set_qa(rag_script(QUESTION, ANSWER))
+
+    run_chat(core.graph, PLANTED_KEY)
+    chunks = run_chat(core.graph, QUESTION)
+
+    assert streamed_text(chunks) == ANSWER
+    assert_follow_up_sent_a_valid_list(core, PLANTED_TARGET_ID)
+
+
+def test_rag_question_after_a_problem_id_hit_sends_a_valid_list(core, planted_table, monkeypatch):
+    """OPEN.md item 15, the same fault through the Problem-N route."""
+    monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)
+    core.set_fast_replies("IN_SCOPE")
+    core.set_qa(rag_script(QUESTION, ANSWER))
+
+    run_chat(core.graph, "Tell me about Problem 7")
+    chunks = run_chat(core.graph, QUESTION)
+
+    assert streamed_text(chunks) == ANSWER
+    assert_follow_up_sent_a_valid_list(core, "7")
+
+
+def test_only_the_unmatched_tool_message_is_dropped():
+    """A real result from an earlier turn stays: without it, its tool call has no output, which is also a 400."""
+    def call(call_id):
+        return AIMessage(content="", tool_calls=[{"name": "search_knowledge_base", "args": {}, "id": call_id}])
+
+    real_result = ToolMessage(content="real", tool_call_id="call_a")
+    unmatched = ToolMessage(content="marker", tool_call_id="other_id")
+    messages = [
+        HumanMessage(content="q1"), call("call_a"), real_result, AIMessage(content="a1"),
+        HumanMessage(content="q2"), unmatched, AIMessage(content="a2"),
+        HumanMessage(content="q3"),
+    ]
+
+    kept = agents.drop_unmatched_tool_messages(messages)
+
+    assert kept == [m for m in messages if m is not unmatched]
+    # One way only: a tool call with no result is not this filter's case (OPEN.md item 15).
+    unanswered = [HumanMessage(content="q1"), call("call_w"), HumanMessage(content="q2")]
+    assert agents.drop_unmatched_tool_messages(unanswered) == unanswered
+
+
 def test_fast_path_payload_carries_only_the_last_message(planted_table):
     """The payload is stored in the checkpoint, so the whole history would be stored again on every hit."""
     state = {"messages": [HumanMessage(content="first"), AIMessage(content="reply"), HumanMessage(content=PLANTED_KEY)]}

@@ -95,7 +95,7 @@ its own; a directive overrides it.
 **3. The fix works, and its mechanism is still a hypothesis.**
 
   before  argument 21 chars, `RETRIEVED_PROBLEM_IDS: []`, answered from general
-          knowledge via the disclaimer at `agents.py:127`
+          knowledge via the disclaimer at `agents.py:145`
   after   argument 76 chars and verbatim, `RETRIEVED_PROBLEM_IDS: ['12', '4',
           'Statement']`, answer built from retrieval
 
@@ -805,7 +805,7 @@ this item said three, having grepped only `backend/core/` and missed the one in
 | Site | Behaviour on failure |
 |---|---|
 | `agents.py:50` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:148` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `agents.py:166` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
 | `app.py:270` `/refine_transcript` | `app.py:275-277` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:140` was `:126` before commit `a8c9af9`
@@ -1079,7 +1079,7 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at three sites — `agents.py:50`, `agents.py:148` and `app.py:270` —
+   work at three sites — `agents.py:50`, `agents.py:166` and `app.py:270` —
    **read from source**. A fourth, triage in `chat.py`, was removed on
    2026-10-30 (P2 item 6). None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
@@ -1431,7 +1431,7 @@ applies.
   model call is made.
 
 The settled-thread probe wrote its state with `as_node="fast_path_node"`, because
-`agents.py:196` edges that node straight to `END` and the write therefore leaves
+`agents.py:214` edges that node straight to `END` and the write therefore leaves
 nothing to run. **A first attempt wrote the `messages` channel with no `as_node`,
 which re-triggered the entry node and spent one real model call.** Recorded
 because the fault was in the probe's design, not in the code under test, and the
@@ -1528,7 +1528,7 @@ defect.
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
 - **The weather wording in the `qa_node` prompt is ambiguous and still
-  unfixed.** `agents.py:122-131` says "You MUST call `search_knowledge_base`"
+  unfixed.** `agents.py:140-149` says "You MUST call `search_knowledge_base`"
   and "Always call the tool first" before it mentions the weather tool. GPT-5
   Mini at `minimal` effort followed the words and searched; at `low` it chose
   the weather tool, and test 94 passes. A first rewording was probed and
@@ -1723,15 +1723,17 @@ The CI design is in `DECISIONS.md` "## CI". Both items were found by
   `HF_TOKEN` and has no `permissions:` block. Adding either block changes the
   file's line count and moves the citations at `sync_to_hub.yml:16, 20`.
 
-## 15. A follow-up after a fast-path answer is rejected by the main model (2026-11-01, P2 item 7)
+## 15. A follow-up after a fast-path answer is rejected by the main model (2026-11-01, P2 item 7) — FIXED 2026-11-02
 
 **Found by `/code-review high` on task `p2-route-once`. Not caused by that task:
-the code before it builds the same messages. Not fixed.**
+the code before it builds the same messages. Fixed by a filter in `qa_node`: `DECISIONS.md`,
+"The main model gets the thread without unmatched tool messages". The text below is the
+record as found, with citations kept current.**
 
 `fast_path_node` writes a `ToolMessage` with `tool_call_id="bypass_tool_call_id"`
 (`agents.py:95-101`), with no earlier `AIMessage` holding that tool call. `eval.py`
 scrapes it for Recall@k. It stays in the thread, and `qa_node` sends the whole thread
-to the model (`agents.py:133`).
+to the model (`agents.py:151`).
 
 **Measured 2026-11-01, one message list sent to `primary_llm` alone:** a normal list
 was accepted. This one got a 400:
@@ -1741,15 +1743,45 @@ was accepted. This one got a 400:
 and then a RAG question in one thread. The RAG question got an answer, and the backend
 log has no error line.
 
-*A hypothesis, labelled as one:* the fallback at `config.py:78` served that answer, so
-a visitor gets a different model and nothing records it. The log cannot show this. To
-test it, read the OpenRouter activity page for that call, or log the fallback.
+*A hypothesis, labelled as one:* the fallback at `config.py:78` served that answer, so a
+visitor gets a different model and no log line says so. That answer itself stays unmeasured.
+
+**Measured 2026-11-02, on the table route only:** in a new thread, a table hit and then a RAG
+question, the stored `response_metadata["model_name"]` read
+`google/gemini-3.6-flashgoogle/gemini-3.6-flash` on both AI messages. No Problem-N thread got a
+RAG turn before the fix. After the fix, a thread with a table hit and threads with a table hit
+and a Problem-N hit each read `openai/gpt-5-miniopenai/gpt-5-mini`. No live thread had a
+Problem-N hit alone; a core test covers that case.
 
 **Reach, read from source:** a follow-up to a RAG route, after any table row with a
 target id (26 of 53) or any Problem-N hit, in the same thread. `conversational_node`
 sends only the current message, so it is not exposed. The eval cannot see this: it
-uses a new thread per case (`eval.py:41-42`).
+uses a new thread per case (`eval.py:41-42`). Read, not run: a weather follow-up and the
+`/chat_approve` resume also enter `qa_node` with the whole thread (`agents.py:27-28`, `:151`).
 
 **Before a fix, note:** the marker is what `eval.py:47-55` reads for recall, so moving
 it needs a change in the eval too. P2 item 12 removes the Problem-N part, not the table
 rows.
+
+## 16. A new message after a cancelled weather call is rejected by the main model (2026-11-02, found on item 15)
+
+**Not fixed. Out of scope for item 15, which is the reverse fault.** A weather call stops at
+`interrupt_before` and stores an AI tool call with no result. Cancel writes nothing to the
+thread (`app.py:324-325`), and the frontend then asks "What would you like to do instead?"
+(`useChatStream.ts:271`).
+
+**Measured 2026-11-02, one message list sent to `primary_llm` alone:** a 400,
+`No tool output found for function call call_w.` An offline test on the fake graph shows the
+next message sends exactly that shape: system, human, ai(tool call), human.
+
+**Not measured:** what a visitor sees. The fallback may answer, as it did for item 15, or the
+message may end in an error event. `drop_unmatched_tool_messages` leaves this shape alone, and
+a test pins that. The owner's local plan (M5) writes a `ToolMessage` on reject. Whether that
+also closes this is not checked.
+
+## 17. A fast-path marker can shorten the next answer's length limit (2026-11-02, found on item 15)
+
+**Not fixed. Read from source, not run. Older than item 15's fix, which does not change it.**
+The marker stays stored, so `chat.py:170` reads it as the last tool output. A follow-up that
+answers with no tool call then has a limit of 2000 characters (`chat.py:176`), even after a long
+RAG answer earlier in the thread. A longer answer gets the truncation warning.

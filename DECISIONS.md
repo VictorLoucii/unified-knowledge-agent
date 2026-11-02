@@ -1460,6 +1460,59 @@ two fast-path answers: see `OPEN.md` item 15.
 - *A cache inside `semantic_router.py`.* It is hidden global state that goes stale
   when `data/` changes.
 
+### The main model gets the thread without unmatched tool messages
+
+**Chosen (2026-11-02, by the owner; `OPEN.md` item 15):** `qa_node` sends the thread through
+`drop_unmatched_tool_messages` (`agents.py:113-129`, called at `:151`). It drops a tool message
+when no earlier AI tool call holds its id, and prints one `[__DEV__]` line per drop. The
+checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:47-55`
+still reads recall from it.
+
+**Why:** the marker has no matching tool call, and the main model rejects that list with a 400.
+The fallback at `config.py:78` then answered, and no log line says so. The link between the 400
+and the fallback is inferred, from the same-day probe and the readings below. The filter reads
+what is stored, so threads saved before it need no migration.
+
+**Measured 2026-11-02, all on one day:**
+- `primary_llm` alone: a normal list accepted; the list with the marker got the 400; the same
+  list without the marker accepted.
+- Live, throwaway Postgres on 5434, reading `response_metadata["model_name"]` from the
+  checkpoint. OpenRouter's stream doubles this value, so read it by substring. Before the fix, a
+  RAG turn after a table hit read `google/gemini-3.6-flash` on both AI messages. No Problem-N
+  thread got a RAG turn before the fix. After the fix
+  each of these read `openai/gpt-5-mini` on both: a new thread (table hit, Problem-N hit, RAG), a
+  thread stored before the fix with two markers, and a thread stored before the fix with
+  Gemini's tool call in it. The last is one thread, not a proof for all Gemini history. A reload
+  of the new thread kept all three questions and answers, with no marker on the page. The
+  backend log has 0 `WARNING`, `Traceback`, `ERROR`, `🚨` or `Failed to` lines. A clean log proved
+  nothing before the fix either, so `model_name` is the witness.
+- Eval: two runs before (`1e5416c`) and one after, each 91/94 logic, 34/34 recall, with the same
+  failures, 22, 42 and 93. All 94 verdicts match. The filter fired 0 times, because each case is
+  one turn on a new thread (`eval.py:40-42`). `latest_run_metrics.json` stays at 95.74, for the
+  reason under "Rejected — committing 96.8".
+
+**The eval cannot show this fix.** It can only show no harm. `.claude/rules/evals.md` rule 5
+asks for a failing dataset case, and a dataset case is one query, so this bug cannot be one. The
+evidence is the three new tests in `test_core_graph.py`, the probe and the live threads.
+
+**The retrieval-noise hypothesis under "`route_query` runs once per message", tested:** two runs
+on the same commit differ. Rerank documents or their order differ in 4 of 33 lists (37, 45, 66,
+77), and only scores in 3 more (at most 1.67e-06). So noise exists on identical code. The after
+run differs from the before runs by a similar amount (5 of 33 against each). The older
+`eval-after` log also differs from the first of these runs (3 of 33), but its code is pinned only
+from 15:00 and the log is from 14:39. *Why it happens is a hypothesis:* `search.py:104` is
+`list(set(all_queries))`, so query order changes per process, and ties may then resolve
+differently. A run with `PYTHONHASHSEED` fixed would test it. That run was not made.
+
+**Rejected:**
+- *Stop storing the marker.* Recall would need a new channel in `eval.py`, stored threads stay
+  broken, and `chat.py:176` changes.
+- *Store a matching tool call.* Stored threads stay broken, and every follow-up shows the model a
+  fake search with an empty result.
+- *Match only the literal `bypass_tool_call_id`.* It cannot drop a real result by accident, but
+  it leaves any other unmatched tool message to the 400. The general rule keeps real results, and
+  two tests guard that (`test_core_chat.py:65-66`, `test_only_the_unmatched_tool_message_is_dropped`).
+
 ## CI
 
 ### One workflow, two jobs; lint is a counted ratchet, not a pass/fail lint
