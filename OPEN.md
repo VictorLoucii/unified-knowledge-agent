@@ -1798,7 +1798,8 @@ cap at `:481` and `MAX_CHAR_LIMIT` at `:535`, and it sums blocks across every fi
 
 **Measured 2026-11-02 by plain file reads with the regexes at `search.py:111` and `:195`, no model
 call:** 158 ids, 26 over 8000 characters, 13 of those word-like: `yarn` 874,632, `This` 409,294, `in`
-362,365. Numbered ids reach 34,914 (Problem 78).
+362,365. Numbered ids reach 34,914 (Problem 78). Problem 42 is 3,344 here, against 867,755 by the
+regex at `config.py:170` (item 12), so item 12's figure does not carry over to this route.
 
 **The fast path switch widens it.** Today a table hit shields eval case 49 ("...'Ghost' Streaming State
 problem in Phase 4..."), whose text gives the id `in`. Off, that question may send about 362,365
