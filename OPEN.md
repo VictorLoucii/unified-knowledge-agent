@@ -1837,3 +1837,11 @@ is inferred from the model name and the missing tool call.
 **P2 item 12 inherits this:** removing the Problem-N lookup removes the same shield. **The empty reply
 is a second fault:** `conversational_node` sends on what `fast_llm` returns, and nothing handles empty
 text. It looks independent of the switch. Not run on `main`.
+
+## 21. `eval_corpus_growth.py` fails at import (2026-11-03, found on P2 item 9)
+
+**Measured:** importing it with the test harness's fakes raises `ImportError: cannot import name
+'get_data_file_path' from 'backend.core.config'`. `eval_corpus_growth.py:18` imports that name and `:25` calls it;
+`config.py:120` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
+`README.md:53` and `:114` still advertise the script. **Not checked:** when the name went, and what else in the script has
+aged. Not fixed: `backend/evals` was out of scope for that task.
