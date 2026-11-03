@@ -1586,7 +1586,7 @@ The process environment is fixed until a restart, so the running app sees one va
   affected. Two costs, by the owner's decision: `OPEN.md` items 18 and 20.
 - **Refine:** returns the raw text before the rate limit (`app.py:262-265`). No credit is spent, as with
   Cancel. The frontend needs no change.
-- **Weather:** the graph keeps its shape, so the four compile sites do not change. `qa_node` uses a second
+- **Weather:** the graph keeps its shape, so the five compile sites do not change. `qa_node` uses a second
   binding without the tool (`agents.py:20`, `:159`), and a replacing prompt line (`agents.py:153`) is meant to
   stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:187`), which returns an error message
   and shows no panel (`OPEN.md` item 19). A thread paused before the switch went off can still be approved
@@ -1596,7 +1596,7 @@ The process environment is fixed until a restart, so the running app sees one va
 - *Any unknown value means off.* A value that looks like yes (`1`, `True `) would silently lose a visible
   feature.
 - *A guard in `/chat_approve` writing a `ToolMessage`.* It overlaps M5 and touches `app.py` for one case.
-- *Removing the node when off.* It changes four compile sites. What LangGraph does with a checkpoint whose
+- *Removing the node when off.* It changes the compile sites (five, with `test_stream.py:11`). What LangGraph does with a checkpoint whose
   next node is missing was not read.
 - *Skipping the router, or new router wording, for Problem-N when off.* Either adds logic to a feature item
   12 removes, or a second router prompt (owner, 2026-11-02).
@@ -1625,3 +1625,81 @@ override a name already set. A variable set in the shell still applies, for P5's
   tool returns before any request, `openai/gpt-5-mini`. A follow-up on a thread holding an older weather
   call, with the tool not bound: `openai/gpt-5-mini`, so the fallback did not hide a rejection. One sample of each.
   The three logs hold 0 `WARNING`, `Traceback`, `ERROR`, `🚨`, `Failed to` or `Error code` lines.
+
+### What a removal test proves
+
+**Chosen 2026-11-03 (P2 item 9, task `p2-removal-tests`):** each optional feature is really deleted from a
+temporary copy of `backend/`, and the core tests then run on that copy in a new process (`test_removal.py`).
+`conftest.py` applies its import-time fakes there as usual. Nothing edits the working tree.
+
+**It proves,** with the recipe's deletions applied: `backend.app` imports with `setup_database_tables` replaced; a direct
+call of the `chat_stream` function returns the answer; and five test files (`CORE_FILES`, `test_removal.py`) give the same
+case results as on an unedited copy, less the tests the recipe names. Each test keeps its own switch states: most run in
+five, some in two, some have none, and each probe runs in `no_variable` only.
+
+**It does not prove:**
+- That a later removal is safe. A recipe proves the removal it writes down. Each edit must find its text exactly once,
+  so a recipe goes stale loudly when the source moves.
+- Anything about HTTP or FastAPI validation. The route is called as a function with `object()` as its request, with
+  `owns_thread`, `get_ingestion_state` and `check_rate_limit` replaced, `core.graph` in place, and `lifespan` never run.
+- Anything `test_core_switches.py` checks. Its 24 cases never run in a copy: it pins the weather tool, the tool list
+  and the prompt hashes, so it must go for weather and system time, and the other five recipes leave it out to run one set.
+
+**The list, from the 27 inventory rows in `miscellaneous/REVAMP.md` section 12 (owner, 2026-11-03):**
+- *Tested here, 7:* fast-path table, weather with approval, transcript refine, `get_system_time`, query expansion,
+  title generation, latency footer.
+- *Core or keep, 11:* input guardrail, scope router, reranker, masking, output cap, history, `/health` state,
+  general-knowledge fallback, fallback model, Phoenix tracing (blocked in every test run, `conftest.py:97-99`),
+  `retrieval_node`.
+- *Removed already, 2; scheduled, 6:* the semantic cache and triage; Problem-N (item 12), phrase-keyed rewrites (P5),
+  `.docx`, `GET /`, the second compile, the unused imports. A test of code about to go buys nothing.
+- *Frontend only, 1:* pinned threads. `frontend/package.json` has no test runner, so no test can hold it today.
+
+**What each recipe deletes, where the choice was not obvious:**
+- *Weather* is the whole feature: the tool, node, three interrupt lists, `/chat_approve`, `resume_graph_stream`, the
+  interrupt branches, the switch reader and its startup text. Module-only would leave a public spend route with nothing
+  to resume. `WEATHER_OFF_LINE` stays in the prompt, because router RULE 2 still lets a weather question through. This
+  departs from section 12's removal method, step 3 (R20). *Whether a model then avoids an invented figure is a hypothesis:*
+  no model ran.
+- *The table* keeps `route_query`, `fast_path_node` and its switch, because Problem-N shares them until item 12. The two
+  Problem-N tests stay in that run, and its `Send` payload test runs through a Problem-N query. The id the router hands
+  to the marker is unproved there: the one Problem-N query has "Problem 7" in it, so the fallback at `agents.py:96-98` can
+  supply the same id.
+- *`check_fast_path.py`* goes with the table.
+
+**Rejected:**
+- *The env switch.* `all_off` in `conftest.py` already runs it. The code, node and imports all stay.
+- *Patch or `importlib.reload`.* It produces a state no real removal produces, and cannot see a leftover import.
+- *A filtered tool list in a subprocess.* It fits tools only.
+- *Fewer switch states per run.* Two states saved 1.5 s a run and `-k` dropped each test with no state id (69 of 176 ran).
+- *Running the copies at once, or leaving them out locally.* The owner took about a minute, one at a time.
+
+**The import check** (`test_import_check.py`) reads source: a runtime check sees only imports that ran. It covers
+`backend/` and the four tracked root scripts by name. A glob would differ between this Mac and CI. Each exception names a
+file and a target, with its reason, and one nothing needs fails the test. A test also checks each `interrupt_before` name
+against `workflow.nodes` at the five compile sites, because a stale name at `app.py:73` fails only at startup.
+
+**Uncovered, so no reader takes these tests as proof of more:**
+- Names that go quiet rather than fail: `chat.py:225`, `:237`, `:268`, `:344`, `:356`, `:387`. `chat.py`'s `Expansion_LLM`
+  filter likewise.
+- Router RULE 2, and the prompt's "weather or technical query" wording.
+- The frontend: approval panel, microphone, footer display. What the mic does on a 404 from `/refine_transcript` was not run.
+- Real Postgres (`FkMemorySaver` stands in), eval scores, and answer quality with a real model.
+- `test_stream.py:15` and `probe_tool_calling.py:41`, `:48`, which hold names as text; `eval.py:18-19`, which sets the
+  switches by name; stored answers that name a tool.
+- Attribute access after a package import, or a feature's name as text, in a function no test calls. `exec`, `eval` and
+  `runpy`, which nothing in `backend/` calls today.
+- A recipe's list of tests that go with its feature: a name wrongly on it hides that test. The list is read, not measured.
+  Stale names fail; extra names do not.
+
+**Measured 2026-11-03,** sandbox, offline, wall clock by `time`: 236 passed, 5 xfailed, 68.40 s, up from 195 and 5 and 9.44 s.
+pytest's own timer gives 62.76 s against 2.57 s. Without `test_removal.py` the suite takes 7.20 s, so its 8 subprocess runs
+take nearly all of it. 41 cases added: 8 removal, 23 import check and compile sites, 10 route. CI minutes: see
+`.claude/check-baseline.md`.
+45 of 45 planted faults were caught on the final code, 16 of them a dependency on a feature planted in core or `app.py`. The rest
+break the routes, the detector or a recipe itself. The map is in the gate 2 report of that task, not in this repository.
+The total does not show the set is complete. The executor session chose the set; the advisor session named the `app.py`
+case, and a code review named six. A first map missed 2 of 37: one fault broke the copy before any test ran, and one
+exposed a redundant branch in the check, since removed. A later map missed 1 of 45: a core case failing on both sides
+matched the unedited run, so the removal test now also fails on any failed case. Considered and not run: the attribute-access and uncalled-function
+cases above, which are known misses, and a test wrongly listed as going with a feature.
