@@ -11,6 +11,7 @@ import re
 from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block, weather_tool_enabled
 from backend.core.tools import tools
 from backend.core.semantic_router import route_query
+from backend.core.skip_counter import count_skip
 
 llm_with_tools = llm.bind_tools(tools)
 
@@ -67,7 +68,7 @@ async def route_input_node(state: State) -> str | Send:
         if "CONVERSATIONAL" in response_text:
             return "conversational_node"
     except Exception as e:
-        # Do not swallow this. fast_llm has no fallback — config.py:77 wraps
+        # Do not swallow this. fast_llm has no fallback — config.py:80 wraps
         # only primary_llm — so a rate limit or timeout lands here, and the
         # fall-through below skips the OUT_OF_SCOPE and CONVERSATIONAL branches
         # above. The refusal that DECISIONS.md records under "OUT_OF_SCOPE takes
@@ -82,6 +83,7 @@ async def route_input_node(state: State) -> str | Send:
             "OUT_OF_SCOPE and CONVERSATIONAL routing are NOT applied to this "
             f"query. Cause: {e}"
         )
+        count_skip("request_skips")
 
     return "retrieval_node"
 

@@ -19,6 +19,7 @@ import re
 import subprocess
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from backend.core.config import retriever, store, parent_splitter, get_data_file_paths
+from backend.core.skip_counter import count_skip
 
 def get_manifest_path() -> str:
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -65,12 +66,14 @@ def _run_ingestion() -> str:
             print("✅ Vector Database & DocStore populated.")
     except Exception as e:
         print(f"⚠️ Error checking docstore: {e}")
+        count_skip("startup_faults")
 
     # 2. Resolve exact paths
     try:
         data_files = get_data_file_paths()
     except FileNotFoundError as e:
         print(f"🚨 ERROR: {e}")
+        count_skip("startup_faults")
         return "failed"
 
     processed_data_files = set()
@@ -93,10 +96,13 @@ def _run_ingestion() -> str:
                     processed_data_files.add(md_file)
                 else:
                     print(f"⚠️ [WARNING] Conversion failed or produced empty file for {data_file}. Skipping.")
+                    count_skip("startup_faults")
             except subprocess.CalledProcessError as e:
                 print(f"⚠️ [WARNING] Pandoc failed for {data_file}:\n{e.stderr}\nSkipping.")
+                count_skip("startup_faults")
             except Exception as e:
                 print(f"⚠️ [WARNING] Unexpected error converting {data_file}: {e}\nSkipping.")
+                count_skip("startup_faults")
         else:
             processed_data_files.add(data_file)
 
@@ -211,3 +217,4 @@ def initialize_rag():
     except Exception as e:
         _ingestion_state = "failed"
         print(f"🚨 Auto-Ingestion failed: {e}")
+        count_skip("startup_faults")

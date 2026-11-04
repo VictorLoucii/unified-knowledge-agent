@@ -3,6 +3,7 @@ import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
 from backend.core.config import retriever, get_data_file_paths
+from backend.core.skip_counter import count_skip
 _reranker = None
 
 def get_reranker():
@@ -75,6 +76,7 @@ async def search_knowledge_base(query: str) -> str:
             search_variants = response.content.split("\n")
         except Exception as e:
             print(f"🚨 [ERROR] expansion_llm.invoke failed: {e}")
+            count_skip("request_skips")
             import traceback
             traceback.print_exc()
             search_variants = []
@@ -151,6 +153,7 @@ async def search_knowledge_base(query: str) -> str:
                     )
         except Exception as e:
             print(f"⚠️ [WARNING] Ordinal interceptor failed: {e}")
+            count_skip("request_skips")
 
     # ==========================================
     # 1.5. CAPABILITIES INTERCEPTOR
@@ -213,6 +216,7 @@ async def search_knowledge_base(query: str) -> str:
                             direct_problem_blocks.append(f"{block}\n")
         except Exception as e:
             print(f"🚨 [ERROR] Raw Interceptor execution failed: {e}")
+            count_skip("request_skips")
 
     # ==========================================
     # 3. SHORT-CIRCUIT THE VECTOR SEARCH
@@ -495,6 +499,7 @@ async def search_knowledge_base(query: str) -> str:
                 escalated_text = "\n\n".join(escalated_blocks)
         except Exception as e:
             print(f"⚠️ [WARNING] Auto-Escalation failed: {e}")
+            count_skip("request_skips")
 
     def format_doc_for_llm(doc):
         headers = []

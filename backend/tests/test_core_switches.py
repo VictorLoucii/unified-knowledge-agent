@@ -105,7 +105,7 @@ def weather_requests(monkeypatch):
 
 @pytest.fixture
 def app_module(monkeypatch):
-    """backend.app opens Postgres at import (app.py:56), so that one call is replaced first."""
+    """backend.app opens Postgres at import (app.py:57), so that one call is replaced first."""
     monkeypatch.setattr(memory, "setup_database_tables", lambda: None)
     import backend.app
 

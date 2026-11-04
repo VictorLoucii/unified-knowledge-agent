@@ -11,10 +11,12 @@ even when app code swallows the error. Sockets opened inside native code (for
 example a C extension's own client) are not seen by these guards.
 """
 import asyncio
+import builtins
 import contextlib
 import itertools
 import json
 import os
+import re
 import socket
 import sys
 from types import ModuleType, SimpleNamespace
@@ -77,7 +79,28 @@ def _audit_dotenv_opens(event, args):
 sys.addaudithook(_audit_dotenv_opens)
 
 # ------------------------------------------------------------------
-# 3. Import-time fakes for config.py (config.py:14, :23-44, :89-99)
+# 2c. Skip-line recorder: every marker line any code prints, from any task
+#     or thread, and whatever captures the output. Installed before any
+#     backend module loads, so lines printed at import are kept too.
+# ------------------------------------------------------------------
+from backend.core.skip_counter import skip_report  # noqa: E402
+
+SKIP_MARKERS = re.compile(r"\[WARNING\]|\[ERROR\]|🚨|⚠|❌")
+SKIP_LINES: list = []
+_real_print = builtins.print
+
+
+def _recording_print(*args, **kwargs):
+    text = (kwargs.get("sep") or " ").join(str(arg) for arg in args)
+    if SKIP_MARKERS.search(text):
+        SKIP_LINES.append(text)
+    return _real_print(*args, **kwargs)
+
+
+builtins.print = _recording_print
+
+# ------------------------------------------------------------------
+# 3. Import-time fakes for config.py (config.py:15, :24-45, :91-101)
 # ------------------------------------------------------------------
 DOTENV_CALLS: list = []
 
@@ -85,7 +108,7 @@ import dotenv  # noqa: E402
 
 
 def _no_dotenv(*args, **kwargs):
-    """Replaces load_dotenv so config.py:14 never opens a .env file."""
+    """Replaces load_dotenv so config.py:15 never opens a .env file."""
     DOTENV_CALLS.append((args, kwargs))
     return False
 
@@ -141,6 +164,9 @@ from backend.core.tools import search  # noqa: E402
 assert DOTENV_CALLS, "config.py did not call the replaced load_dotenv; the .env guard is not in effect"
 assert not DOTENV_OPENS, f".env opened while importing the backend: {DOTENV_OPENS}"
 assert not NETWORK_ATTEMPTS, f"network calls attempted while importing the backend: {NETWORK_ATTEMPTS}"
+
+IMPORT_SKIP_LINES = tuple(SKIP_LINES)
+COUNTS_AFTER_IMPORT = skip_report()
 
 # ------------------------------------------------------------------
 # 4. Fakes injected per test
@@ -343,6 +369,42 @@ def offline_only():
     assert not DOTENV_OPENS, f".env opened: {DOTENV_OPENS}"
 
 
+def silent_skip_problems(lines, rise, expected_lines=(), expected_rise=None):
+    """What a test printed or counted and did not name, and what it named that never happened.
+
+    An expected line matches a printed line that starts with it. A line is a marker
+    line; a rise is each kind's count after the test less its count before.
+    """
+    expected_rise = expected_rise or {}
+    problems = [f"unexpected skip line: {line!r}" for line in lines if not any(line.startswith(e) for e in expected_lines)]
+    problems += [f"expected skip line never printed: {e!r}" for e in expected_lines if not any(line.startswith(e) for line in lines)]
+    problems += [
+        f"{kind} rose by {rise.get(kind, 0)}, expected {expected_rise.get(kind, 0)}"
+        for kind in sorted({*rise, *expected_rise})
+        if rise.get(kind, 0) != expected_rise.get(kind, 0)
+    ]
+    return problems
+
+
+@pytest.fixture(autouse=True)
+def no_silent_skips(request):
+    """Fails a test that printed a skip line or raised a skip count it did not name.
+
+    A test names what it expects with @pytest.mark.expected_skips(lines=[...], <kind>=<rise>).
+    See DECISIONS.md, "What counts as a skip, and what the count does not show".
+    """
+    SKIP_LINES.clear()
+    before = skip_report()
+    yield
+    after = skip_report()
+    rise = {kind: after[kind] - before[kind] for kind in after if kind != "seconds_since_start"}
+    marker = request.node.get_closest_marker("expected_skips")
+    named = dict(marker.kwargs) if marker else {}
+    expected_lines = named.pop("lines", ())
+    problems = silent_skip_problems(SKIP_LINES, rise, expected_lines, named)
+    assert not problems, "\n".join(problems)
+
+
 def _only_on(on_name=None):
     return {name: "true" if name == on_name else "false" for name in SWITCH_NAMES}
 
@@ -359,6 +421,7 @@ SWITCH_STATES = {
 
 def pytest_configure(config):
     config.addinivalue_line("markers", "switch_states(*names): runs only in the named states of SWITCH_STATES")
+    config.addinivalue_line("markers", "expected_skips(lines=[...], <kind>=<rise>): the skip lines and count rises this test causes on purpose")
 
 
 def pytest_generate_tests(metafunc):
@@ -450,7 +513,7 @@ def core(monkeypatch, switch_state):
     ns.set_qa = set_qa
     ns.set_fast_replies = set_fast_replies
     ns.use_real_registry = use_real_registry
-    # Same compile as app.py:73, with FkMemorySaver in place of AsyncPostgresSaver.
+    # Same compile as app.py:74, with FkMemorySaver in place of AsyncPostgresSaver.
     ns.graph = agents.workflow.compile(checkpointer=FkMemorySaver(registry), interrupt_before=["sensitive_tools"])
     yield ns
     # A test that failed before run_chat drained its title task leaves it here; never carry it over

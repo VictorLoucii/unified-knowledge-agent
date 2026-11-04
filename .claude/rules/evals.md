@@ -16,8 +16,8 @@ tools or the retrieval pipeline. Carried over from
 uv run python -m backend.evals.eval --concurrency 1
 ```
 
-- **Never set `MODEL_NAME`.** Three places read it: `config.py:49` (agent,
-  default `openai/gpt-5-mini`), `search.py:16` (query expansion,
+- **Never set `MODEL_NAME`.** Three places read it: `config.py:51` (agent,
+  default `openai/gpt-5-mini`), `search.py:17` (query expansion,
   `google/gemini-3.5-flash-lite`) and `eval.py:71` (judge,
   `deepseek/deepseek-chat`). Setting it also swaps the judge, which invalidates
   every cached judgment and makes the run far more expensive. A model migration

@@ -4,6 +4,7 @@ import json
 from langchain_core.tools import tool
 from langchain_text_splitters import MarkdownHeaderTextSplitter
 from backend.core.config import get_data_file_paths
+from backend.core.skip_counter import count_skip
 
 @tool
 def get_internship_stats() -> str:
@@ -49,4 +50,6 @@ def get_internship_stats() -> str:
             "total_knowledge_files_scanned": total_files
         })
     except Exception as e:
+        print(f"⚠️ [WARNING] get_internship_stats failed: {e}")
+        count_skip("request_skips")
         return json.dumps({"error": f"Could not determine stats: {e}"})

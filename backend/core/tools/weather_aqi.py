@@ -3,6 +3,7 @@ import requests
 from langchain_core.tools import tool
 
 from backend.core.config import weather_tool_enabled
+from backend.core.skip_counter import count_skip
 
 WEATHER_OFF_RESULT = "Live weather and air quality data is not available."
 
@@ -78,4 +79,6 @@ def get_weather_and_aqi(location: str) -> str:
         return f"Location: {name}\nWeather: {temp}°C, Wind Speed: {windspeed} km/h\n{aqi_info}"
         
     except Exception as e:
+        print(f"⚠️ [WARNING] get_weather_and_aqi failed: {e}")
+        count_skip("request_skips")
         return f"An error occurred while fetching weather and AQI: {str(e)}"

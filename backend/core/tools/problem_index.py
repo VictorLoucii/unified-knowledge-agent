@@ -1,6 +1,7 @@
 import os
 import re
 from langchain_core.tools import tool
+from backend.core.skip_counter import count_skip
 
 @tool
 def get_problem_index(start: int = 1, end: int = 25) -> str:
@@ -24,6 +25,8 @@ def get_problem_index(start: int = 1, end: int = 25) -> str:
         DATA_FILE = os.path.join(ROOT_DIR, "data", "NEXTIER_Internship_Bugs.md")
 
         if not os.path.exists(DATA_FILE):
+            print("⚠️ [WARNING] get_problem_index found no data file.")
+            count_skip("request_skips")
             return "Error: Internship database file not found."
 
         with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -104,4 +107,5 @@ def get_problem_index(start: int = 1, end: int = 25) -> str:
 
     except Exception as e:
         print(f"🚨 [ERROR] get_problem_index crashed: {e}")
+        count_skip("request_skips")
         return f"Error extracting titles: {e}"

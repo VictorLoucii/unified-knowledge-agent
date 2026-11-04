@@ -11,6 +11,7 @@ from backend.core.guardrails import (
     get_last_tool_output_length,
 )
 from backend.memory import register_thread, start_title_generation
+from backend.core.skip_counter import count_skip
 import time
 
 
@@ -87,6 +88,7 @@ def _error_events(e: Exception, user_message: str, start_time: float) -> list[st
     import traceback
 
     print("🚨 Backend Crash Details:")
+    count_skip("failed_requests")
     traceback.print_exc()
 
     print(f"🚨 Raw Error: {repr(e)}")
@@ -397,6 +399,7 @@ async def resume_graph_stream(thread_id: str, graph):
     except Exception as e:
         import traceback
         print("🚨 resume_graph_stream Crash Details:")
+        count_skip("failed_requests")
         traceback.print_exc()
         if is_credit_limit_refusal(e):
             print("🔧 [__DEV__] resume_graph_stream | is_credit_limit_refusal matched (403, scope key_limit) | Response: demo paused line")

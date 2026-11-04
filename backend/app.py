@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from pydantic import BaseModel, Field
 import asyncio
 
-# OpenTelemetry & Phoenix tracing is set up in ONE place: config.py:23-44.
+# OpenTelemetry & Phoenix tracing is set up in ONE place: config.py:24-45.
 #
 # Do not add a second setup here. This file previously built its own
 # TracerProvider with a SimpleSpanProcessor exporting to
@@ -26,6 +26,7 @@ import asyncio
 from backend.core.ingest import initialize_rag, get_ingestion_state
 from backend.core.chat import generate_chat_responses, resume_graph_stream
 from backend.core.rate_limit import check_rate_limit
+from backend.core.skip_counter import count_skip, skip_report
 
 from backend.memory import (
     DB_URI,
@@ -144,7 +145,7 @@ async def health_check(request: Request):
     """
     ingestion_state = get_ingestion_state()
     database = await check_database()
-    return {
+    health = {
         "status": "online",
         "version": "6.7-p1-task-b",  # <--- CHANGE THIS ON EVERY PUSH
         "rag_hydrated": ingestion_state == "done",  # see DECISIONS.md, "rag_hydrated means ingestion finished"
@@ -152,6 +153,12 @@ async def health_check(request: Request):
         "database": database,
         "provider": "Hugging Face Spaces",
     }
+    # Numbers only, and /health answers without them: see DECISIONS.md, "What counts as a skip".
+    try:
+        health["skips"] = skip_report()
+    except Exception as e:
+        print(f"🚨 /health skip count failed: {type(e).__name__}")
+    return health
 
 
 # ==========================================
@@ -227,6 +234,7 @@ async def chat_stream(request: ChatRequest, http_request: Request, x_browser_id:
             return thread_not_found()
     except Exception as e:
         print(f"🚨 Ownership check error: {e}")
+        count_skip("failed_requests")
         return JSONResponse(status_code=503, content={"error": "Internal error"})
 
     ingestion_state = get_ingestion_state()
@@ -277,6 +285,7 @@ async def refine_transcript(request: RefineRequest, http_request: Request):
         return {"refined_transcript": response.content.strip()}
     except Exception as e:
         print(f"🚨 Error refining transcript: {e}")
+        count_skip("request_skips")
         return {"refined_transcript": request.transcript} # Fallback to original
 
 
@@ -304,6 +313,7 @@ async def chat_approve(request: ActionRequest, http_request: Request, x_browser_
             return thread_not_found()
     except Exception as e:
         print(f"🚨 Ownership check error: {e}")
+        count_skip("failed_requests")
         return JSONResponse(status_code=503, content={"error": "Internal error"})
 
     if request.approve:
@@ -344,6 +354,7 @@ async def get_all_threads(limit: int = 20, offset: int = 0, x_browser_id: str | 
         return {"threads": threads, "has_more": has_more}
     except Exception as e:
         print(f"🚨 Error fetching threads: {e}")
+        count_skip("failed_requests")
         return {"error": "Internal error", "threads": [], "has_more": False}
 
 
@@ -379,6 +390,7 @@ async def get_thread_history(thread_id: str, x_browser_id: str | None = Header(d
         return {"messages": formatted_messages}
     except Exception as e:
         print(f"🚨 Error fetching thread state: {e}")
+        count_skip("failed_requests")
         return {"error": "Internal error", "messages": []}
 
 
@@ -395,6 +407,7 @@ async def delete_thread(thread_id: str, x_browser_id: str | None = Header(defaul
         return {"status": "success"}
     except Exception as e:
         print(f"🚨 Delete Error: {e}")
+        count_skip("failed_requests")
         return {"error": "Internal error"}
 
 

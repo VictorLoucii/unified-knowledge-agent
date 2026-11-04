@@ -1,4 +1,4 @@
-"""Compare the scope router's verdict (agents.py:55-67 prompt) across models.
+"""Compare the scope router's verdict (agents.py:56-68 prompt) across models.
 
 Run from the repo root:
     uv run python -m backend.evals.router_compare
@@ -7,7 +7,7 @@ loads it. 13 short live calls per model.
 
 2026-08-22 result: gemini-3.5-flash-lite answered OUT_OF_SCOPE for 46, 58, 59,
 60, 93 and CONVERSATIONAL for 42; 2.5 Flash and 3.6 Flash answered IN_SCOPE on
-all six. That is why fast_llm is not Lite (config.py:70).
+all six. That is why fast_llm is not Lite (config.py:72).
 """
 import asyncio
 import json

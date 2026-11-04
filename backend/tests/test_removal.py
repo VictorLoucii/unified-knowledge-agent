@@ -387,6 +387,7 @@ def remove_latency_footer(root):
 
 
 LATENCY_FOOTER_PROBE = '''
+@pytest.mark.expected_skips(lines=["🚨 resume_graph_stream Crash Details:"], failed_requests=1)
 def test_probe(core, routes):
     core.set_qa(rag_script(QUESTION, ANSWER))
     chunks = call_chat_stream(routes)

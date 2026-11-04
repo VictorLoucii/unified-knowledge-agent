@@ -55,6 +55,7 @@ def test_new_thread_is_registered_and_gets_the_model_title(core):
     assert [m.type for m in checkpoint_messages(core.graph)] == ["human", "ai", "tool", "ai"]
 
 
+@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Failed to generate title from LLM: fake provider outage"], request_skips=1)
 def test_failing_title_model_keeps_the_fallback_title_and_the_answer(core, capsys):
     """Steps: registry, title fails inside generate_title_from_llm, answer, stream."""
     core.use_real_registry(FailingModel())
@@ -70,6 +71,7 @@ def test_failing_title_model_keeps_the_fallback_title_and_the_answer(core, capsy
     assert [m.type for m in checkpoint_messages(core.graph)] == ["human", "ai", "tool", "ai"]
 
 
+@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Background title update failed: fake title failure"], request_skips=1)
 def test_raising_title_function_does_not_fail_the_turn(core, monkeypatch, capsys):
     """Steps: registry, title raises past generate_title_from_llm, answer, stream."""
     core.use_real_registry(FailingModel())
@@ -89,6 +91,7 @@ def test_raising_title_function_does_not_fail_the_turn(core, monkeypatch, capsys
     assert [m.type for m in checkpoint_messages(core.graph)] == ["human", "ai", "tool", "ai"]
 
 
+@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Background title update could not start: fake scheduling failure"], request_skips=1)
 def test_title_task_that_cannot_start_does_not_fail_the_turn(core, monkeypatch, capsys):
     """Steps: registry, scheduling the title task raises, answer, stream."""
     title_model = TitleModel("Reranker Context")

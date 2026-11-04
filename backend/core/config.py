@@ -7,6 +7,7 @@ from langchain_chroma import Chroma
 from langchain_classic.storage import LocalFileStore, create_kv_docstore
 from langchain_classic.retrievers import ParentDocumentRetriever
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from backend.core.skip_counter import count_skip
 
 # ==========================================
 # 1. ENVIRONMENT & LLM SETUP
@@ -42,6 +43,7 @@ try:
     print("✅ Arize Phoenix tracing successfully initialized.")
 except Exception as e:
     print(f"⚠️ [WARNING] Failed to initialize Phoenix tracing: {e}")
+    count_skip("startup_faults")
 
 is_eval_mode = os.getenv("EVAL_MODE", "false").lower() == "true"
 
@@ -134,6 +136,7 @@ def get_data_file_paths() -> list[str]:
             
     if not target_data_dir:
         print("⚠️ [WARNING] Could not find the 'data' directory.")
+        count_skip("startup_faults")
         return []
 
     data_paths = []
@@ -143,6 +146,7 @@ def get_data_file_paths() -> list[str]:
             
     if not data_paths:
         print(f"⚠️ [WARNING] No .md or .docx files found in {target_data_dir}.")
+        count_skip("startup_faults")
         
     return data_paths
 
@@ -193,6 +197,7 @@ def extract_problem_block(problem_id: str) -> str | None:
                     return f"{block}\n\n<END OF PROBLEM>"
     except Exception as e:
         print(f"🚨 [ERROR] extract_problem_block failed: {e}")
+        count_skip("request_skips")
     return None
 
 

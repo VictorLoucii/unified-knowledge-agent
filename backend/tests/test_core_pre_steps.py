@@ -7,6 +7,7 @@ optional triage step was removed 2026-10-30 (P2 item 6).
 """
 import asyncio
 
+import pytest
 from langchain_core.messages import AIMessage
 from langchain_core.vectorstores import InMemoryVectorStore
 
@@ -160,6 +161,7 @@ def test_save_step_handles_a_thread_another_browser_owns(core):
     assert core.title_calls == []
 
 
+@pytest.mark.expected_skips(lines=["🚨 Backend Crash Details:", "🚨 Raw Error: ConnectionError('fake database outage')"], failed_requests=1)
 def test_failed_save_ends_the_turn_with_the_error_event(core, monkeypatch):
     """A save failure must not pass on: later steps would checkpoint with no row, after model calls."""
     async def failing_register_thread(async_pool, thread_id, user_message, owner_id):
@@ -176,6 +178,7 @@ def test_failed_save_ends_the_turn_with_the_error_event(core, monkeypatch):
     assert core.fast_llm.calls == 0
 
 
+@pytest.mark.expected_skips(lines=["🚨 Backend Crash Details:", "🚨 Raw Error: RuntimeError('fake guardrail bug')"], failed_requests=1)
 def test_guardrail_that_raises_ends_the_turn_with_the_error_event(core, monkeypatch):
     """A core step fails closed: an unchecked message never passes on to the save or the models."""
     def broken_guardrail(message):

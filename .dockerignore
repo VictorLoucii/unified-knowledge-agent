@@ -9,14 +9,14 @@
 # NOT excluded on purpose: backend/chroma_db/ and backend/docstore/. The
 # Dockerfile's `COPY backend/ ./backend/` is what gives a LOCAL build its
 # vector index, because the working tree also holds data/.manifest.json and
-# ingestion returns early when every file is already listed (ingest.py:91).
+# ingestion returns early when every file is already listed (ingest.py:115).
 # Excluding them would leave a local container with an empty index.
 #
 # The HuggingFace Space is a different case and does not rely on any of this.
 # It builds from a git clone, and .gitignore excludes the index directories
 # and (since 2026-08-18) data/.manifest.json too. The Space therefore starts
-# with no manifest, ingest.py:32 returns an empty one, and the container
-# ingests all 26 files in the background thread at app.py:78.
+# with no manifest, ingest.py:33 returns an empty one, and the container
+# ingests all 26 files in the background thread at app.py:79.
 
 # Virtual environment. The image builds its own with `uv sync`.
 .venv/

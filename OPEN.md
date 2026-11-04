@@ -11,7 +11,7 @@ Decisions already taken are in [DECISIONS.md](DECISIONS.md).
 ## 1. Index 83 — 'Community Type' — FIXED 2026-08-20
 
 **Status: fixed and measured.** The fix is the generalised verbatim directive at
-`search.py:38-44`. Recall went from 33/34 to **34/34** and the AI Logic score
+`search.py:39-45`. Recall went from 33/34 to **34/34** and the AI Logic score
 held at 90/94, so the change gained a point without costing one.
 
 This item is kept at length, and not deleted, because **the diagnosis was wrong
@@ -43,7 +43,7 @@ This item previously stated, as established fact:
 > highly can be discarded before it is ever scored.
 
 *(That quotation is left exactly as it was written. Its line numbers were
-correct when it was written and are now `:390` and `:410`; correcting numbers
+correct when it was written and are now `:394` and `:414`; correcting numbers
 inside a quotation would make the quotation false.)*
 
 **Refuted twice over.** In the failing case the document is not in the pool to
@@ -64,7 +64,7 @@ this produced: a record's evidence must sit at the same level as its claim.
 **2. The replacement theory was weakened by measuring the tool argument.**
 
 The replacement theory was that the tool's docstring is keyword-shaped —
-`search.py:32-34` describes it as being for "specific topics, keywords, errors,
+`search.py:33-35` describes it as being for "specific topics, keywords, errors,
 code logic, or existence checks" — and that the model fills the gap by
 shortening. It was labelled `inferred`.
 
@@ -95,7 +95,7 @@ its own; a directive overrides it.
 **3. The fix works, and its mechanism is still a hypothesis.**
 
   before  argument 21 chars, `RETRIEVED_PROBLEM_IDS: []`, answered from general
-          knowledge via the disclaimer at `agents.py:152`
+          knowledge via the disclaimer at `agents.py:154`
   after   argument 76 chars and verbatim, `RETRIEVED_PROBLEM_IDS: ['12', '4',
           'Statement']`, answer built from retrieval
 
@@ -141,7 +141,7 @@ judge, for 37 specifically, on the evidence above.
 
 ### Rejected, and recorded so it is not reached for again
 
-`search.py:86-93` already hardcodes two query injections for queries that expand
+`search.py:88-95` already hardcodes two query injections for queries that expand
 badly. A third for Community Type would have passed index 83 and would have
 matched precedent. It would have moved the score without improving the pipeline,
 which is the failure the score warning in `.claude/rules/evals.md` exists to prevent.
@@ -154,7 +154,7 @@ which is the failure the score warning in `.claude/rules/evals.md` exists to pre
   **The seven passing recall targets were never probed.** They were not needed —
   recall rose, so there was no lost point to attribute — but if a future change
   drops one, their pre-change arguments are still measurable at any commit.
-- The pool-ordering defect at `search.py:390` is untouched and still real: the
+- The pool-ordering defect at `search.py:394` is untouched and still real: the
   pool is 97 and the cap is 50, so roughly half the candidates are discarded by
   `calculate_relevance_score`, a hand-written keyword scorer, before the
   cross-encoder scores anything. Whether widening it helps is **unknown**. A
@@ -207,10 +207,10 @@ weights already on disk. Treat that as a floor, not a forecast.
 **The deployed Space pays roughly twelve times that. Measured 2026-08-19:**
 17,958 children in **about twenty minutes**, against 97 seconds locally — about
 **15 chunks per second in the container, against about 185 on the Mac.** The
-Space pays it on every container start, in the background thread at `app.py:78`,
+Space pays it on every container start, in the background thread at `app.py:79`,
 so it never blocks the port bind. **It is not brief.** See item 4.
 
-**The likely cause, read:** `config.py:89` is
+**The likely cause, read:** `config.py:91` is
 `HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")` with **no device pinned**,
 so the library selects the device. The Mac has one to select and the container
 does not. *That the library picks the Mac GPU was general knowledge and
@@ -218,8 +218,8 @@ unverified until 2026-08-22, when an eval run at `--concurrency 10` segfaulted
 inside PyTorch's MPS backend on a thread named `metal gpu stream` — see item 8.
 The device is now established; the 12x figure's cause is still inferred.*
 
-**Corroboration that the log describes this code.** `ingest.py:124` loops per
-file and `ingest.py:183-187` batches within each file at `BATCH_SIZE = 100`.
+**Corroboration that the log describes this code.** `ingest.py:130` loops per
+file and `ingest.py:189-193` batches within each file at `BATCH_SIZE = 100`.
 17,958 children over 26 files, each file rounding up, gives between 180 and 205
 batches. The log's 194 sits inside that range.
 
@@ -297,10 +297,10 @@ only for the small residue below. The decision and the full mechanism are in
 [DECISIONS.md](DECISIONS.md), "The Space ingests at startup".
 
 `data/.manifest.json` is no longer tracked, so the Space's clone arrives without
-one, `ingest.py:32` returns an empty manifest, and the container ingests all 26
-files in the background thread at `app.py:78`.
+one, `ingest.py:33` returns an empty manifest, and the container ingests all 26
+files in the background thread at `app.py:79`.
 
-**How it was confirmed, at zero OpenRouter cost.** `app.py:139-154` exposes
+**How it was confirmed, at zero OpenRouter cost.** `app.py:140-155` exposes
 `/health`, which reports `rag_hydrated` by testing whether the docstore holds
 any key (`app.py:112`). An empty docstore was the entire bug, so this flag was
 `false` before.
@@ -320,7 +320,7 @@ those keys.
 **Two of the three unknowns are now answered.** The models *do* resolve inside
 the Space — ingestion cannot embed without `all-MiniLM-L6-v2`, and the store is
 populated. The startup penalty *does not* break anything — the app reported
-`online` while ingestion ran, which is what `app.py:76-78` was built for.
+`online` while ingestion ran, which is what `app.py:77-79` was built for.
 
 ### Residue
 
@@ -357,7 +357,7 @@ files eventually load. This one is about the window before they do.
 
 Read, three lines:
 
-1. `app.py:78` fires ingestion with
+1. `app.py:79` fires ingestion with
    `asyncio.create_task(asyncio.to_thread(initialize_rag))`. **Nothing awaits
    it.**
 2. `app.py:112` computed `rag_hydrated` as `next(store.yield_keys(), None)`,
@@ -390,7 +390,7 @@ key, `ingestion_state`, so the two questions stop sharing one answer:
 
 | Key | Question it answers | How |
 |---|---|---|
-| `rag_hydrated` | has loading **finished** (since 2026-10-28) | `ingestion_state == "done"`, `app.py:150` |
+| `rag_hydrated` | has loading **finished** (since 2026-10-28) | `ingestion_state == "done"`, `app.py:151` |
 | `ingestion_state` | has loading **finished** | module state in `ingest.py`, read through `get_ingestion_state()` |
 
 On 2026-08-21 `rag_hydrated` kept its former meaning, "is **anything**
@@ -420,7 +420,7 @@ an `asyncio` Task that nothing retrieves.
 ```
 
 The startup log printed `✅ Vector Database & DocStore up to date. Proceeding
-with existing index.`, which is the early-return path at `ingest.py:109-111`, so
+with existing index.`, which is the early-return path at `ingest.py:115-117`, so
 that branch is the one the observed `done` came from. All four values were then
 driven directly and each was observed, including `not_started` at import time.
 
@@ -513,8 +513,8 @@ above closes coverage by counting log lines, and that is still the only way.
   so it was deliberately skipped.
 
 **One latent trap this route introduces.** If a `.docx` is ever added to
-`data/`, the container will try to convert it with pandoc (`ingest.py:84`),
-which is **not installed in the image**. `ingest.py:98-99` catches the error and
+`data/`, the container will try to convert it with pandoc (`ingest.py:87`),
+which is **not installed in the image**. `ingest.py:103-104` catches the error and
 skips the file, so it degrades rather than crashes, but that document would
 silently never be ingested in the Space. There are no `.docx` files in `data/`
 today — checked 2026-08-18, count zero, none tracked.
@@ -573,12 +573,12 @@ Read from source:
 
 | Path | Reads what | After a `data/` edit |
 |---|---|---|
-| `config.py:163-166` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
-| The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:32` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
+| `config.py:167-170` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
+| The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:33` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
 **The permanently stale path wins when a table key matches, and only then.**
-`agents.py:43-53` calls `route_query` first and sends `fast_path_node` the result on a
+`agents.py:44-54` calls `route_query` first and sends `fast_path_node` the result on a
 hit, before any model call, and `semantic_router.py:14` matches the key as a
 *substring* of the user's query.
 **Taken from DECISIONS.md, not source:** that ordering is deliberate, recorded
@@ -592,7 +592,7 @@ and serves the live block. So the same problem reaches a user by two paths, and
 which one answers depends on how the question was phrased.
 
 **Measured 2026-08-22, `route_query` awaited directly, no model call** — the
-router itself never calls a model, the classifier does, at `agents.py:56`. "Can
+router itself never calls a model, the classifier does, at `agents.py:57`. "Can
 you provide the complete details and code for Problem 14?" is a table key and
 returns the stored string, whose first line is `**# Problem 1**4`. "Tell me
 about Problem 14 please" matches no table key, falls through to
@@ -612,7 +612,7 @@ the `<END OF PROBLEM>` marker. 27 entries are short answers with
 `target_id: None`.
 
 **`target_id` is a recall label before it is a copy claim.** When it is truthy,
-`agents.py:101-107` synthesises the `ToolMessage` that `eval.py:51-59` scrapes and
+`agents.py:103-109` synthesises the `ToolMessage` that `eval.py:51-59` scrapes and
 `eval.py:147-151` scores for Recall@k. That is why five entries carry one and
 are still not copies, and why a byte-for-byte check of all 26 would measure them
 against something they never claimed to equal.
@@ -621,7 +621,7 @@ against something they never claimed to equal.
 
 1. **An edit to `data/` that is committed and pushed reaches the deployed
    Space with no manual rebuild.** That makes fixing the stale document far
-   smaller than it first appears. Confidence HIGH — `ingest.py:32` read, plus
+   smaller than it first appears. Confidence HIGH — `ingest.py:33` read, plus
    two observed startups.
 2. **But check the fast-path table first.** If a table key matches the query a
    reader would ask, the edit never surfaces, on any host, ever. Nothing in the
@@ -647,7 +647,7 @@ against something they never claimed to equal.
    live block, and exited 1 on that last entry alone.
 
    **Its verdict can become machine-dependent, and it is not today.**
-   `config.py:140` iterates `os.listdir` with no `sorted()` and `config.py:164`
+   `config.py:143` iterates `os.listdir` with no `sorted()` and `config.py:168`
    returns on the first file holding a matching header, so "the live block" for
    an id is whichever file the filesystem lists first. Measured 2026-08-22
    across the 26 files: 118 problem headers, 116 distinct ids, with `42` in two
@@ -753,7 +753,7 @@ defect. The comments in `docker-compose.yml` say so at the point of edit.
 
 **Status:** diagnosed from source 2026-08-18 after a live rate-limit incident.
 The silent part is fixed. **Since `2c06890` (2026-08-22) the primary's fallback
-is on a different vendor** — `config.py:60` is `google/gemini-3.6-flash` behind
+is on a different vendor** — `config.py:62` is `google/gemini-3.6-flash` behind
 `openai/gpt-5-mini` — which closes the "same model twice" exposure below.
 `fast_llm` and `expansion_llm` are still wrapped by nothing; that part is open.
 The model table below describes the pre-migration state.
@@ -762,12 +762,12 @@ The model table below describes the pre-migration state.
 
 On 2026-08-18 a question through the deployed frontend hit
 `openai.APIError: google/gemini-2.5-flash is temporarily rate-limited upstream`
-at `search.py:74`. `search.py:76-80` caught it, logged it, and set
+at `search.py:75`. `search.py:77-82` caught it, logged it, and set
 `search_variants = []`, so the tool searched with the user's original phrase and
 the answer was still correct. That path degraded gracefully and worked as
 designed.
 
-**It is not a one-off blip.** `search.py:22` sets `max_retries=5` on the
+**It is not a one-off blip.** `search.py:23` sets `max_retries=5` on the
 expansion model, and the error was raised only after those five retries were
 exhausted.
 
@@ -782,7 +782,7 @@ Read from source:
 | `config.py:70` `fast_llm` | `google/gemini-2.5-flash`, hardcoded |
 | `search.py:16` `expansion_llm` | `MODEL_NAME`, same default |
 
-`config.py:78` is `llm = primary_llm.with_fallbacks([fallback_llm])`. With
+`config.py:80` is `llm = primary_llm.with_fallbacks([fallback_llm])`. With
 `MODEL_NAME` unset — which CLAUDE.md instructs — the fallback asks the same
 provider for the same model that just refused. It protects against a
 per-request error, not a model-level or provider-level outage.
@@ -794,19 +794,19 @@ wording of the error message, not from OpenRouter's documented routing.
 
 ### `fast_llm` is the sharper exposure
 
-`config.py:78` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
+`config.py:80` wraps only `primary_llm`. **`fast_llm` is wrapped by nothing.**
 As the scope router it makes the graph's first model call on every request
 that misses the fast path, and it carries the lowest retry count of the four,
-`max_retries=2` at `config.py:75`. **Three call sites** since triage was removed
+`max_retries=2` at `config.py:77`. **Three call sites** since triage was removed
 on 2026-10-30 (P2 item 6). Before that there were four; an earlier version of
 this item said three, having grepped only `backend/core/` and missed the one in
 `app.py`:
 
 | Site | Behaviour on failure |
 |---|---|
-| `agents.py:56` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:174` conversational | No local handler. Propagates to `chat.py:281-283`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
-| `app.py:273` `/refine_transcript` | `app.py:278-280` logs and returns the raw transcript unchanged. Graceful. |
+| `agents.py:57` scope router | Falls through to `retrieval_node`. **See below.** |
+| `agents.py:176` conversational | No local handler. Propagates to `chat.py:283-285`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `app.py:281` `/refine_transcript` | `app.py:286-289` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:147` was `:126` before commit `a8c9af9`
 added the router log. Re-grep rather than trusting a line number in this file.
@@ -821,9 +821,9 @@ is not exposed. That import is dead.
 CLAUDE.md's rule against empty catch blocks. It now logs.
 
 **Not fixed, and deliberately so:** the behaviour is unchanged. When
-`fast_llm` fails at `agents.py:56`, control reaches `agents.py:86` and returns
-`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:65-66` and
-the `CONVERSATIONAL` branch at `agents.py:67-68`. So a query that should be
+`fast_llm` fails at `agents.py:57`, control reaches `agents.py:88` and returns
+`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:66-67` and
+the `CONVERSATIONAL` branch at `agents.py:68-69`. So a query that should be
 refused is answered instead, for as long as the model is unavailable.
 
 **Taken from DECISIONS.md, not source:** that refusal is deliberate and
@@ -850,8 +850,8 @@ $0.30 / $2.50 per million tokens, and the performance charts plot three series:
 Google AI Studio, Google Vertex (Global) and Google Vertex (EU).
 
 *Consequence:* a retry of the same model can land on a different provider, so
-`config.py:78`'s same-model fallback is **not pure decoration**. This lowers the
-priority of the "point `config.py:60` at a different provider" option below —
+`config.py:80`'s same-model fallback is **not pure decoration**. This lowers the
+priority of the "point `config.py:62` at a different provider" option below —
 that option was recorded without knowing the provider count.
 
 *Not settled:* whether OpenRouter fails over between providers **inside** a
@@ -890,13 +890,13 @@ rate limit that failed. **This option cannot help until the model strings
 change. See item 8**, which also records why nothing broke when the key was
 added.
 
-- **Give `expansion_llm` its own fallback** (`search.py:15-23`) on a different
-  provider. The constraint below does not apply to it: `search.py:74` calls
+- **Give `expansion_llm` its own fallback** (`search.py:16-24`) on a different
+  provider. The constraint below does not apply to it: `search.py:75` calls
   `ainvoke` on a plain prompt and parses `.content` as text, so it never calls a
   tool and never touches the approval panel. But this feeds retrieval, so it is
   under the EDD rules. Low value — the current path already produced a correct
   answer.
-- **Point `config.py:60` at a different provider.** **Downgraded 2026-08-18.**
+- **Point `config.py:62` at a different provider.** **Downgraded 2026-08-18.**
   It protects the failure that would break the product, but the multi-provider
   finding above means the existing same-model fallback may already retry against
   a different upstream, and a BYOK key addresses the cause directly. **Taken
@@ -916,8 +916,8 @@ added.
 returns on the first success, and `fallbacks.py:156-161` documents that iterator
 as yielding the runnable and then its fallbacks. A fallback is never reached
 while the primary succeeds, so a passing 94-case run cannot exercise a changed
-fallback and the score cannot move. This holds only for `config.py:60` and the
-fallbacks above. Changing `config.py:49` changes the model under test and does
+fallback and the score cannot move. This holds only for `config.py:62` and the
+fallbacks above. Changing `config.py:51` changes the model under test and does
 require a run.
 
 ---
@@ -1031,7 +1031,7 @@ whole application rests on one model that has begun closing doors.
 ### The trap that will bite a migration — *read from source*
 
 `eval.py:71` is `model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat")`.
-`config.py:49` and `search.py:16` read the **same variable** with a different
+`config.py:51` and `search.py:17` read the **same variable** with a different
 default. So setting `MODEL_NAME` does not only change the agent — **it swaps the
 evaluation judge from DeepSeek to whatever is set.** That is exactly what
 `.claude/rules/evals.md` warns about under "The command".
@@ -1039,7 +1039,7 @@ evaluation judge from DeepSeek to whatever is set.** That is exactly what
 **Therefore: any migration belongs in the hardcoded default strings in source,
 never in an environment variable.**
 
-**And `config.py:49` is the one change that does oblige an evaluation run**,
+**And `config.py:51` is the one change that does oblige an evaluation run**,
 because it is the model under test. **Taken from CLAUDE.md:** roughly $0.11 of a
 $1.12 balance, and any run — including a partial `--indices` one — overwrites
 `backend/evals/latest_run_metrics.json`, so back that file up first.
@@ -1079,7 +1079,7 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at three sites — `agents.py:56`, `agents.py:174` and `app.py:273` —
+   work at three sites — `agents.py:57`, `agents.py:176` and `app.py:281` —
    **read from source**. A fourth, triage in `chat.py`, was removed on
    2026-10-30 (P2 item 6). None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
@@ -1161,14 +1161,14 @@ three spend routes check the rate limit.
 
 | Route | Line | Reaches a model | Notes |
 |---|---|---|---|
-| `GET /health` | :139 | no | Reports `rag_hydrated`, `ingestion_state` and `database` (one `SELECT 1`, cached 10 s). Harmless. |
-| `POST /chat_stream` | :218 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
-| `POST /refine_transcript` | :259 | **yes** | `fast_llm.ainvoke` at :273. **Length cap only**, `app.py:257`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
-| `GET /` | :284 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :296 | **yes** | Resumes an interrupted graph run for a `thread_id` the calling browser owns; any other gets 404 (`98dae35`). Rate-limited 2026-10-29 (approve only). |
-| `GET /history` | :334 | no | Lists the calling browser's thread ids and titles (`X-Browser-Id`), with `limit`/`offset`; no header gets an empty list. Scoped 2026-10-27 (`98dae35`). |
-| `GET /history/{thread_id}` | :350 | no | Full messages of a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
-| `DELETE /history/{thread_id}` | :386 | no | Deletes a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
+| `GET /health` | :140 | no | Reports `rag_hydrated`, `ingestion_state`, `database` (one `SELECT 1`, cached 10 s) and `skips` (numbers only; `DECISIONS.md`, "What counts as a skip"). Harmless. |
+| `POST /chat_stream` | :225 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
+| `POST /refine_transcript` | :267 | **yes** | `fast_llm.ainvoke` at :281. **Length cap only**, `app.py:265`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
+| `GET /` | :293 | no | Serves `static/index.html` if present. |
+| `POST /chat_approve` | :305 | **yes** | Resumes an interrupted graph run for a `thread_id` the calling browser owns; any other gets 404 (`98dae35`). Rate-limited 2026-10-29 (approve only). |
+| `GET /history` | :344 | no | Lists the calling browser's thread ids and titles (`X-Browser-Id`), with `limit`/`offset`; no header gets an empty list. Scoped 2026-10-27 (`98dae35`). |
+| `GET /history/{thread_id}` | :361 | no | Full messages of a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
+| `DELETE /history/{thread_id}` | :398 | no | Deletes a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
 
 **Until G14 (`98dae35`, 2026-10-27), the three `/history` routes chained, and that
 was the data exposure.** `/history` at :331 handed out the thread ids, so nothing
@@ -1188,7 +1188,7 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 **Read.** `/chat_stream` is genuinely defended, but none of the defence lives in
 `app.py` — it is all in `chat.py`, which only `/chat_stream` routes through.
 
-- `chat.py:105` calls `check_input_guardrail`. `guardrails.py:13` refuses any
+- `chat.py:107` calls `check_input_guardrail`. `guardrails.py:13` refuses any
   message over 1,000 characters, and `guardrails.py:20-25` blocks jailbreak and
   key-extraction phrases.
 - The semantic cache step that ran after the guardrail and the thread save was
@@ -1203,7 +1203,7 @@ length check, no cache. `app.py:150-151` was
 call reached the model. It was simultaneously the cheapest route to abuse and the
 only one with no brakes.
 
-**A length cap was added 2026-08-20.** `app.py:257` is now
+**A length cap was added 2026-08-20.** `app.py:265` is now
 `transcript: str = Field(..., max_length=8000)`. It bounds the cost of one model
 call and nothing else. There is still no guardrail and no cache on this route, so
 the asymmetry with `/chat_stream` stands.
@@ -1214,7 +1214,7 @@ only what routes through `chat.py`.
 
 ### The key itself is not exposed
 
-**Read.** `config.py:50`, `:61` and `:71` each pass
+**Read.** `config.py:52`, `:63` and `:73` each pass
 `openai_api_key=os.getenv("OPENROUTER_API_KEY")`. The key stays in the container
 and never reaches a browser. The exposure is not key theft — it is that public
 routes make model calls on behalf of whoever asks.
@@ -1223,10 +1223,10 @@ routes make model calls on behalf of whoever asks.
 
 - **Until 2026-10-28, `app.py:90` read `VERCEL_FRONTEND_URL` into `frontend_url`,
   and nothing used it.** The CORS middleware used `allow_origin_regex=".*"` with
-  `allow_credentials=True`, so the allowlist the comment at `app.py:88` calls
+  `allow_credentials=True`, so the allowlist the comment at `app.py:89` calls
   "Secure CORS" was written and never wired in.
-- **Since `9d66aa9` the allowlist is wired in.** `app.py:94` sets `allow_origins`
-  to `frontend_url` plus `http://localhost:3000`, exact match; `app.py:95` sets
+- **Since `9d66aa9` the allowlist is wired in.** `app.py:95` sets `allow_origins`
+  to `frontend_url` plus `http://localhost:3000`, exact match; `app.py:96` sets
   `allow_credentials=False`. Measured locally: `Origin: https://evil.example` got
   400 and no `access-control-allow-origin`. **On the Space it does not hold:** the
   same origin got its own `access-control-allow-origin` (curl, 2026-10-28).
@@ -1277,7 +1277,7 @@ exactly the route names the scanner was missing. **Closed 2026-08-20 by option
 **(a) Record only, fix nothing.** Costs nothing. Buys a written record so the
 next session does not rediscover this. **This is what was done on 2026-08-19.**
 
-**(b) A length cap on `RefineRequest.transcript`, `app.py:256-257`. — APPLIED
+**(b) A length cap on `RefineRequest.transcript`, `app.py:264-265`. — APPLIED
 2026-08-20.** One line, purely additive, breaks no caller. Bounds the cost of one
 model call; does not stop abuse. The value is **8,000** characters. It is not the
 `1000` this option used to recommend for symmetry with `guardrails.py:13` — that
@@ -1295,7 +1295,7 @@ holds is readable in devtools by anyone. The only version of (c) that works puts
 a server-side proxy in front — a Next.js route handler that holds the secret
 server-side and forwards. That is a real feature, not a one-line change.
 
-**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:86`. —
+**(d) `openapi_url=None, docs_url=None, redoc_url=None` at `app.py:87`. —
 APPLIED 2026-08-20.** One line. Obscurity only — `/chat_stream` is not an exotic
 name. Slightly better than it first appears, because the scanner in the log
 demonstrably did **not** have the route names, and `/openapi.json` handed them
@@ -1324,7 +1324,7 @@ still points where it did.** The 33 `app.py:NNN` references that stood across th
 records before the edit, and the 12 bare `:NNN` references inside this item, were
 re-checked line by line afterwards. One was already wrong and is corrected in the
 same commit: this item cited `app.py:87` for the "Secure CORS" comment, which
-sits at `app.py:88`.
+sits at `app.py:89`.
 
 **A grep for that filename now returns 41, not 33, and the eight are additions
 rather than omissions.** They are citations written for the first time by this
@@ -1334,11 +1334,11 @@ more to the CORS comment, and four to the capped field — three here and one in
 `DECISIONS.md` — less the single citation lost with the "Not checked" bullet that
 this section answers.
 
-1. **`app.py:86`** now reads
+1. **`app.py:87`** now reads
    `app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)`.
    **Measured:** `/openapi.json`, `/docs` and `/redoc` each return **404**,
    requested against the real `app` object.
-2. **`app.py:257`** now reads `transcript: str = Field(..., max_length=8000)`,
+2. **`app.py:265`** now reads `transcript: str = Field(..., max_length=8000)`,
    with `Field` added to the `pydantic` import already on `app.py:5`.
    **Measured:** a POST of 8,001 characters returns **422** with
    `string_too_long` and carries no `refined_transcript` key; 8,000 characters
@@ -1363,7 +1363,7 @@ ingests. And it bounds one call only — there was no rate limit in `backend/` u
 
 **Option (d) costs the local `/docs` page too.** The interactive schema is gone
 in development as well as in the Space. Getting it back is an edit to
-`app.py:86`, not a setting.
+`app.py:87`, not a setting.
 
 **One consequence left alone.** `data/Agentic_AI_Engineer.md:14254` gives
 `http://127.0.0.1:8000/docs` as a local URL, which option (d) turns into a 404.
@@ -1423,7 +1423,7 @@ applies.
 `MemorySaver` — which is what `eval.py:39` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
-  input for __start__` and produces zero events. `chat.py:397-406` catches it and
+  input for __start__` and produces zero events. `chat.py:399-409` catches it and
   yielded `{"error": ...}` then `[DONE]` (since `ad7b286`, the `on_error` event
   then `[DONE]`), so the stream terminates cleanly.
 - A thread with `state.next == ()` raises nothing and yields two events,
@@ -1431,7 +1431,7 @@ applies.
   model call is made.
 
 The settled-thread probe wrote its state with `as_node="fast_path_node"`, because
-`agents.py:223` edges that node straight to `END` and the write therefore leaves
+`agents.py:225` edges that node straight to `END` and the write therefore leaves
 nothing to run. **A first attempt wrote the `messages` channel with no `as_node`,
 which re-triggered the entry node and spent one real model call.** Recorded
 because the fault was in the probe's design, not in the code under test, and the
@@ -1466,7 +1466,7 @@ promised exactly what this line quietly undid.
 the debug line that prints the query — so the log showed the truncated string as
 if it were what arrived, and a reader could not tell a long query had been cut.
 
-**What replaced it**, at `search.py:50-58`: the cap is now 1,000 and a `✂️` line
+**What replaced it**, at `search.py:51-59`: the cap is now 1,000 and a `✂️` line
 prints when the cut fires, immediately before the existing query print.
 
 **Why 1,000, and the caveat that belongs with it.** `guardrails.py:13` already
@@ -1528,7 +1528,7 @@ defect.
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
 - **The weather wording in the `qa_node` prompt is ambiguous and still
-  unfixed.** `agents.py:147-156` says "You MUST call `search_knowledge_base`"
+  unfixed.** `agents.py:149-158` says "You MUST call `search_knowledge_base`"
   and "Always call the tool first" before it mentions the weather tool. GPT-5
   Mini at `minimal` effort followed the words and searched; at `low` it chose
   the weather tool, and test 94 passes. A first rewording was probed and
@@ -1544,7 +1544,7 @@ defect.
   for the model migration lives in OpenRouter's BYOK page, not in `.env`.
   `DATABASE_URL` and `LANGCHAIN_API_KEY` are read by `guardrails.py` and
   `memory.py`, so they stay.
-- **Ingestion file order varies between container starts.** `ingest.py:76` is
+- **Ingestion file order varies between container starts.** `ingest.py:79` is
   `processed_data_files = set()` and the ingest loop iterates that set. CPython
   randomises `str` hashes per process, so the order changes every run — measured
   2026-08-21, **four distinct first files in five processes**. Total work is
@@ -1576,13 +1576,13 @@ The mechanism, in order, all `read` at `7a42773`:
    holds **exactly one** problem header — `Problem 42`. So the block runs to EOF.
 4. `agents.py:95` puts that string into an `AIMessage` unchanged. **There is no
    length cap on this path.** The only `max_length=8000` in the backend is on
-   `/refine_transcript` (`app.py:257`), a different route — see item 9.
+   `/refine_transcript` (`app.py:265`), a different route — see item 9.
 
 **Corrected 2026-08-22, after the commit that recorded it.** This item first
 said 867,756. That is the raw file slice from the header to EOF.
-`config.py:183` then calls `.strip()` (-1), `config.py:185-191` replaces the
+`config.py:187` then calls `.strip()` (-1), `config.py:189-195` replaces the
 27-character source header with the 16-character normalised one (-11), and
-`config.py:193` appends `\n\n<END OF PROBLEM>` (+18). What the user receives is
+`config.py:197` appends `\n\n<END OF PROBLEM>` (+18). What the user receives is
 **867,746**, measured three ways — `extract_problem_block("42")`,
 `route_query(...)["fast_path_response"]`, and the advisor session's independent
 reimplementation, all agreeing. **The subject line of commit `119e256` still
@@ -1606,7 +1606,7 @@ a user typing the question.
 
 - sort `get_data_file_paths()` so the choice is at least deterministic — makes
   the result stable, not correct, and would still return 867,746 characters;
-- cap the fast-path response the way `app.py:257` caps `/refine_transcript`;
+- cap the fast-path response the way `app.py:265` caps `/refine_transcript`;
 - end a block at the next heading of any level rather than only at the next
   `Problem N`, which is the actual cause and the largest change.
 
@@ -1619,11 +1619,11 @@ is why they read alike; the mechanisms are opposite and the fixes are separate.
 
 ## 13. The DB pool handed out a dead connection after idle — fix in place, not verified against the trigger
 
-**Status 2026-10-27: fix applied at `app.py:67`. The original failure did not
+**Status 2026-10-27: fix applied at `app.py:68`. The original failure did not
 reproduce, so the fix is untested against what caused it.**
 
 An earlier local session saw `/history` hang after roughly 15 minutes idle, then
-return the empty error list (`app.py:345-347`), with
+return the empty error list (`app.py:355-358`), with
 `discarding closed connection ... [BAD]` in the backend log. *Stated* — taken
 from the task brief; the original log was not re-read.
 
@@ -1692,7 +1692,7 @@ because the unfixed build also passed at idle.
 ### Why one line
 
 The fix sits on the line that already held the pool, with a trailing pointer
-here, as item 9's did (`app.py:86`). A multi-line block would have moved 44
+here, as item 9's did (`app.py:87`). A multi-line block would have moved 44
 live citations, 5 of them in `DECISIONS.md` — a subagent's sweep count, not
 re-counted.
 
@@ -1731,9 +1731,9 @@ the code before it builds the same messages. Fixed by a filter in `qa_node`: `DE
 record as found, with citations kept current.**
 
 `fast_path_node` writes a `ToolMessage` with `tool_call_id="bypass_tool_call_id"`
-(`agents.py:101-107`), with no earlier `AIMessage` holding that tool call. `eval.py`
+(`agents.py:103-109`), with no earlier `AIMessage` holding that tool call. `eval.py`
 scrapes it for Recall@k. It stays in the thread, and `qa_node` sends the whole thread
-to the model (`agents.py:158`).
+to the model (`agents.py:160`).
 
 **Measured 2026-11-01, one message list sent to `primary_llm` alone:** a normal list
 was accepted. This one got a 400:
@@ -1743,7 +1743,7 @@ was accepted. This one got a 400:
 and then a RAG question in one thread. The RAG question got an answer, and the backend
 log has no error line.
 
-*A hypothesis, labelled as one:* the fallback at `config.py:78` served that answer, so a
+*A hypothesis, labelled as one:* the fallback at `config.py:80` served that answer, so a
 visitor gets a different model and no log line says so. That answer itself stays unmeasured.
 
 **Measured 2026-11-02, on the table route only:** in a new thread, a table hit and then a RAG
@@ -1757,7 +1757,7 @@ Problem-N hit alone; a core test covers that case.
 target id (26 of 53) or any Problem-N hit, in the same thread. `conversational_node`
 sends only the current message, so it is not exposed. The eval cannot see this: it
 uses a new thread per case (`eval.py:45-46`). Read, not run: a weather follow-up and the
-`/chat_approve` resume also enter `qa_node` with the whole thread (`agents.py:33-34`, `:158`).
+`/chat_approve` resume also enter `qa_node` with the whole thread (`agents.py:34-35`, `:160`).
 
 **Before a fix, note:** the marker is what `eval.py:51-59` reads for recall, so moving
 it needs a change in the eval too. P2 item 12 removes the Problem-N part, not the table
@@ -1767,7 +1767,7 @@ rows.
 
 **Not fixed. Out of scope for item 15, which is the reverse fault.** A weather call stops at
 `interrupt_before` and stores an AI tool call with no result. Cancel writes nothing to the
-thread (`app.py:327-328`), and the frontend then asks "What would you like to do instead?"
+thread (`app.py:337-338`), and the frontend then asks "What would you like to do instead?"
 (`useChatStream.ts:271`).
 
 **Measured 2026-11-02, one message list sent to `primary_llm` alone:** a 400,
@@ -1786,20 +1786,20 @@ went off keeps the shape, and a new message on it sends the same list in both st
 ## 17. A fast-path marker can shorten the next answer's length limit (2026-11-02, found on item 15)
 
 **Not fixed. Read from source, not run. Older than item 15's fix, which does not change it.**
-The marker stays stored, so `chat.py:170` reads it as the last tool output. A follow-up that
-answers with no tool call then has a limit of 2000 characters (`chat.py:176`), even after a long
+The marker stays stored, so `chat.py:172` reads it as the last tool output. A follow-up that
+answers with no tool call then has a limit of 2000 characters (`chat.py:178`), even after a long
 RAG answer earlier in the thread. A longer answer gets the truncation warning.
 
 ## 18. `search.py` takes any word after "problem" as an id, and that route has no length cap (2026-11-02, found on P2 item 8)
 
-**Not fixed. `search.py` was out of scope.** `search.py:111-115` builds a target from the word
-after "problem" or "question". The raw route returns at `search.py:220-228`, before the 8000-per-block
-cap at `:481` and `MAX_CHAR_LIMIT` at `:535`, and it sums blocks across every file that holds the id.
+**Not fixed. `search.py` was out of scope.** `search.py:113-117` builds a target from the word
+after "problem" or "question". The raw route returns at `search.py:224-232`, before the 8000-per-block
+cap at `:485` and `MAX_CHAR_LIMIT` at `:540`, and it sums blocks across every file that holds the id.
 
-**Measured 2026-11-02 by plain file reads with the regexes at `search.py:111` and `:195`, no model
+**Measured 2026-11-02 by plain file reads with the regexes at `search.py:113` and `:198`, no model
 call:** 158 ids, 26 over 8000 characters, 13 of those word-like: `yarn` 874,632, `This` 409,294, `in`
 362,365. Numbered ids reach 34,914 (Problem 78). Problem 42 is 3,344 here, against 867,755 by the
-regex at `config.py:170` (item 12), so item 12's figure does not carry over to this route.
+regex at `config.py:174` (item 12), so item 12's figure does not carry over to this route.
 
 **The fast path switch widens it.** Today a table hit shields eval case 49 ("...'Ghost' Streaming State
 problem in Phase 4..."), whose text gives the id `in`. Off, that question may send about 362,365
@@ -1815,15 +1815,15 @@ request can reach about 5000 main-model calls (inferred), under one rate-limit c
 
 **Older than the switch:** any invented tool name, and any model repeating a real tool, loops the same
 way. **The switch changes one thing:** with weather on, a weather call stops at the panel for a person.
-Off, `agents.py:187` sends it to `safe_tools`, which returns an error message to the model. One fake
+Off, `agents.py:189` sends it to `safe_tools`, which returns an error message to the model. One fake
 test and no real-model sample cover an invented call. The error text names the valid tools and the off
 prompt line says there is no such tool, so a repeat looks unlikely (inferred). A `recursion_limit` in the
-configs at `chat.py:165` and `:288` looks small, but it changes behaviour on the core path.
+configs at `chat.py:167` and `:290` looks small, but it changes behaviour on the core path.
 
 ## 20. With the fast path off, a Problem-N question can skip retrieval, and a conversational reply can be empty (2026-11-02, found on P2 item 8)
 
 **Not fixed, by the owner's decision on task `p2-env-switches`.** The fast path also shields a
-Problem-N question from the scope router (`agents.py:38-42` says so). Off, the router decides.
+Problem-N question from the scope router (`agents.py:39-43` says so). Off, the router decides.
 
 **Seen live 2026-11-02, all switches off, throwaway Postgres on 5434, stored messages:**
 - "Tell me about Problem 42", twice: one AI message, `google/gemini-3.6-flash`, no tool call. Once 0
@@ -1842,6 +1842,6 @@ text. It looks independent of the switch. Not run on `main`.
 
 **Measured:** importing it with the test harness's fakes raises `ImportError: cannot import name
 'get_data_file_path' from 'backend.core.config'`. `eval_corpus_growth.py:18` imports that name and `:25` calls it;
-`config.py:120` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
+`config.py:122` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
 `README.md:53` and `:114` still advertise the script. **Not checked:** when the name went, and what else in the script has
 aged. Not fixed: `backend/evals` was out of scope for that task.

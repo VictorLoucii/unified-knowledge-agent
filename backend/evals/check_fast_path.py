@@ -3,7 +3,7 @@
 Run from the repo root:
     uv run python -m backend.evals.check_fast_path
 Imports backend.core.config so the environment is loaded the way the app loads
-it. That import is not free — config.py:14-115 runs load_dotenv, registers
+it. That import is not free — config.py:15-117 runs load_dotenv, registers
 Phoenix tracing, builds three ChatOpenAI clients and loads the all-MiniLM-L6-v2
 embedding model — but no model call is made. This script only reads files.
 
@@ -14,7 +14,7 @@ problem. So one problem can reach a user by two paths, and every difference this
 script prints is a difference between what those two paths return.
 
 target_id carries two meanings and only one of them is a copy claim. When it is
-truthy, agents.py:101-107 synthesises the ToolMessage that eval.py:51-59 scrapes
+truthy, agents.py:103-109 synthesises the ToolMessage that eval.py:51-59 scrapes
 and eval.py:147-151 scores for Recall@k, so target_id is a recall label first.
 For 20 entries the stored output is also a copy of that problem's block. For 5 it
 is a short answer *about* the problem and was never a copy, and the 26th
@@ -79,7 +79,7 @@ def classify(stored: str, live: str | None) -> tuple[str, str]:
         return "NO_LIVE_BLOCK", "data/: no '# Problem <id>' header exists"
     if stored == live:
         return "IDENTICAL", "nothing"
-    # `_body(live)` guards a vacuous equality. config.py:189-191 emits a bare
+    # `_body(live)` guards a vacuous equality. config.py:193-195 emits a bare
     # header for a block with no newline, whose body is "" — and every one-line
     # short answer also has a body of "". Without the guard those two collide
     # here and a short answer is reported as a header difference. No such block

@@ -60,6 +60,7 @@ ALLOWED = {
     ("backend/core/tools/weather_aqi.py", "backend.core.config.weather_tool_enabled"): "the weather feature's own module",
     ("backend/evals/check_fast_path.py", "backend.core.fast_path_routes"): "guards the table and goes with it",
     ("backend/tests/test_core_switches.py", "backend.core.tools.weather_aqi"): "tests the weather feature",
+    ("backend/tests/test_no_silent_skips.py", "backend.core.tools.weather_aqi"): "tests the weather tool's skip count",
     # These two files name every feature in text, to look for it.
     ("backend/tests/test_import_check.py", "backend.core.fast_path_routes"): "this check's own list",
     ("backend/tests/test_import_check.py", "backend.core.tools.system"): "this check's own list",

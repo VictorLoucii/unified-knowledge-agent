@@ -61,6 +61,7 @@ def test_chat_stream_route_streams_the_answer(core, routes):
     assert core.registry_calls == [("thread-1", QUESTION, BROWSER_ID)]
 
 
+@pytest.mark.expected_skips(lines=["🚨 resume_graph_stream Crash Details:"], failed_requests=1)
 def test_chat_approve_route_ends_a_thread_with_nothing_to_resume(core, routes):
     """Steps: route, resume fails inside the graph, the stream still ends. No model call."""
     core.set_fast_replies()

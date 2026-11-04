@@ -4,6 +4,7 @@ import asyncio
 import psycopg
 from psycopg_pool import AsyncConnectionPool
 from langgraph.checkpoint.postgres import PostgresSaver
+from backend.core.skip_counter import count_skip
 
 # Get DB URI from environment
 DB_URI = os.getenv("DATABASE_URL", "postgresql://localhost/postgres")
@@ -65,6 +66,7 @@ def setup_database_tables():
         print("✅ PostgresSaver and Metadata tables verified/created.")
     except Exception as e:
         print(f"❌ Postgres Connection Error: {e}")
+        count_skip("startup_faults")
         print("👉 Ensure Postgres is running and DATABASE_URL in .env is correct.")
 
 
@@ -97,6 +99,7 @@ async def generate_title_from_llm(user_message: str) -> str:
         return title or user_message[:40]
     except Exception as e:
         print(f"⚠️ [WARNING] Failed to generate title from LLM: {e}")
+        count_skip("request_skips")
         return user_message[:40] + ("..." if len(user_message) > 40 else "")
 
 
@@ -160,6 +163,7 @@ def start_title_generation(async_pool: AsyncConnectionPool, thread_id: str, user
                         )
             except Exception as e:
                 print(f"⚠️ [WARNING] Background title update failed: {e}")
+                count_skip("request_skips")
 
         coro = update_title_bg()
         task = asyncio.create_task(coro)
@@ -171,6 +175,7 @@ def start_title_generation(async_pool: AsyncConnectionPool, thread_id: str, user
         if coro is not None:
             coro.close()
         print(f"⚠️ [WARNING] Background title update could not start: {e}")
+        count_skip("request_skips")
 
 
 async def get_thread_owner(async_pool: AsyncConnectionPool, thread_id: str) -> tuple[bool, str | None]:

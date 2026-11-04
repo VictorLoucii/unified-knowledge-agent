@@ -26,10 +26,10 @@ evaluation by setting `MODEL_NAME`, but not as the driver.
 ### GPT-5 Mini drives, Gemini 3.6 Flash routes and falls back, Flash Lite only expands
 
 **Chosen (2026-08-22, `2c06890`):** `openai/gpt-5-mini` with
-`reasoning_effort="low"` for `primary_llm` (`config.py:49`);
-`google/gemini-3.6-flash` for `fallback_llm` (`config.py:60`) and `fast_llm`
-(`config.py:70`); `google/gemini-3.5-flash-lite` for `expansion_llm`
-(`search.py:16`) only. The judge at `eval.py:71` is unchanged.
+`reasoning_effort="low"` for `primary_llm` (`config.py:51`);
+`google/gemini-3.6-flash` for `fallback_llm` (`config.py:62`) and `fast_llm`
+(`config.py:72`); `google/gemini-3.5-flash-lite` for `expansion_llm`
+(`search.py:17`) only. The judge at `eval.py:71` is unchanged.
 
 **Rejected:** `google/gemini-3.6-flash` as the driver; `gemini-3.5-flash-lite`
 as `fast_llm`; `reasoning_effort` of `minimal` or `medium`.
@@ -46,7 +46,7 @@ effort chose the search tool for a weather question; `low` chose the weather
 tool and spent about 60 reasoning tokens.
 
 **Flash Lite is rejected as `fast_llm` by measurement, not by taste.** The scope
-router at `agents.py:55-67` runs on `fast_llm`. With Lite it answered
+router at `agents.py:56-68` runs on `fast_llm`. With Lite it answered
 `OUT_OF_SCOPE` for tests 46, 58, 59, 60, 93 and `CONVERSATIONAL` for test 42;
 2.5 Flash and 3.6 Flash both answer `IN_SCOPE` on all six. Those cases then
 never reached `qa_node`, called no tool, and scored 87/94 and 33/34. Raising
@@ -98,7 +98,7 @@ that reads "the fix was to add flexDirection: row" loses all trace of which
 problem it belongs to. Putting `# Problem 12` into `page_content` makes the id
 both searchable and recoverable — the recall marker in `search.py` is derived
 by reading the header back out of retrieved chunks. This is why recall works at
-all, and it is why `search.py:240` can de-duplicate by exact `page_content`.
+all, and it is why `search.py:244` can de-duplicate by exact `page_content`.
 
 ### Keyword-style query expansion, not natural-language sentences
 
@@ -122,15 +122,15 @@ recall, 33/34 → 34/34, which is what opens the suite's gate.
 swapped the pair back: index 37 now passes and index 83 now misses. Recall
 returned to 33/34. The decision above still stands — keyword expansion beat
 sentences on its own merits — but the two cases were never independent. They
-compete for slots in one candidate pool that `search.py:390` truncates *before*
-`search.py:410` reranks it, so whichever change lands last decides the winner.
+compete for slots in one candidate pool that `search.py:394` truncates *before*
+`search.py:414` reranks it, so whichever change lands last decides the winner.
 That mechanism, not the expansion style, is the thing to fix. See
 [OPEN.md](OPEN.md) item 1.
 
 **Update, 2026-08-20 — the mechanism named in the paragraph above was refuted,
 and index 83 is fixed.** Measuring the candidate pool showed that the document
 index 83 needs never enters it, so truncation order was never what excluded it.
-The fix was the docstring directive at `search.py:38-44`, not a change to the
+The fix was the docstring directive at `search.py:39-45`, not a change to the
 pool. Recall is 34/34 again and net logic is again flat at 90/94, because 37 and
 83 traded once more — this time with the judge's own reasons captured on both
 sides, which is what identifies 37 as judge variance rather than retrieval.
@@ -143,20 +143,20 @@ neither failing case. It stays at 30.
 
 ### The tool docstring demands the user's whole question, not a keyword fragment
 
-**Chosen, 2026-08-20:** `search.py:38-44` instructs the model to pass the user's
+**Chosen, 2026-08-20:** `search.py:39-45` instructs the model to pass the user's
 question word for word, and keeps the Problem ID and ordinal examples verbatim
 inside the generalised rule.
 
-**Rejected:** a third hardcoded query injection at `search.py:86-93`. Two
+**Rejected:** a third hardcoded query injection at `search.py:88-95`. Two
 already exist there, so a `Community Type` entry would have passed index 83 and
 would have matched precedent. It would have moved the score without improving
 the pipeline, which is the failure the score warning in `.claude/rules/evals.md`
 exists to prevent.
 
 **Why the examples had to survive the generalisation.** They are load-bearing in
-a way their old wording did not advertise. `search.py:62` matches the problem
+a way their old wording did not advertise. `search.py:63` matches the problem
 regex against the query and skips expansion entirely on a hit, and
-`search.py:120-121` tests the four literal strings `"first problem"`,
+`search.py:122-123` tests the four literal strings `"first problem"`,
 `"oldest problem"`, `"last problem"` and `"latest problem"` as substrings. A
 paraphrase that dropped those phrases would silently re-enable expansion for the
 queries the original directive existed to protect, and would break the ordinal
@@ -170,7 +170,7 @@ hypothesis. See [OPEN.md](OPEN.md) item 1.
 
 ### The query cap is 1,000, matching the input guardrail
 
-**Chosen, 2026-08-20:** `search.py:50-58` caps the query at 1,000 characters and
+**Chosen, 2026-08-20:** `search.py:51-59` caps the query at 1,000 characters and
 prints a `✂️` line when the cut fires.
 
 **Rejected:** keeping the previous cap of 150 and adding only the log line; and
@@ -237,7 +237,7 @@ LFS rules that already sit unused at `.gitattributes:4-6`.
 
 **Why:** three reasons, in order of weight.
 
-1. **The startup cost is already absorbed.** `app.py:76-78` runs
+1. **The startup cost is already absorbed.** `app.py:77-79` runs
    `initialize_rag` in a background thread precisely so HuggingFace health
    checks pass instantly — the comment there says so. The ingest never blocks
    the port bind, and the Space does answer from the first second.
@@ -349,9 +349,9 @@ returned, not that all 26 files are present. Both remain open in
 ### `rag_hydrated` means ingestion finished, and `/chat_stream` waits for it
 
 **Chosen (2026-10-28):** `/health` computes `rag_hydrated` as
-`ingestion_state == "done"` (`app.py:150`), and no longer looks at the docstore.
+`ingestion_state == "done"` (`app.py:151`), and no longer looks at the docstore.
 While the state is not `done`, `/chat_stream` returns one fixed line as a normal
-stream (`app.py:232-234`, built at `app.py:194-210`). It makes no model call and
+stream (`app.py:240-242`, built at `app.py:201-217`). It makes no model call and
 saves nothing to history. The frontend polls `/health` and shows a banner until
 `done`.
 
@@ -388,7 +388,7 @@ now." The banner shows a failed variant.
 runs after the ownership check and before the chat pre-steps. No pre-step can
 therefore answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
-is a second copy of the guardrail refusal's event shape (`chat.py:107-113`).
+is a second copy of the guardrail refusal's event shape (`chat.py:109-115`).
 
 **No eval run, and why.** `eval.py:26-48` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
@@ -428,10 +428,10 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:407`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:420`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
-`search.py:481` and `:483`, which truncate a text block at 8000 *characters*.
+`search.py:485` and `:487`, which truncate a text block at 8000 *characters*.
 `README.md`'s `--port 8000` was the single line out of step.
 
 **What the choice buys.** On 7860 local development needs no configuration at
@@ -481,7 +481,7 @@ was in the knowledge base. Keep the feature; fix the retrieval.
 
 ### The scope router keeps failing open; only its silence was fixed
 
-**Chosen (2026-08-18):** `agents.py:69` logs the exception and still falls
+**Chosen (2026-08-18):** `agents.py:70` logs the exception and still falls
 through to `retrieval_node`. Behaviour is unchanged.
 
 **Rejected — failing closed.** Refusing the query when the router model is
@@ -492,15 +492,15 @@ worse product than answering an out-of-scope one.
 rule against empty catch blocks, and its real cost was that nothing in the
 container log recorded that the guardrail had been skipped.
 
-**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:56`,
-the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:65-66`. The
+**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:57`,
+the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:66-67`. The
 refusal recorded above under "OUT_OF_SCOPE takes precedence in the router
 prompt" therefore stops firing. That guardrail was fixed deliberately once
 already, so a future session finding this fall-through should know it was seen
 and left, not missed. The exposure is written up as [OPEN.md](OPEN.md) item 7.
 
 **Not decided:** whether to give `fast_llm` a fallback. It has none —
-`config.py:78` wraps only `primary_llm`.
+`config.py:80` wraps only `primary_llm`.
 
 ### Arize Phoenix over LangSmith
 
@@ -538,7 +538,7 @@ request was paying for it. **Do not change this back.**
 ### One tracing setup only, and it lives in `config.py`
 
 **Chosen (2026-08-18):** delete the OpenTelemetry block that stood at
-`app.py:7-16` and let `config.py:23-44` be the only instrumentation. A comment
+`app.py:7-16` and let `config.py:24-45` be the only instrumentation. A comment
 explaining why nothing may go back there now sits at `app.py:8-24`.
 
 **Rejected — keeping both and making `app.py`'s processor a batch one.** It
@@ -569,7 +569,7 @@ production log showed 23 such cycles for one startup and one question.
 
 **Why deleting it leaves no gap, read from the installed package.**
 
-- `phoenix/config.py:2828` defines `GRPC_PORT = 4317`, so `config.py:31`'s
+- `phoenix/config.py:2828` defines `GRPC_PORT = 4317`, so `config.py:32`'s
   endpoint is the correct gRPC port and not a guess.
 - `otel.py:691-694` infers the gRPC exporter when the URL has no path and the
   port matches. `http://localhost:4317` satisfies both.
@@ -577,7 +577,7 @@ production log showed 23 such cycles for one startup and one question.
   when another processor is added, so `register(batch=True)` really is
   batch-only.
 - `otel.py:180-181` shows `register()` sets the global tracer provider by
-  default, which `config.py:40` never overrides. The global provider was
+  default, which `config.py:41` never overrides. The global provider was
   already Phoenix's.
 
 **The one cost accepted:** local tracing moves from HTTP on 6006 to gRPC on
@@ -613,7 +613,7 @@ and declined.
 **Why the minimal swap is not enough.** Established while checking the fast-path
 table for that edit: **the vector index is the only path this text takes to a
 reader.** `extract_problem_block` never serves this file — its regex at
-`config.py:168-170` is `^\s*(?:#|//|\*)` and every heading in the file is
+`config.py:172-174` is `^\s*(?:#|//|\*)` and every heading in the file is
 pandoc-escaped as `\#`, giving **0 matches** when run against it. No fast-path
 key concerns tracing either. So a reader gets a *retrieved chunk*, not the
 section.
@@ -626,7 +626,7 @@ either.** The note is the only place that reasoning can reach a reader through
 this system.
 
 **The honest limit.** The bullets help only if they land in the same retrieved
-chunk as the fence. `config.py:105` sets the parent chunk size to 1000 and the
+chunk as the fence. `config.py:107` sets the parent chunk size to 1000 and the
 section runs to roughly 1,600 characters, so they probably do not. Recorded
 rather than resolved.
 
@@ -647,7 +647,7 @@ while letting the environment win.
 
 ### The refine cap is 8,000 characters, not 1,000
 
-**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:257`.
+**Chosen:** `transcript: str = Field(..., max_length=8000)` at `app.py:265`.
 
 **Rejected:** `1000`, matching the message cap at `guardrails.py:13`, so the two
 routes would read consistently.
@@ -688,7 +688,7 @@ movement that did not happen. The full explanation is in
 
 ### Changing a fallback model does not oblige an evaluation run
 
-**Chosen (2026-08-18):** a change to `config.py:60` `fallback_llm`, or to any
+**Chosen (2026-08-18):** a change to `config.py:62` `fallback_llm`, or to any
 fallback added later, may be made and committed without running the suite.
 
 **Rejected:** spending roughly $0.11 of a $1.13 balance to confirm a no-op.
@@ -705,7 +705,7 @@ semantic router, the tools and the retrieval pipeline. A fallback model is none
 of those.
 
 **The limit of this, stated explicitly:** it applies only while the primary
-succeeds. Changing `config.py:49` `primary_llm` changes the model under test and
+succeeds. Changing `config.py:51` `primary_llm` changes the model under test and
 does require a full run.
 
 ### The recall baseline was lowered to 33/34 on purpose
@@ -718,7 +718,7 @@ does require a full run.
 
 **Why:** the pre-rebuild index held roughly five copies of everything — 8,404
 distinct chunks stored 5 times each, 85,008 child chunks against 17,954 after.
-`search.py:390` truncates the candidate pool to 50 before reranking, so a pool
+`search.py:394` truncates the candidate pool to 50 before reranking, so a pool
 of 50 held about 10 distinct documents. That is a worse defect than one recall
 point, and it was invisible in the score.
 
@@ -737,7 +737,7 @@ The baseline is 34/34 again. **The decision recorded here still stands:** taking
 the rebuild and accepting a one-point cost was right, because five copies of
 every chunk was the worse defect and the score could not see it. What has
 changed is only that the cost has since been paid back, by the docstring
-directive at `search.py:38-44` rather than by anything in this entry. The two
+directive at `search.py:39-45` rather than by anything in this entry. The two
 rejected alternatives were also never reached for.
 
 **The decision recorded here is unaffected.** Bending `search.py` to recover one
@@ -833,7 +833,7 @@ different things and only one of them needed relaxing.
 rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries carry a `target_id`, and 20
 of those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
 only in the first line or the trailing `<END OF PROBLEM>` marker.
-`agents.py:43-53` consults that table before any model call, so editing `data/`
+`agents.py:44-54` consults that table before any model call, so editing `data/`
 cannot change what those queries return. Measured 2026-08-22 by
 `backend/evals/check_fast_path.py`. See [OPEN.md](OPEN.md) item 5.
 
@@ -879,7 +879,7 @@ Also rejected: splitting the header/marker tier in two, one tier for a mangled
 header and one for a missing marker.
 
 **Why not strict:** `target_id` is a recall label before it is a copy claim.
-When it is truthy, `agents.py:101-107` synthesises the `ToolMessage` that
+When it is truthy, `agents.py:103-109` synthesises the `ToolMessage` that
 `eval.py:51-59` scrapes and `eval.py:147-151` scores for Recall@k. Five entries
 carry one and hold a short answer *about* a problem rather than a copy of it, so
 a strict rule measures them against something they never claimed to equal and
@@ -903,7 +903,7 @@ so four of the six looked like marker-only differences.
 **Two latent defects were closed in the same commit, neither reachable today.**
 The action column could name a file and no repair when a difference was
 whitespace `_body` strips; a `whitespace` flag now covers that. And a live block
-with an empty body — which `config.py:189-191` can emit for a header with
+with an empty body — which `config.py:193-195` can emit for a header with
 nothing under it — has the same empty body as any one-line short answer, so the
 two collided and the short answer was reported as a header difference; the body
 test now requires a non-empty body or a problem heading. `data/` holds 118
@@ -1063,7 +1063,7 @@ check there. [OPEN.md](OPEN.md) item 9, "Two pieces of dead configuration".
 pass at once, but it loosens a check to make it pass, and the live demo would
 still echo any origin.
 
-**Why the risk is small.** The frontend sends no cookies, and `app.py:95` sets
+**Why the risk is small.** The frontend sends no cookies, and `app.py:96` sets
 `allow_credentials=False`; the proxy sent no `allow-credentials` header. A page
 on another origin cannot read the visitor's browser id, so it reads only its own
 threads. *Not checked:* where the frontend stores the id. What such a page can
@@ -1083,7 +1083,7 @@ process before any backend import. It sets a stub `OPENROUTER_API_KEY`, makes
 `langchain_chroma` and `langchain_huggingface` into `sys.modules`. The fake
 models (`GenericFakeChatModel`, `FakeMessagesListChatModel`) and the fake
 registry, retriever, reranker and cache are patched as module attributes per
-test. The graph is compiled with `MemorySaver`, as `app.py:73` compiles it with
+test. The graph is compiled with `MemorySaver`, as `app.py:74` compiles it with
 `AsyncPostgresSaver`. Guards record every Python-level connect, DNS lookup and
 `open()` of a file named `.env`, and fail the test that made one.
 
@@ -1106,7 +1106,7 @@ failure measures M10: a key placed before the last 120 characters of a streamed
 answer reaches the browser whole and unmasked.
 
 **Not covered:** the `app.py` routes, the registry SQL in `memory.py`, the
-foreign key from the checkpoint tables to `thread_metadata` (`memory.py:41-59`;
+foreign key from the checkpoint tables to `thread_metadata` (`memory.py:42-60`;
 it needs Postgres), and real retrieval quality. Sockets opened inside native
 code are not seen by the guards.
 
@@ -1173,7 +1173,7 @@ below.
 ### The chat pre-steps are one list; the thread save is one step that fails closed
 
 **Chosen (2026-10-29, P2 item 4, REVAMP section 12 point 3):**
-`generate_chat_responses` runs `PRE_STEPS` (`chat.py:137`) in order, then the
+`generate_chat_responses` runs `PRE_STEPS` (`chat.py:139`) in order, then the
 graph path. The steps are the input guardrail and the thread save. Until
 2026-10-30 the semantic cache and triage followed the save (see "The semantic
 cache is removed, not fixed" and "Triage is removed; the router is the one
@@ -1186,7 +1186,7 @@ returns, so a step that fails has sent nothing.
 **Two failure policies, not one.** An optional step keeps its own `try` and its
 exact warning text, and passes on when it fails. Triage and the cache were the
 optional steps; both were removed 2026-10-30, so the list holds none today. The guardrail and the thread save are core: they have no `try`, and the
-runner ends the turn with `_error_events` (`chat.py:85`), the same events and
+runner ends the turn with `_error_events` (`chat.py:86`), the same events and
 logs the graph path's `except` sends. A save that passed on would leave no
 `thread_metadata` row, so the next checkpoint write fails its foreign key, and
 with `durability="async"` (see "The thread registry is core") a model call can
@@ -1281,7 +1281,7 @@ answers.
 
 **Left alone, on purpose:**
 - The on-disk collection `semantic_cache_v2`. It shares `persist_directory`
-  with the main index (`config.py:86`), so deleting files there can destroy the
+  with the main index (`config.py:88`), so deleting files there can destroy the
   index. Nothing opens it now. To drop it later, call `delete_collection()`
   on a `Chroma` opened on that collection name, once, as the deleted
   `clear_cache.py` did; never delete files. Whether `backend/chroma_db` on the
@@ -1319,7 +1319,7 @@ the test, by name.
 **Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
 12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
 its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
-thread save (`chat.py:137`). The scope router in the graph (`agents.py:56-63`)
+thread save (`chat.py:139`). The scope router in the graph (`agents.py:57-64`)
 stays and is now the only model that classifies scope.
 
 **Why:**
@@ -1375,10 +1375,10 @@ project-tree labels "Fast Path & Triage" (on `semantic_router.py`) and
 ### `route_query` runs once per message; `Send` carries the result
 
 **Chosen (2026-11-01, by the owner; P2 item 7, REVAMP coupling 2):**
-`route_input_node` is the only caller of `route_query` (`agents.py:43`). On a
+`route_input_node` is the only caller of `route_query` (`agents.py:44`). On a
 hit it returns `Send("fast_path_node", ...)` with the last message, the stored
-answer and the target id (`agents.py:45-53`). `retrieval_node` returns the
-constant `RAG` (`agents.py:113-117`).
+answer and the target id (`agents.py:46-54`). `retrieval_node` returns the
+constant `RAG` (`agents.py:115-119`).
 
 **Why:** the repeat at the old `:76` and `:101` did the same lookup again. The
 gain is small and is not a model-call saving: `route_query` calls no model
@@ -1463,13 +1463,13 @@ two fast-path answers: see `OPEN.md` item 15.
 ### The main model gets the thread without unmatched tool messages
 
 **Chosen (2026-11-02, by the owner; `OPEN.md` item 15):** `qa_node` sends the thread through
-`drop_unmatched_tool_messages` (`agents.py:119-135`, called at `:158`). It drops a tool message
+`drop_unmatched_tool_messages` (`agents.py:121-137`, called at `:160`). It drops a tool message
 when no earlier AI tool call holds its id, and prints one `[__DEV__]` line per drop. The
 checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:51-59`
 still reads recall from it.
 
 **Why:** the marker has no matching tool call, and the main model rejects that list with a 400.
-The fallback at `config.py:78` then answered, and no log line says so. The link between the 400
+The fallback at `config.py:80` then answered, and no log line says so. The link between the 400
 and the fallback is inferred, from the same-day probe and the readings below. The filter reads
 what is stored, so threads saved before it need no migration.
 
@@ -1500,13 +1500,13 @@ on the same commit differ. Rerank documents or their order differ in 4 of 33 lis
 77), and only scores in 3 more (at most 1.67e-06). So noise exists on identical code. The after
 run differs from the before runs by a similar amount (5 of 33 against each). The older
 `eval-after` log also differs from the first of these runs (3 of 33), but its code is pinned only
-from 15:00 and the log is from 14:39. *Why it happens is a hypothesis:* `search.py:104` is
+from 15:00 and the log is from 14:39. *Why it happens is a hypothesis:* `search.py:106` is
 `list(set(all_queries))`, so query order changes per process, and ties may then resolve
 differently. A run with `PYTHONHASHSEED` fixed would test it. That run was not made.
 
 **Rejected:**
 - *Stop storing the marker.* Recall would need a new channel in `eval.py`, stored threads stay
-  broken, and `chat.py:176` changes.
+  broken, and `chat.py:178` changes.
 - *Store a matching tool call.* Stored threads stay broken, and every follow-up shows the model a
   fake search with an empty result.
 - *Match only the literal `bypass_tool_call_id`.* It cannot drop a real result by accident, but
@@ -1571,8 +1571,8 @@ and not locked. On GitHub, run `40894313618` on `p2-ci`: frontend 37 s,
 `TRANSCRIPT_REFINE_ENABLED` and `WEATHER_TOOL_ENABLED`, read by three functions at the end of
 `config.py`. With no variable set, every feature stays on.
 
-**Only `false` turns a feature off** (`config.py:204`). A `NAME=` line parses to an empty string
-(`dotenv_values`, run), and `getenv`'s default does not apply to it, so the pattern at `config.py:46`
+**Only `false` turns a feature off** (`config.py:209`). A `NAME=` line parses to an empty string
+(`dotenv_values`, run), and `getenv`'s default does not apply to it, so the pattern at `config.py:48`
 turned to default-on would switch a feature off silently. The cost, accepted by the owner: `off`, `0`
 or a value holding literal quote marks, such as `"false"` typed in the Space settings, leaves a feature on and spending. A startup line prints the three states.
 
@@ -1584,13 +1584,13 @@ The process environment is fixed until a restart, so the running app sees one va
 - **Fast path:** one check at the top of `route_query` covers the table and the Problem-N lookup. It
   stays one `route_query` call per message. `check_fast_path.py` imports the table directly and is not
   affected. Two costs, by the owner's decision: `OPEN.md` items 18 and 20.
-- **Refine:** returns the raw text before the rate limit (`app.py:262-265`). No credit is spent, as with
+- **Refine:** returns the raw text before the rate limit (`app.py:270-273`). No credit is spent, as with
   Cancel. The frontend needs no change.
 - **Weather:** the graph keeps its shape, so the five compile sites do not change. `qa_node` uses a second
-  binding without the tool (`agents.py:20`, `:159`), and a replacing prompt line (`agents.py:153`) is meant to
-  stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:187`), which returns an error message
+  binding without the tool (`agents.py:21`, `:161`), and a replacing prompt line (`agents.py:155`) is meant to
+  stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:189`), which returns an error message
   and shows no panel (`OPEN.md` item 19). A thread paused before the switch went off can still be approved
-  from an open tab, so the tool itself checks the switch (`weather_aqi.py:21`). Router RULES 2 and 3 stay.
+  from an open tab, so the tool itself checks the switch (`weather_aqi.py:22`). Router RULES 2 and 3 stay.
 
 **Rejected:**
 - *Any unknown value means off.* A value that looks like yes (`1`, `True `) would silently lose a visible
@@ -1649,7 +1649,7 @@ five, some in two, some have none, and each probe runs in `no_variable` only.
 - *Tested here, 7:* fast-path table, weather with approval, transcript refine, `get_system_time`, query expansion,
   title generation, latency footer.
 - *Core or keep, 11:* input guardrail, scope router, reranker, masking, output cap, history, `/health` state,
-  general-knowledge fallback, fallback model, Phoenix tracing (blocked in every test run, `conftest.py:97-99`),
+  general-knowledge fallback, fallback model, Phoenix tracing (blocked in every test run, `conftest.py:120-122`),
   `retrieval_node`.
 - *Removed already, 2; scheduled, 6:* the semantic cache and triage; Problem-N (item 12), phrase-keyed rewrites (P5),
   `.docx`, `GET /`, the second compile, the unused imports. A test of code about to go buys nothing.
@@ -1663,7 +1663,7 @@ five, some in two, some have none, and each probe runs in `no_variable` only.
   no model ran.
 - *The table* keeps `route_query`, `fast_path_node` and its switch, because Problem-N shares them until item 12. The two
   Problem-N tests stay in that run, and its `Send` payload test runs through a Problem-N query. The id the router hands
-  to the marker is unproved there: the one Problem-N query has "Problem 7" in it, so the fallback at `agents.py:96-98` can
+  to the marker is unproved there: the one Problem-N query has "Problem 7" in it, so the fallback at `agents.py:98-100` can
   supply the same id.
 - *`check_fast_path.py`* goes with the table.
 
@@ -1677,10 +1677,10 @@ five, some in two, some have none, and each probe runs in `no_variable` only.
 **The import check** (`test_import_check.py`) reads source: a runtime check sees only imports that ran. It covers
 `backend/` and the four tracked root scripts by name. A glob would differ between this Mac and CI. Each exception names a
 file and a target, with its reason, and one nothing needs fails the test. A test also checks each `interrupt_before` name
-against `workflow.nodes` at the five compile sites, because a stale name at `app.py:73` fails only at startup.
+against `workflow.nodes` at the five compile sites, because a stale name at `app.py:74` fails only at startup.
 
 **Uncovered, so no reader takes these tests as proof of more:**
-- Names that go quiet rather than fail: `chat.py:225`, `:237`, `:268`, `:344`, `:356`, `:387`. `chat.py`'s `Expansion_LLM`
+- Names that go quiet rather than fail: `chat.py:227`, `:239`, `:270`, `:346`, `:358`, `:389`. `chat.py`'s `Expansion_LLM`
   filter likewise.
 - Router RULE 2, and the prompt's "weather or technical query" wording.
 - The frontend: approval panel, microphone, footer display. What the mic does on a 404 from `/refine_transcript` was not run.
@@ -1703,3 +1703,72 @@ case, and a code review named six. A first map missed 2 of 37: one fault broke t
 exposed a redundant branch in the check, since removed. A later map missed 1 of 45: a core case failing on both sides
 matched the unedited run, so the removal test now also fails on any failed case. Considered and not run: the attribute-access and uncalled-function
 cases above, which are known misses, and a test wrongly listed as going with a feature.
+
+### What counts as a skip, and what the count does not show
+
+**Chosen (2026-11-04, task `p2-no-silent-skips`):** a skip is a place where the app hits a fault and carries on. Tests now
+fail on a skip line they did not name, and `/health` counts skips by kind. A skip stays a skip: no retry and no fallback was
+added. Three sites that printed nothing now also print a `[WARNING]` line (`weather_aqi.py`, `stats.py`, `problem_index.py`),
+so a rise has a line in the log to explain it.
+
+`/health` gains one key, numbers only:
+`"skips": {"request_skips": n, "startup_faults": n, "failed_requests": n, "seconds_since_start": n}`. If the count code
+fails, the key is absent and the other fields still answer.
+
+**The sort, 31 `count_skip` calls (`skip_counter.py`):**
+- *`request_skips`, 14:* the request is answered with less. The scope router, query expansion, three search interceptors,
+  `extract_problem_block`, three title sites, refine, and the index, stats and weather tools.
+- *`startup_faults`, 10:* Phoenix, the data folder (two), ingestion (six), table setup.
+- *`failed_requests`, 7:* the caller got an error. A failed turn or resume, an ownership check, and the history and delete routes.
+  The plan's word was "failed turn"; the history and delete routes are not turns, and nothing else shows their failures.
+  A credit-limit refusal counts here, because the caller gets the paused line and no answer. So a spent key reads like a wave of failures.
+
+**Not counted, on purpose:** the `/health` database check, because the same response shows it and tabs poll it. `ingest.py`'s
+"Vector Database missing" line, which is a normal ingest. A chat refused while ingestion is loading or failed, because
+`ingestion_state` shows it. An unknown place name at `weather_aqi.py`, which is the user's input. Designed limits: the output
+cap, the rate limits, the query cap, `drop_unmatched_tool_messages`. `guardrails.py`'s `len(str(data))`, which measures the same thing.
+
+**Rejected:**
+- *A wrapper.* These are `except` arms inside a function that carries on, so a wrapper changes control flow.
+- *A logging handler.* `backend/` has no logging, so all the prints would change. Scanning stdout instead counts real
+  document text: on the 2026-11-04 eval run, `search.py`'s preview lines printed `🚨` and `❌` from `data/` with no fault at all.
+- *A total on `/health`.* One startup fault would hold it above zero for good and hide the rest.
+- *A capsys check.* `test_core_registry.py` empties the buffer with `readouterr()`, so a teardown read would see nothing there.
+  `conftest.py` records through `builtins.print`, from before any backend import, so it sees tasks, threads and import lines.
+
+**What the count does not show, so no reader takes it for more than it is:**
+- *A 0 means "none counted since this process started", not "healthy".* Each push or restart resets it, and a sleep, if one happens. One process
+  holds it (`Dockerfile:33` sets no `--workers`). `seconds_since_start` is there so a reader can tell a new zero from an old one.
+- *Events, not requests.* In one outage, one turn can add the router, expansion and title: 3. `get_data_file_paths` can add several.
+  There is no rate, because nothing counts turns. There is no cause and no request; those stay in the log.
+- *`startup_faults` also rises during requests,* because search and stats call `get_data_file_paths`.
+- *The largest gap: `llm = primary_llm.with_fallbacks(...)` (`config.py:80`).* The main model can fail on every turn and the
+  backup can answer; no code of ours runs, so the count stays 0. Seeing it needs a callback on the model path, close to G18 (P2 item 11). G18 wraps `fast_llm` the same way, so after it a router failure goes to the backup unseen, and `agents.py`'s site fires only when both fail.
+- *LangGraph's `ToolInvocationError`* (`tool_node.py`, langgraph): bad tool arguments go back to the model as text, with no line.
+- *Coverage.* It says nothing about how many documents loaded (`OPEN.md` item 4).
+- *Exposure.* `/health` is public, so a caller can watch a count rise after their own request. Fixed names and numbers show only a
+  category, and a total would expose the same. `seconds_since_start` shows the last restart, which a poller can already infer when `ingestion_state` goes back to `running`.
+
+**The check proves the faked path only.** A test is happy path unless it names what it expects with
+`@pytest.mark.expected_skips(lines=[...], <kind>=<rise>)`. Eight are named, one by one: three title tests, three error-event tests, the
+resume test and the latency footer probe. The Phoenix line at import has its own test, because `conftest.py` blocks phoenix
+on purpose. Every test also fails if a count rose that it did not name. In a removal copy, `conftest.py` is copied, so each child
+process has its own recorder, count and check. A skip that needs real data, such as the raw interceptor, stays unseen except in a site test that forces it.
+
+**The static guard** (a departure from the task as written, approved at gate 1): `test_every_site_counts_or_is_named` reads source. Each
+marker print and each `except` arm must hold `count_skip` as a statement of the same block, or `_error_events`, or be named in
+`NOT_COUNTED` with a reason. The guard cannot see these: a `print(msg)` whose text is a variable, a marker not in the list, a
+fault that returns with no print and no `except`, such as `problem_index.py`'s missing file before it gained its line.
+
+**Measured 2026-11-04,** sandbox, offline, wall clock by `time` on one machine: clean tree at `18033ff` 236 passed, 5 xfailed, 1:02.18;
+this change 296 passed, 5 xfailed, 1:00.94. 60 cases added from 44 functions in `test_no_silent_skips.py`, 1 `ALLOWED` line and
+8 named exceptions. Eval before and after, full run, no variable (the owner's runs): 91/94, 34/34, failures 22, 42, 93, all 94
+verdicts the same; 41-case 39/41 and 8-case 8/8, counted from that output; 103.06 s and 110.51 s. A warm cache, so the times prove nothing.
+Live, on a throwaway `postgres:16`, one backend process with no `--reload`, read through Chrome: `skips` read 0, 0, 0 at 54 s. One normal
+question, with a real answer and a model-made title, left all three at 0 at 117 s. One question that a launch-only patch made the scope router
+fail on (nothing committed) was still answered, and `request_skips` read 1 at 168 s. So this shows one site live, and only that one. `startup_faults` read 0, so Phoenix did not fault on this Mac; the Space was not checked.
+67 of 67 named mutations were caught on the final code: each of the 31 count calls deleted, and 36 on the check, the counter, `/health`
+and the guard. A first run missed 2 of 67: dropping `[WARNING]` or `[ERROR]` from the marker changed nothing, because every such line
+also holds an emoji and so did the test's samples. The test now uses plain samples. The total does not show the set is complete.
+The executor session chose the set; the advisor session named the capsys and silent-site cases, and a code review named the guard's
+blind spots. Considered and not run: removing the counter's lock (no test can show a race reliably), and removing the `ALLOWED` line (the import check needs the root scripts, which the mutation copy leaves out).

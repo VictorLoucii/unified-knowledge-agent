@@ -1,8 +1,8 @@
 """Tool-calling probe for OPEN.md item 8.
 
-Mirrors the real call path: ChatOpenAI with the config.py:48-55 settings,
+Mirrors the real call path: ChatOpenAI with the config.py:50-57 settings,
 the real five tools bound with bind_tools, the qa_node system prompt from
-agents.py:147-156, streaming on. Records every streamed chunk in order and
+agents.py:149-158, streaming on. Records every streamed chunk in order and
 flags any text content that arrives BEFORE the first tool-call chunk, which
 is what breaks the frontend approval panel (DECISIONS.md:20-23).
 
@@ -59,7 +59,7 @@ VARIANTS = [
 
 
 def make_llm(model, extra):
-    # Same settings as config.py:48-55 (streaming=True outside eval mode)
+    # Same settings as config.py:50-57 (streaming=True outside eval mode)
     return ChatOpenAI(
         model=model,
         openai_api_key=os.getenv("OPENROUTER_API_KEY"),
