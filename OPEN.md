@@ -1873,3 +1873,18 @@ text. It looks independent of the switch. Not run on `main`.
 `config.py:138` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
 `README.md:53` and `:114` still advertise the script. **Not checked:** when the name went, and what else in the script has
 aged. Not fixed: `backend/evals` was out of scope for that task.
+
+## 22. A cancel and an approve can race, and a cancel declines every paused call (2026-11-06, found on P2 item 11)
+
+**Read from source, not run. Found by `/code-review high` on task `p2-router-reject-masking`; left unfixed there.**
+- *The race.* `decline_pending_tool_calls` (`app.py:309`) reads the state and then writes, with no lock and no
+  version check. An approve that resumes the same pause at the same moment, from a second tab or a direct call,
+  can run the weather tool while the cancel stores a declined result for the same call id. The thread could then
+  hold two results for one call. Two approves can race the same way today. It needs two requests on one thread at
+  once from the same browser.
+- *Every paused call is declined.* The cancel answers every tool call in the paused AI message. If the model calls
+  the weather tool and another tool together, `custom_tools_condition` (`agents.py:182`) sends the whole step to
+  `sensitive_tools`. That node holds only the weather tool, so on approve the other call fails there too. Cancel
+  matches approve, and the other call is not run either way.
+
+**Not checked:** whether the main model ever calls the weather tool together with another tool.
