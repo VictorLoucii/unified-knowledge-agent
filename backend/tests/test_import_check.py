@@ -59,6 +59,7 @@ ALLOWED = {
     ("backend/core/agents.py", "backend.core.config.weather_tool_enabled"): "registration line: the graph's weather choice",
     ("backend/core/tools/weather_aqi.py", "backend.core.config.weather_tool_enabled"): "the weather feature's own module",
     ("backend/evals/check_fast_path.py", "backend.core.fast_path_routes"): "guards the table and goes with it",
+    ("backend/evals/check_section_labels.py", "backend.core.fast_path_routes"): "checks the table's recall labels and goes with it",
     ("backend/tests/test_core_switches.py", "backend.core.tools.weather_aqi"): "tests the weather feature",
     ("backend/tests/test_no_silent_skips.py", "backend.core.tools.weather_aqi"): "tests the weather tool's skip count",
     # These two files name every feature in text, to look for it.
@@ -78,6 +79,7 @@ ALLOWED = {
     ("backend/tests/test_import_check.py", "backend.memory.generate_title_from_llm"): "this check's own list",
     ("backend/tests/test_import_check.py", "backend.memory.start_title_generation"): "this check's own list",
     ("backend/tests/test_removal.py", "backend.core.fast_path_routes"): "its probe looks for the module",
+    ("backend/tests/test_recall_labels.py", "backend.core.fast_path_routes"): "tests the table's recall labels",
     ("backend/tests/test_removal.py", "backend.core.tools.system"): "its probe looks for the module",
     ("backend/tests/test_removal.py", "backend.core.tools.weather_aqi"): "its probe looks for the module",
 }
@@ -216,7 +218,7 @@ def test_a_relative_import_resolves_from_its_own_package():
 # ------------------------------------------------------------------
 # Interrupt lists at the compile sites
 # ------------------------------------------------------------------
-COMPILE_SITES = {"backend/app.py", "backend/core/agents.py", "backend/evals/eval.py", "backend/tests/conftest.py", "test_stream.py"}
+COMPILE_SITES = {"backend/app.py", "backend/core/agents.py", "backend/evals/eval.py", "backend/evals/run_topic_cases.py", "backend/tests/conftest.py", "test_stream.py"}
 
 
 def compile_calls(source):

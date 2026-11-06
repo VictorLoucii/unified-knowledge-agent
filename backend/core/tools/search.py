@@ -23,8 +23,8 @@ expansion_llm = ChatOpenAI(
     max_retries=5,
 )
 
-@tool
-async def search_knowledge_base(query: str) -> str:
+@tool(response_format="content_and_artifact")
+async def search_knowledge_base(query: str) -> tuple[str, dict]:
     """
     CRITICAL DIRECTIVE: You MUST call this tool for EVERY technical question, bug inquiry,
     UI styling rule, or project workflow question. Do NOT rely on your internal programming knowledge for project-specific bugs.
@@ -231,7 +231,9 @@ async def search_knowledge_base(query: str) -> str:
         retrieved_ids_str = ",".join([p.split('_')[-1] for p in target_problems])
         final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
 
-        return final_output
+        # The artifact is for eval.py's section recall; the model reads only final_output.
+        # These raw blocks are file slices, not retrieved chunks, so no section counts.
+        return final_output, {"retrieved_sections": []}
 
     # ==========================================
     # 4. RESUME STANDARD VECTOR SEARCH
@@ -522,9 +524,8 @@ async def search_knowledge_base(query: str) -> str:
         source_file = os.path.basename(str(doc.metadata.get('source', doc.metadata.get('source_file', 'Unknown File'))))
         return f"Document: {source_file}\nSection Hierarchy: {header_str}\nPage {doc.metadata.get('page', 'Unknown')}:\n{content}"
 
-    formatted_context = "\n\n---\n\n".join(
-        [format_doc_for_llm(doc) for doc in unique_docs]
-    )
+    doc_blocks = [format_doc_for_llm(doc) for doc in unique_docs]
+    formatted_context = "\n\n---\n\n".join(doc_blocks)
 
     # FIX: Prioritize Top Vector Matches (General Knowledge) BEFORE bulky Escalated Problems
     if escalated_text:
@@ -538,6 +539,22 @@ async def search_knowledge_base(query: str) -> str:
         final_output = formatted_context
 
     MAX_CHAR_LIMIT = 30000
+
+    # Section recall (eval.py): the reranked chunks whose block starts before the cut
+    # below. A block that starts just before the cut counts even if only its first
+    # characters survive it (DECISIONS.md). Escalated blocks
+    # are file slices chosen by problem id, so they do not count (DECISIONS.md).
+    block_start = final_output.index(formatted_context)
+    retrieved_sections = []
+    for doc, block in zip(unique_docs, doc_blocks):
+        section = {
+            "source_file": os.path.basename(str(doc.metadata.get('source', doc.metadata.get('source_file', 'Unknown File')))),
+            "headers": {k: doc.metadata[k] for k in ("Header 1", "Header 2", "Header 3") if k in doc.metadata},
+        }
+        if block_start < MAX_CHAR_LIMIT and section not in retrieved_sections:
+            retrieved_sections.append(section)
+        block_start += len(block) + len("\n\n---\n\n")
+
     if len(final_output) > MAX_CHAR_LIMIT:
         final_output = (
             final_output[:MAX_CHAR_LIMIT]
@@ -551,4 +568,4 @@ async def search_knowledge_base(query: str) -> str:
         retrieved_ids_str = ",".join([p.split('_')[-1] for p in discovered_problems])
         final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
 
-    return final_output
+    return final_output, {"retrieved_sections": retrieved_sections}

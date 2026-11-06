@@ -29,7 +29,7 @@ evaluation by setting `MODEL_NAME`, but not as the driver.
 `reasoning_effort="low"` for `primary_llm` (`config.py:51`);
 `google/gemini-3.6-flash` for `fallback_llm` (`config.py:62`) and `fast_llm`
 (`config.py:72`); `google/gemini-3.5-flash-lite` for `expansion_llm`
-(`search.py:17`) only. The judge at `eval.py:71` is unchanged.
+(`search.py:17`) only. The judge at `eval.py:84` is unchanged.
 
 **Rejected:** `google/gemini-3.6-flash` as the driver; `gemini-3.5-flash-lite`
 as `fast_llm`; `reasoning_effort` of `minimal` or `medium`.
@@ -46,7 +46,7 @@ effort chose the search tool for a weather question; `low` chose the weather
 tool and spent about 60 reasoning tokens.
 
 **Flash Lite is rejected as `fast_llm` by measurement, not by taste.** The scope
-router at `agents.py:56-68` runs on `fast_llm`. With Lite it answered
+router at `agents.py:57-69` runs on `fast_llm`. With Lite it answered
 `OUT_OF_SCOPE` for tests 46, 58, 59, 60, 93 and `CONVERSATIONAL` for test 42;
 2.5 Flash and 3.6 Flash both answer `IN_SCOPE` on all six. Those cases then
 never reached `qa_node`, called no tool, and scored 87/94 and 33/34. Raising
@@ -98,7 +98,7 @@ that reads "the fix was to add flexDirection: row" loses all trace of which
 problem it belongs to. Putting `# Problem 12` into `page_content` makes the id
 both searchable and recoverable — the recall marker in `search.py` is derived
 by reading the header back out of retrieved chunks. This is why recall works at
-all, and it is why `search.py:244` can de-duplicate by exact `page_content`.
+all, and it is why `search.py:246` can de-duplicate by exact `page_content`.
 
 ### Keyword-style query expansion, not natural-language sentences
 
@@ -122,8 +122,8 @@ recall, 33/34 → 34/34, which is what opens the suite's gate.
 swapped the pair back: index 37 now passes and index 83 now misses. Recall
 returned to 33/34. The decision above still stands — keyword expansion beat
 sentences on its own merits — but the two cases were never independent. They
-compete for slots in one candidate pool that `search.py:394` truncates *before*
-`search.py:414` reranks it, so whichever change lands last decides the winner.
+compete for slots in one candidate pool that `search.py:396` truncates *before*
+`search.py:416` reranks it, so whichever change lands last decides the winner.
 That mechanism, not the expansion style, is the thing to fix. See
 [OPEN.md](OPEN.md) item 1.
 
@@ -390,7 +390,7 @@ therefore answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
 is a second copy of the guardrail refusal's event shape (`chat.py:110-116`).
 
-**No eval run, and why.** `eval.py:26-48` compiles its own graph and calls
+**No eval run, and why.** `eval.py:26-53` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
 `initialize_rag`, so no eval input or output can change. The change touches no
 prompt, router, tool or retrieval code. *Inferred from the read; the owner
@@ -431,7 +431,7 @@ The code already agreed with the note in five places — `Dockerfile:30` and
 `:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:449`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
-`search.py:485` and `:487`, which truncate a text block at 8000 *characters*.
+`search.py:487` and `:489`, which truncate a text block at 8000 *characters*.
 `README.md`'s `--port 8000` was the single line out of step.
 
 **What the choice buys.** On 7860 local development needs no configuration at
@@ -481,7 +481,7 @@ was in the knowledge base. Keep the feature; fix the retrieval.
 
 ### The scope router keeps failing open; only its silence was fixed
 
-**Chosen (2026-08-18):** `agents.py:70` logs the exception and still falls
+**Chosen (2026-08-18):** `agents.py:71` logs the exception and still falls
 through to `retrieval_node`. Behaviour is unchanged.
 
 **Rejected — failing closed.** Refusing the query when the router model is
@@ -492,8 +492,8 @@ worse product than answering an out-of-scope one.
 rule against empty catch blocks, and its real cost was that nothing in the
 container log recorded that the guardrail had been skipped.
 
-**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:57`,
-the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:66-67`. The
+**Why this needed a decision at all:** when `fast_llm` fails at `agents.py:58`,
+the fall-through skips the `OUT_OF_SCOPE` branch at `agents.py:67-68`. The
 refusal recorded above under "OUT_OF_SCOPE takes precedence in the router
 prompt" therefore stops firing. That guardrail was fixed deliberately once
 already, so a future session finding this fall-through should know it was seen
@@ -506,7 +506,7 @@ open when both models fail is unchanged, and still chosen for the reason above.
 *Chosen:* `config.py:97` wraps `fast_llm` with `fast_llm_backup` (`config.py:87-96`): `openai/gpt-5-mini`,
 a new instance with `streaming=False`, `request_timeout=45`, `max_retries=2`, `reasoning_effort="low"`.
 `fast_llm` gains `request_timeout=45` (`config.py:77`). The wrap is in `config.py`, so all three sites take
-it: the router (`agents.py:57`), `conversational_node` (`agents.py:176`) and refine (`app.py:281`).
+it: the router (`agents.py:58`), `conversational_node` (`agents.py:195`) and refine (`app.py:281`).
 
 *Why another vendor:* `fallback_llm` names the same model as `fast_llm`, so it would add retries, not a second
 model. `gemini-3.5-flash-lite` is barred as the router (`.claude/rules/evals.md`). `gpt-5-mini` is
@@ -532,7 +532,7 @@ measured. `asyncio.wait_for` around the primary only: it keeps the cache key, bu
 for a small gain.
 
 **What the count no longer shows.** A `fast_llm` failure that the backup covers raises nothing, so the
-`except` arm at `agents.py:70-86` does not run: no `[WARNING]` line, and `request_skips` stays 0. That arm
+`except` arm at `agents.py:71-87` does not run: no `[WARNING]` line, and `request_skips` stays 0. That arm
 now fires only when both models fail. This is the same gap as `llm` at `config.py:80` (see "What counts as a
 skip"). Phoenix traces should show the backup's run; not checked. Seeing it needs a callback on the model
 path. Not added: the owner chose to record the gap at gate 1.
@@ -819,7 +819,7 @@ does require a full run.
 
 **Why:** the pre-rebuild index held roughly five copies of everything — 8,404
 distinct chunks stored 5 times each, 85,008 child chunks against 17,954 after.
-`search.py:394` truncates the candidate pool to 50 before reranking, so a pool
+`search.py:396` truncates the candidate pool to 50 before reranking, so a pool
 of 50 held about 10 distinct documents. That is a worse defect than one recall
 point, and it was invisible in the score.
 
@@ -847,7 +847,7 @@ defect turned out to be — and it turned out not to be the one named above, whi
 is the argument for keeping the two changes apart, not against it. It is written
 up as `OPEN.md` item 1 instead.
 
-**Consequence:** `eval.py:236` still gates on `recall_score == 100.0`, so the
+**Consequence:** `eval.py:276` still gates on `recall_score == 100.0`, so the
 suite reports `PIPELINE FAILED` at this baseline. That is expected until index
 83 is fixed. Do not relax the gate to make the message go away.
 
@@ -934,7 +934,7 @@ different things and only one of them needed relaxing.
 rule:** 26 of the 53 `FAST_PATH_INTERCEPTS` entries carry a `target_id`, and 20
 of those hold a copy of a `data/` problem block — 3 byte-identical, 17 differing
 only in the first line or the trailing `<END OF PROBLEM>` marker.
-`agents.py:44-54` consults that table before any model call, so editing `data/`
+`agents.py:44-55` consults that table before any model call, so editing `data/`
 cannot change what those queries return. Measured 2026-08-22 by
 `backend/evals/check_fast_path.py`. See [OPEN.md](OPEN.md) item 5.
 
@@ -980,8 +980,8 @@ Also rejected: splitting the header/marker tier in two, one tier for a mangled
 header and one for a missing marker.
 
 **Why not strict:** `target_id` is a recall label before it is a copy claim.
-When it is truthy, `agents.py:103-109` synthesises the `ToolMessage` that
-`eval.py:51-59` scrapes and `eval.py:147-151` scores for Recall@k. Five entries
+When it is truthy, `agents.py:104-113` synthesises the `ToolMessage` that
+`eval.py:56-64` scrapes and `eval.py:165-169` scores for Recall@k. Five entries
 carry one and hold a short answer *about* a problem rather than a copy of it, so
 a strict rule measures them against something they never claimed to equal and
 they can never pass. The second reason is the exit code. Repairing the rest
@@ -1009,6 +1009,82 @@ nothing under it — has the same empty body as any one-line short answer, so th
 two collided and the short answer was reported as a header difference; the body
 test now requires a non-empty body or a problem heading. `data/` holds 118
 problem headers and no header-only block, so neither case fires.
+
+### Recall counts sections, not problem numbers
+
+**Chosen (2026-11-06, P2 item 12 step 1).** A Recall@k hit is now a retrieved
+section: a chunk whose source file and header path (`Header 1`/`2`/`3`, as
+`ingest.py`'s splitter writes them) equal one of the case's `target_sections`.
+Exact, any of the list. The rule is `backend/evals/recall.py`. The 34 eval cases
+and the 26 fast-path entries that carried a problem id now also carry
+`target_sections`; `target_problem_id` and `target_id` stay until the
+Problem-N removal (task 12b).
+
+**Why the problem number had to go.** The number is not unique. A line that
+starts with `Problem 5` or `Question 5` occurs in three `data/` files (measured
+2026-11-06 with the raw interceptor's regex), and the old marker
+(`<!-- RETRIEVED_PROBLEM_IDS -->`) counted any of them as a hit. Case 48 asks
+about `count_items`, which occurs nowhere in `data/`; a mapping of its id 3 by
+number picks an unrelated "Question 3". And task 12b deletes the code that
+writes the marker, so recall would drop to 0 and read as broken retrieval.
+
+**How the labels were built: by a script, not by hand.** A label is every
+splitter section from the target header line up to the next header that names a
+numbered Problem or Question. "Problem Statement" is not a boundary. The
+position rule matters for `Problem 115`. Its header is followed at once by an
+escaped `\#` header, which ingest turns into a new H1. So no chunk carries
+"Problem 115", and its text sits under "Walkthrough - Scroll-to-Hide Header in
+ChatBot". Of the 114 problem spans in `NEXTIER_Internship_Bugs.md`, 28 differ
+from a match on the header name; of the 22 target problems, only 115 does
+(measured 2026-11-06). The owner chose two labels at gate 1. JOB_HUNT names no
+section; its label is the `Errors_in_AgenticAI_Projects.md` section whose title
+names the error. The three capabilities cases (32-34) and their entries copy
+Problem 1, the choice the capabilities interceptor makes (`search.py:161-167`).
+That label is not a claim that Problem 1 answers the question.
+`backend/evals/check_section_labels.py` checks every label against `data/`.
+
+**What it does not measure.**
+- 26 of the 34 cases are answered by the fast-path table. `fast_path_node`
+  copies the entry's label into its tool message, so those hits are true by
+  construction. Retrieval is measured on 8 cases (6, 46, 77, 78, 79, 80, 81,
+  83). `eval.py` prints the two counts apart.
+- A section counts when its block starts before the tool's 30,000-character
+  cut, not when the answer uses it.
+- The raw interceptor's blocks and the auto-escalated blocks are file slices,
+  not chunks, so they never count.
+- A label names sections that exist today. A later edit to `data/` can make
+  a correct retrieval read as a miss until the labels are rebuilt.
+
+**Where the label travels: a tool-message artifact the model never reads.**
+The search tool returns `(content, artifact)`; the content is unchanged, old
+marker included. The provider never receives the artifact. But the eval's model
+cache keys on `dumps()` of the whole message list, and `dumps()` writes the
+artifact into the key (measured 2026-11-06, `langchain_core` 1.2.20). So
+`qa_node` sends copies without it (`agents.without_artifacts`). A stripped copy
+dumps byte-equal to the message as it was before artifacts existed;
+`test_the_model_gets_the_tool_message_without_its_artifact` pins that. The
+checkpoint stores the artifact.
+
+**Rejected:** a second HTML comment in the tool output. It changes every
+retrieval prompt, so the cache goes cold and answers may move. Also rejected:
+replacing the old marker, which loses the side-by-side figure below.
+
+**The pass rule stays on the old recall until 12b.** `eval.py` still gates on
+the problem-number recall, and a miss on it still skips the judge. The section
+recall is printed beside it and kept out of both. If the new figure fed the
+judge skip, each new miss would also fail a logic verdict, for a measurement
+reason. `latest_run_metrics.json` is not rewritten for this change.
+
+**Measured on the first run, 2026-11-06, before the Problem-N removal.** Old
+recall 34/34, section recall 34/34 (retrieval 8/8, fast-path copies 26/26),
+logic 91/94 with the same 94 verdicts as the run before (failures 22, 42, 93);
+41-case 39/41, 8-case 8/8. So the measure changed and the retrieval did not.
+Four retrieval cases (6, 78, 80, 83) missed the model cache. The cause is the
+old marker, not this change. It lists the ids of a Python set, whose order
+changes between processes, so the tool text differs between runs. A diff of the
+new cache row for case 6 against its last one: the message keys are equal and
+no artifact is present; only the marker's id order differs. The cache already
+held 15 such prompts for case 6, 15 for 78, 15 for 80 and 14 for 83.
 
 ## Records
 
@@ -1335,7 +1411,7 @@ event. The triage prompt is
 byte-identical to `394ea8e` (`test_triage_prompt_is_unchanged`, sha256;
 removed 2026-10-30 with triage).
 
-**No eval run, by the owner's decision.** `eval.py:48` calls `graph.ainvoke`
+**No eval run, by the owner's decision.** `eval.py:53` calls `graph.ainvoke`
 and never runs the pre-steps, so the suite cannot measure this change.
 
 **Tests.** `backend/tests/test_core_pre_steps.py`: each step's handled and
@@ -1392,7 +1468,7 @@ answers.
   no longer imports them; `agents.py`, `semantic_router.py` and
   `check_fast_path.py` still use them (Problem-N is P2 item 12).
 
-**No eval run, by the owner's decision.** `eval.py:48` calls `graph.ainvoke`
+**No eval run, by the owner's decision.** `eval.py:53` calls `graph.ainvoke`
 and never runs the pre-steps; the cache is not prompt, router, tools or
 retrieval.
 
@@ -1420,12 +1496,12 @@ the test, by name.
 **Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
 12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
 its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
-thread save (`chat.py:140`). The scope router in the graph (`agents.py:57-64`)
+thread save (`chat.py:140`). The scope router in the graph (`agents.py:58-65`)
 stays and is now the only model that classifies scope.
 
 **Why:**
 1. Two scope classifiers with different prompts can disagree, and the eval
-   sees only the router (`eval.py:48` calls `graph.ainvoke`).
+   sees only the router (`eval.py:53` calls `graph.ainvoke`).
 2. Triage cost one `fast_llm` call per message.
 3. Its reply never reached the visitor (M1). It wrote state with
    `as_node="chatbot"`, a node the graph does not have; LangGraph raised, the
@@ -1449,7 +1525,7 @@ interceptor in `search.py` can fire. *Seen live 2026-10-30* (P2 close check
 without the knowledge-base summary that triage rule 2 described. Changing that
 is a router or prompt change, so it is eval-driven.
 
-**No eval run, by the owner's decision.** `eval.py:48` never runs the
+**No eval run, by the owner's decision.** `eval.py:53` never runs the
 pre-steps; triage is not the router, prompt, tools or retrieval.
 
 **Tests.** Six triage tests removed with the feature (five in
@@ -1478,12 +1554,12 @@ project-tree labels "Fast Path & Triage" (on `semantic_router.py`) and
 **Chosen (2026-11-01, by the owner; P2 item 7, REVAMP coupling 2):**
 `route_input_node` is the only caller of `route_query` (`agents.py:44`). On a
 hit it returns `Send("fast_path_node", ...)` with the last message, the stored
-answer and the target id (`agents.py:46-54`). `retrieval_node` returns the
-constant `RAG` (`agents.py:115-119`).
+answer and the target id (`agents.py:46-55`). `retrieval_node` returns the
+constant `RAG` (`agents.py:119-123`).
 
 **Why:** the repeat at the old `:76` and `:101` did the same lookup again. The
 gain is small and is not a model-call saving: `route_query` calls no model
-(`semantic_router.py:5-40`). Read from the code at `043609e`, a table hit or a
+(`semantic_router.py:5-41`). Read from the code at `043609e`, a table hit or a
 Problem-N hit ran it twice, and so did any message the scope router sent to
 `retrieval_node`. Each now runs it once. A message the scope router marks
 CONVERSATIONAL or OUT_OF_SCOPE ran it once already. On the routes that ran it twice,
@@ -1556,7 +1632,7 @@ two fast-path answers: see `OPEN.md` item 15.
   until the next turn overwrites it. Measured on the same test graph: 4,005,165
   bytes against 4,003,437 for a 1,000,000-character answer, so storage does not
   separate the two options.
-- *A lookup in `chat.py` before the graph.* `eval.py:48` calls the graph directly
+- *A lookup in `chat.py` before the graph.* `eval.py:53` calls the graph directly
   and would skip it.
 - *A cache inside `semantic_router.py`.* It is hidden global state that goes stale
   when `data/` changes.
@@ -1564,9 +1640,9 @@ two fast-path answers: see `OPEN.md` item 15.
 ### The main model gets the thread without unmatched tool messages
 
 **Chosen (2026-11-02, by the owner; `OPEN.md` item 15):** `qa_node` sends the thread through
-`drop_unmatched_tool_messages` (`agents.py:121-137`, called at `:160`). It drops a tool message
+`drop_unmatched_tool_messages` (`agents.py:125-141`, called at `:179`). It drops a tool message
 when no earlier AI tool call holds its id, and prints one `[__DEV__]` line per drop. The
-checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:51-59`
+checkpoint does not change, so `fast_path_node` still stores the marker and `eval.py:56-64`
 still reads recall from it.
 
 **Why:** the marker has no matching tool call, and the main model rejects that list with a 400.
@@ -1589,7 +1665,7 @@ what is stored, so threads saved before it need no migration.
   nothing before the fix either, so `model_name` is the witness.
 - Eval: two runs before (`1e5416c`) and one after, each 91/94 logic, 34/34 recall, with the same
   failures, 22, 42 and 93. All 94 verdicts match. The filter fired 0 times, because each case is
-  one turn on a new thread (`eval.py:44-46`). `latest_run_metrics.json` stays at 95.74, for the
+  one turn on a new thread (`eval.py:49-51`). `latest_run_metrics.json` stays at 95.74, for the
   reason under "Rejected — committing 96.8".
 
 **The eval cannot show this fix.** It can only show no harm. `.claude/rules/evals.md` rule 5
@@ -1688,8 +1764,8 @@ The process environment is fixed until a restart, so the running app sees one va
 - **Refine:** returns the raw text before the rate limit (`app.py:270-273`). No credit is spent, as with
   Cancel. The frontend needs no change.
 - **Weather:** the graph keeps its shape, so the five compile sites do not change. `qa_node` uses a second
-  binding without the tool (`agents.py:21`, `:161`), and a replacing prompt line (`agents.py:155`) is meant to
-  stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:189`), which returns an error message
+  binding without the tool (`agents.py:21`, `:180`), and a replacing prompt line (`agents.py:174`) is meant to
+  stop an invented figure; two live weather answers held no figure. An invented call goes to `safe_tools` (`agents.py:208`), which returns an error message
   and shows no panel (`OPEN.md` item 19). A thread paused before the switch went off can still be approved
   from an open tab, so the tool itself checks the switch (`weather_aqi.py:22`). Router RULES 2 and 3 stay.
 
@@ -1764,7 +1840,7 @@ five, some in two, some have none, and each probe runs in `no_variable` only.
   no model ran.
 - *The table* keeps `route_query`, `fast_path_node` and its switch, because Problem-N shares them until item 12. The two
   Problem-N tests stay in that run, and its `Send` payload test runs through a Problem-N query. The id the router hands
-  to the marker is unproved there: the one Problem-N query has "Problem 7" in it, so the fallback at `agents.py:98-100` can
+  to the marker is unproved there: the one Problem-N query has "Problem 7" in it, so the fallback at `agents.py:99-101` can
   supply the same id.
 - *`check_fast_path.py`* goes with the table.
 

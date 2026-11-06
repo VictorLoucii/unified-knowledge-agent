@@ -16,7 +16,8 @@ async def route_query(user_query: str) -> dict:
             return {
                 "route_category": "FAST_PATH",
                 "fast_path_response": fast_data["output"],
-                "fast_path_target_id": fast_data.get("target_id", "")
+                "fast_path_target_id": fast_data.get("target_id", ""),
+                "fast_path_target_sections": fast_data.get("target_sections", []),
             }
             
     # Also handle problem ID fast path

@@ -303,7 +303,7 @@ def test_probe(core, routes):
 
 def remove_query_expansion(root):
     search = "backend/core/tools/search.py"
-    cut(root, search, "expansion_llm = ChatOpenAI(", "@tool\nasync def search_knowledge_base")
+    cut(root, search, "expansion_llm = ChatOpenAI(", '@tool(response_format="content_and_artifact")\nasync def search_knowledge_base')
     cut(root, search, "    direct_match = re.search(", "    all_queries = [", "    search_variants = []\n\n")
     replace(root, "backend/tests/conftest.py", '    monkeypatch.setattr(search, "expansion_llm", expansion_llm)\n')
 

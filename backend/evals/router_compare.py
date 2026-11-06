@@ -1,4 +1,4 @@
-"""Compare the scope router's verdict (agents.py:56-68 prompt) across models.
+"""Compare the scope router's verdict (agents.py:57-69 prompt) across models.
 
 Run from the repo root:
     uv run python -m backend.evals.router_compare

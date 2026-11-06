@@ -154,7 +154,7 @@ which is the failure the score warning in `.claude/rules/evals.md` exists to pre
   **The seven passing recall targets were never probed.** They were not needed —
   recall rose, so there was no lost point to attribute — but if a future change
   drops one, their pre-change arguments are still measurable at any commit.
-- The pool-ordering defect at `search.py:394` is untouched and still real: the
+- The pool-ordering defect at `search.py:396` is untouched and still real: the
   pool is 97 and the cap is 50, so roughly half the candidates are discarded by
   `calculate_relevance_score`, a hand-written keyword scorer, before the
   cross-encoder scores anything. Whether widening it helps is **unknown**. A
@@ -578,7 +578,7 @@ Read from source:
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
 **The permanently stale path wins when a table key matches, and only then.**
-`agents.py:44-54` calls `route_query` first and sends `fast_path_node` the result on a
+`agents.py:44-55` calls `route_query` first and sends `fast_path_node` the result on a
 hit, before any model call, and `semantic_router.py:14` matches the key as a
 *substring* of the user's query.
 **Taken from DECISIONS.md, not source:** that ordering is deliberate, recorded
@@ -586,17 +586,17 @@ under "The deterministic fast-path table runs before the classifying model", so
 a probabilistic call cannot override a deterministic match.
 
 **But the table is not the only fast path, and rows one and three above are not
-independent routes.** `semantic_router.py:22-36` runs after the table loop: when
+independent routes.** `semantic_router.py:23-37` runs after the table loop: when
 no key matched and the query names a problem, it calls `extract_problem_block`
 and serves the live block. So the same problem reaches a user by two paths, and
 which one answers depends on how the question was phrased.
 
 **Measured 2026-08-22, `route_query` awaited directly, no model call** — the
-router itself never calls a model, the classifier does, at `agents.py:57`. "Can
+router itself never calls a model, the classifier does, at `agents.py:58`. "Can
 you provide the complete details and code for Problem 14?" is a table key and
 returns the stored string, whose first line is `**# Problem 1**4`. "Tell me
 about Problem 14 please" matches no table key, falls through to
-`semantic_router.py:23` and returns the live block, whose first line is
+`semantic_router.py:24` and returns the live block, whose first line is
 `**# Problem 14**`. Both are 1,099 characters. The two strings are not equal.
 **Two users asking the same question in different words get different answers
 today.**
@@ -612,8 +612,8 @@ the `<END OF PROBLEM>` marker. 27 entries are short answers with
 `target_id: None`.
 
 **`target_id` is a recall label before it is a copy claim.** When it is truthy,
-`agents.py:103-109` synthesises the `ToolMessage` that `eval.py:51-59` scrapes and
-`eval.py:147-151` scores for Recall@k. That is why five entries carry one and
+`agents.py:104-113` synthesises the `ToolMessage` that `eval.py:56-64` scrapes and
+`eval.py:165-169` scores for Recall@k. That is why five entries carry one and
 are still not copies, and why a byte-for-byte check of all 26 would measure them
 against something they never claimed to equal.
 
@@ -806,15 +806,15 @@ this item said three, having grepped only `backend/core/` and missed the one in
 
 | Site | Behaviour on failure |
 |---|---|
-| `agents.py:57` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:176` conversational | No local handler. Propagates to `chat.py:280-282`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `agents.py:58` scope router | Falls through to `retrieval_node`. **See below.** |
+| `agents.py:195` conversational | No local handler. Propagates to `chat.py:280-282`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
 | `app.py:281` `/refine_transcript` | `app.py:286-289` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:147` was `:126` before commit `a8c9af9`
 added the router log. Re-grep rather than trusting a line number in this file.
 
 `semantic_router.py:1` imports `fast_llm` and never uses it — `route_query` is
-pure string matching and regex (`semantic_router.py:12-40`), so the router itself
+pure string matching and regex (`semantic_router.py:12-41`), so the router itself
 is not exposed. That import is dead.
 
 ### The scope router fails open, and it used to fail silently
@@ -823,9 +823,9 @@ is not exposed. That import is dead.
 CLAUDE.md's rule against empty catch blocks. It now logs.
 
 **Not fixed, and deliberately so:** the behaviour is unchanged. When
-`fast_llm` fails at `agents.py:57`, control reaches `agents.py:88` and returns
-`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:66-67` and
-the `CONVERSATIONAL` branch at `agents.py:68-69`. So a query that should be
+`fast_llm` fails at `agents.py:58`, control reaches `agents.py:89` and returns
+`"retrieval_node"`, skipping the `OUT_OF_SCOPE` branch at `agents.py:67-68` and
+the `CONVERSATIONAL` branch at `agents.py:69-70`. So a query that should be
 refused is answered instead, for as long as the model is unavailable.
 
 **Taken from DECISIONS.md, not source:** that refusal is deliberate and
@@ -1032,7 +1032,7 @@ whole application rests on one model that has begun closing doors.
 
 ### The trap that will bite a migration — *read from source*
 
-`eval.py:71` is `model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat")`.
+`eval.py:84` is `model=os.getenv("MODEL_NAME", "deepseek/deepseek-chat")`.
 `config.py:51` and `search.py:17` read the **same variable** with a different
 default. So setting `MODEL_NAME` does not only change the agent — **it swaps the
 evaluation judge from DeepSeek to whatever is set.** That is exactly what
@@ -1081,7 +1081,7 @@ compatibility signal anyone has, and its cost is unknown.
    Tool-calling accuracy is this project's binding constraint and Exacto has
    never been considered. It may matter more than the price difference.
 2. **A per-site model split.** `fast_llm` does short classification and cleanup
-   work at three sites — `agents.py:57`, `agents.py:176` and `app.py:281` —
+   work at three sites — `agents.py:58`, `agents.py:195` and `app.py:281` —
    **read from source**. A fourth, triage in `chat.py`, was removed on
    2026-10-30 (P2 item 6). None of them calls a tool, so none is
    bound by the approval-panel constraint. `fast_llm` does not have to share a
@@ -1403,8 +1403,8 @@ median 75, across 94 cases. The worst single request the cap allows is about
 2,000 input tokens.
 
 **No evaluation run was owed for either edit.** `eval.py:26` imports only
-`workflow` from `agents.py`, `eval.py:39` compiles it against `MemorySaver`, and
-`eval.py:48` calls `graph.ainvoke` directly. The suite never imports
+`workflow` from `agents.py`, `eval.py:40` compiles it against `MemorySaver`, and
+`eval.py:53` calls `graph.ainvoke` directly. The suite never imports
 `backend/app.py`, never issues an HTTP request, and never routes through
 `chat.py`, so it exercises neither `/refine_transcript` nor `/chat_stream`.
 
@@ -1422,7 +1422,7 @@ crash, and it does not spend.
 applies.
 
 **Observation, run.** The real `workflow` from `agents.py`, compiled against
-`MemorySaver` — which is what `eval.py:39` does. No server, no database, no HTTP.
+`MemorySaver` — which is what `eval.py:40` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
   input for __start__` and produces zero events. `chat.py:392-402` catches it and
@@ -1433,7 +1433,7 @@ applies.
   model call is made.
 
 The settled-thread probe wrote its state with `as_node="fast_path_node"`, because
-`agents.py:225` edges that node straight to `END` and the write therefore leaves
+`agents.py:244` edges that node straight to `END` and the write therefore leaves
 nothing to run. **A first attempt wrote the `messages` channel with no `as_node`,
 which re-triggered the entry node and spent one real model call.** Recorded
 because the fault was in the probe's design, not in the code under test, and the
@@ -1521,16 +1521,16 @@ defect.
   graph directly, so the input guardrail, the output masking and the semantic
   cache are all untested by the suite.
 - **The runtime line is printed twice on a pass and once on a fail, and that is
-  a useful accident.** `eval.py:250-251` and `eval.py:255-256` are the same
+  a useful accident.** `eval.py:290-291` and `eval.py:295-296` are the same
   `end_time` / `⏱️ Total Evaluation Time` pair, with `sys.exit(1)` at
-  `eval.py:253` between them. A failing run exits before the second. So the
+  `eval.py:293` between them. A failing run exits before the second. So the
   count of that line is a gate signature that survives in any archived log,
   independent of whether the status line was captured. Confirmed on two logs on
   2026-08-20: `f30ff63:full_evaluation_log.txt` and the copy at `HEAD` both
   print it twice and both carry `🏆 STATUS: PRODUCTION READY`. **Anyone tidying
   the duplicate away is removing a diagnostic**; say so in the commit.
 - **The weather wording in the `qa_node` prompt is ambiguous and still
-  unfixed.** `agents.py:149-158` says "You MUST call `search_knowledge_base`"
+  unfixed.** `agents.py:168-177` says "You MUST call `search_knowledge_base`"
   and "Always call the tool first" before it mentions the weather tool. GPT-5
   Mini at `minimal` effort followed the words and searched; at `low` it chose
   the weather tool, and test 94 passes. A first rewording was probed and
@@ -1576,7 +1576,7 @@ The mechanism, in order, all `read` at `7a42773`:
 3. `config.py:187-191` ends a block at the **next** header, or at end of file
    when there is none. `Agentic_AI_Engineer.md` is 1,271,338 characters and
    holds **exactly one** problem header — `Problem 42`. So the block runs to EOF.
-4. `agents.py:95` puts that string into an `AIMessage` unchanged. **There is no
+4. `agents.py:96` puts that string into an `AIMessage` unchanged. **There is no
    length cap on this path.** The only `max_length=8000` in the backend is on
    `/refine_transcript` (`app.py:265`), a different route — see item 9.
 
@@ -1733,9 +1733,9 @@ the code before it builds the same messages. Fixed by a filter in `qa_node`: `DE
 record as found, with citations kept current.**
 
 `fast_path_node` writes a `ToolMessage` with `tool_call_id="bypass_tool_call_id"`
-(`agents.py:103-109`), with no earlier `AIMessage` holding that tool call. `eval.py`
+(`agents.py:104-113`), with no earlier `AIMessage` holding that tool call. `eval.py`
 scrapes it for Recall@k. It stays in the thread, and `qa_node` sends the whole thread
-to the model (`agents.py:160`).
+to the model (`agents.py:179`).
 
 **Measured 2026-11-01, one message list sent to `primary_llm` alone:** a normal list
 was accepted. This one got a 400:
@@ -1758,10 +1758,10 @@ Problem-N hit alone; a core test covers that case.
 **Reach, read from source:** a follow-up to a RAG route, after any table row with a
 target id (26 of 53) or any Problem-N hit, in the same thread. `conversational_node`
 sends only the current message, so it is not exposed. The eval cannot see this: it
-uses a new thread per case (`eval.py:45-46`). Read, not run: a weather follow-up and the
-`/chat_approve` resume also enter `qa_node` with the whole thread (`agents.py:34-35`, `:160`).
+uses a new thread per case (`eval.py:50-51`). Read, not run: a weather follow-up and the
+`/chat_approve` resume also enter `qa_node` with the whole thread (`agents.py:34-35`, `:179`).
 
-**Before a fix, note:** the marker is what `eval.py:51-59` reads for recall, so moving
+**Before a fix, note:** the marker is what `eval.py:56-64` reads for recall, so moving
 it needs a change in the eval too. P2 item 12 removes the Problem-N part, not the table
 rows.
 
@@ -1822,7 +1822,7 @@ RAG answer earlier in the thread. A longer answer gets the truncation warning.
 
 **Not fixed. `search.py` was out of scope.** `search.py:113-117` builds a target from the word
 after "problem" or "question". The raw route returns at `search.py:224-232`, before the 8000-per-block
-cap at `:485` and `MAX_CHAR_LIMIT` at `:540`, and it sums blocks across every file that holds the id.
+cap at `:487` and `MAX_CHAR_LIMIT` at `:541`, and it sums blocks across every file that holds the id.
 
 **Measured 2026-11-02 by plain file reads with the regexes at `search.py:113` and `:198`, no model
 call:** 158 ids, 26 over 8000 characters, 13 of those word-like: `yarn` 874,632, `This` 409,294, `in`
@@ -1843,7 +1843,7 @@ request can reach about 5000 main-model calls (inferred), under one rate-limit c
 
 **Older than the switch:** any invented tool name, and any model repeating a real tool, loops the same
 way. **The switch changes one thing:** with weather on, a weather call stops at the panel for a person.
-Off, `agents.py:189` sends it to `safe_tools`, which returns an error message to the model. One fake
+Off, `agents.py:208` sends it to `safe_tools`, which returns an error message to the model. One fake
 test and no real-model sample cover an invented call. The error text names the valid tools and the off
 prompt line says there is no such tool, so a repeat looks unlikely (inferred). A `recursion_limit` in the
 configs at `chat.py:168` and `:287` looks small, but it changes behaviour on the core path.
@@ -1883,7 +1883,7 @@ aged. Not fixed: `backend/evals` was out of scope for that task.
   hold two results for one call. Two approves can race the same way today. It needs two requests on one thread at
   once from the same browser.
 - *Every paused call is declined.* The cancel answers every tool call in the paused AI message. If the model calls
-  the weather tool and another tool together, `custom_tools_condition` (`agents.py:182`) sends the whole step to
+  the weather tool and another tool together, `custom_tools_condition` (`agents.py:201`) sends the whole step to
   `sensitive_tools`. That node holds only the weather tool, so on approve the other call fails there too. Cancel
   matches approve, and the other call is not run either way.
 

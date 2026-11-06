@@ -24,6 +24,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.messages import HumanMessage
 from backend.core.agents import workflow 
+from backend.evals.recall import is_section_hit
 from langgraph.checkpoint.memory import MemorySaver
 import asyncio
 from langchain_core.globals import set_llm_cache
@@ -38,8 +39,12 @@ set_llm_cache(SQLiteCache(database_path=os.path.join(project_root, ".langchain.d
 memory = MemorySaver()
 graph = workflow.compile(checkpointer=memory)
 
-async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str]]:
-    """Returns the agent's textual response alongside mathematically extracted Problem IDs."""
+async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str], list[dict], bool]:
+    """Returns the agent's textual response alongside mathematically extracted Problem IDs.
+
+    Also returns the retrieved sections from the tool messages' artifacts, for the section
+    recall (backend/evals/recall.py), and whether a fast-path table hit wrote them.
+    """
     try:
         inputs = {"messages": [HumanMessage(content=query)]}
         test_thread_id = str(uuid.uuid4())
@@ -57,9 +62,17 @@ async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str]]:
                     if match.strip():
                         retrieved_ids.extend([x.strip() for x in match.split(",")])
                         
-        return final_message, list(set(retrieved_ids))
+        retrieved_sections = []
+        from_fast_path = False
+        for msg in output_state["messages"]:
+            if getattr(msg, "type", None) == "tool" and isinstance(getattr(msg, "artifact", None), dict):
+                retrieved_sections.extend(msg.artifact.get("retrieved_sections", []))
+                # fast_path_node's synthetic message (agents.py); its sections copy the table's label
+                from_fast_path = from_fast_path or msg.tool_call_id == "bypass_tool_call_id"
+
+        return final_message, list(set(retrieved_ids)), retrieved_sections, from_fast_path
     except Exception as e:
-        return f"Error invoking agent: {str(e)}", []
+        return f"Error invoking agent: {str(e)}", [], [], False
 
 # --- 1. Define the Structured Output for the Judge ---
 class EvalResult(BaseModel):
@@ -141,7 +154,12 @@ def run_evals():
             print(f"🔄 Running Test {actual_test_idx}...")
             
             # 1. Get Agent Output & Metadata
-            agent_output, retrieved_ids = await get_agent_response_and_metadata(test["query"])
+            agent_output, retrieved_ids, retrieved_sections, from_fast_path = await get_agent_response_and_metadata(test["query"])
+
+            # Section recall: reported beside the old recall, and kept out of the pass rule
+            # and the judge skip below until the Problem-N removal (DECISIONS.md).
+            target_sections = test.get("target_sections")
+            section_hit = is_section_hit(target_sections, retrieved_sections) if target_sections else None
             
             # 2. Check Recall@k (Mathematical Check, bypassing LLM bias)
             target_id = test.get("target_problem_id")
@@ -186,7 +204,10 @@ def run_evals():
                 "reason": verdict.reason if verdict else "Failed",
                 "target_id": target_id,
                 "is_hit": is_hit,
-                "retrieved_ids": retrieved_ids
+                "retrieved_ids": retrieved_ids,
+                "section_hit": section_hit,
+                "retrieved_sections": retrieved_sections,
+                "from_fast_path": from_fast_path,
             }
 
     async def async_run_all():
@@ -198,6 +219,8 @@ def run_evals():
         return await asyncio.gather(*tasks)
         
     results = asyncio.run(async_run_all())
+    # [hits, cases] per source of the sections: real retrieval, or a copy of the table's label
+    section_counts = {"retrieval": [0, 0], "fast-path copy": [0, 0]}
     
     for result in results:
         if result["passed"]:
@@ -214,6 +237,15 @@ def run_evals():
             else:
                 print(f"❌ SEARCH MISS: Target [{result['target_id']}] NOT found in Chroma DB Retrieval {result['retrieved_ids']}")
 
+        if result["section_hit"] is not None:
+            source = "fast-path copy" if result["from_fast_path"] else "retrieval"
+            section_counts[source][1] += 1
+            if result["section_hit"]:
+                section_counts[source][0] += 1
+                print(f"✅ SECTION HIT ({source})")
+            else:
+                print(f"❌ SECTION MISS ({source}). Retrieved: {json.dumps(result['retrieved_sections'], ensure_ascii=False)}")
+
         print(f"   Reason: {result['reason']}")
         print("-" * 60)
 
@@ -229,6 +261,14 @@ def run_evals():
     else:
         recall_score = 100.0
         print("🔎 Final Search Recall@k: N/A (No target IDs specified)")
+
+    section_hits = sum(c[0] for c in section_counts.values())
+    section_cases = sum(c[1] for c in section_counts.values())
+    if section_cases:
+        (r_hits, r_cases), (f_hits, f_cases) = section_counts["retrieval"], section_counts["fast-path copy"]
+        print(f"🔎 Section Recall@k (reported only, not in the pass rule): {section_hits}/{section_cases} "
+              f"({section_hits / section_cases * 100:.1f}%); retrieval {r_hits}/{r_cases}, "
+              f"fast-path copies {f_hits}/{f_cases} (true by construction)")
 
     print(f"🧠 Final Agent Logic Score: {passed_llm_count}/{total_llm} ({llm_score:.1f}%)")
     print("===========================================")

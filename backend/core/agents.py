@@ -51,6 +51,7 @@ async def route_input_node(state: State) -> str | Send:
             "messages": state["messages"][-1:],
             "fast_path_response": route_result["fast_path_response"],
             "fast_path_target_id": route_result.get("fast_path_target_id", ""),
+            "fast_path_target_sections": route_result.get("fast_path_target_sections", []),
         })
 
     try:
@@ -104,7 +105,10 @@ async def fast_path_node(state: State):
         tool_msg = ToolMessage(
             content=f"<!-- RETRIEVED_PROBLEM_IDS: [{target_id}] -->",
             name="search_knowledge_base",
-            tool_call_id="bypass_tool_call_id"
+            tool_call_id="bypass_tool_call_id",
+            # eval.py's section recall. A copy of the table's label, so a table hit is a
+            # recall hit by construction (DECISIONS.md). No model ever reads it.
+            artifact={"retrieved_sections": state.get("fast_path_target_sections") or []},
         )
         msgs.append(tool_msg)
         
@@ -136,6 +140,21 @@ def drop_unmatched_tool_messages(messages: list[BaseMessage]) -> list[BaseMessag
         kept.append(msg)
     return kept
 
+def without_artifacts(messages: list[BaseMessage]) -> list[BaseMessage]:
+    """Returns the list with the artifact taken off each tool message that has one.
+
+    The artifact carries the retrieved sections for eval.py. The provider never receives
+    it, but the eval's model cache keys on the whole message list, artifact included
+    (DECISIONS.md), so a message that kept it would turn every cached answer into a miss.
+    The stored message keeps its artifact; only the copy sent to the model loses it.
+    """
+    return [
+        msg.model_copy(update={"artifact": None})
+        if msg.type == "tool" and getattr(msg, "artifact", None) is not None
+        else msg
+        for msg in messages
+    ]
+
 async def qa_node(state: State):
     user_msg = ""
     for msg in reversed(state["messages"]):
@@ -157,7 +176,7 @@ async def qa_node(state: State):
         )
     )
     
-    messages = [system_prompt] + drop_unmatched_tool_messages(state["messages"])
+    messages = [system_prompt] + without_artifacts(drop_unmatched_tool_messages(state["messages"]))
     model = llm_with_tools if weather_on else llm_without_weather
     response = await model.ainvoke(messages)
     
