@@ -499,8 +499,60 @@ prompt" therefore stops firing. That guardrail was fixed deliberately once
 already, so a future session finding this fall-through should know it was seen
 and left, not missed. The exposure is written up as [OPEN.md](OPEN.md) item 7.
 
-**Not decided:** whether to give `fast_llm` a fallback. It has none —
-`config.py:80` wraps only `primary_llm`.
+**Decided 2026-11-06 (task `p2-router-reject-masking`, G18, by the owner at gate 1): `fast_llm` has a
+backup, and a time limit.** This replaces "Not decided: whether to give `fast_llm` a fallback." Failing
+open when both models fail is unchanged, and still chosen for the reason above.
+
+*Chosen:* `config.py:97` wraps `fast_llm` with `fast_llm_backup` (`config.py:87-96`): `openai/gpt-5-mini`,
+a new instance with `streaming=False`, `request_timeout=45`, `max_retries=2`, `reasoning_effort="low"`.
+`fast_llm` gains `request_timeout=45` (`config.py:77`). The wrap is in `config.py`, so all three sites take
+it: the router (`agents.py:57`), `conversational_node` (`agents.py:176`) and refine (`app.py:281`).
+
+*Why another vendor:* `fallback_llm` names the same model as `fast_llm`, so it would add retries, not a second
+model. `gemini-3.5-flash-lite` is barred as the router (`.claude/rules/evals.md`). `gpt-5-mini` is
+`primary_llm`'s default; `config.py:88` repeats the string, and a comment there names `config.py:51`.
+
+*Why a new instance:* a chat model streams under `astream_events` unless `streaming` is set explicitly to
+`False` (read, `langchain_core` 1.2.20, `chat_models.py:459-477`). `chat.py` forwards every model stream
+event except query expansion. So reusing `fallback_llm` or `primary_llm`, which stream when not in eval
+mode, would put the router's label in the visitor's stream and send conversational text twice. Inferred
+from those two reads; not run.
+
+*Why the time limit:* `fast_llm` passed `timeout=None` to the SDK, which means no limit (ran: the client's
+timeout printed `None`). A hung call never raises, and `with_fallbacks` acts only on an exception.
+Cost: the SDK retries a timeout (read, `openai/_base_client.py:1653-1661`), so a hang can take about
+3 x 45 s plus back-off before the backup runs, and the same again before the fail-open path. Before, it had
+no limit. The timeout also changed the eval cache key (ran: `_get_llm_string` differs), so the after-run
+below was cold for router and conversational calls.
+
+*Rejected:* a backup on the same model string; `gemini-3.5-flash-lite`; reusing `fallback_llm` or
+`primary_llm`. No time limit (it keeps the eval warm, but leaves a hang uncovered; the advisor session
+argued for the limit). A shorter limit: refine sends up to 8000 characters, and its answer time is not
+measured. `asyncio.wait_for` around the primary only: it keeps the cache key, but is an unusual construct
+for a small gain.
+
+**What the count no longer shows.** A `fast_llm` failure that the backup covers raises nothing, so the
+`except` arm at `agents.py:70-86` does not run: no `[WARNING]` line, and `request_skips` stays 0. That arm
+now fires only when both models fail. This is the same gap as `llm` at `config.py:80` (see "What counts as a
+skip"). Phoenix traces should show the backup's run; not checked. Seeing it needs a callback on the model
+path. Not added: the owner chose to record the gap at gate 1.
+
+**Measured 2026-11-06:**
+- Tests: `test_core_graph.py` adds three. The wrap's shape; a failing primary whose backup says
+  `OUT_OF_SCOPE`, so the query is refused and nothing is counted; both failing, so the query is answered
+  and `request_skips` rises by 1. 11 cases. 5 of 5 named mutations caught, each by the intended assertion.
+- Eval, full run, before and after, no variable (the owner's runs): 91/94, 34/34, failures 22, 42, 93, all
+  94 verdicts and all 34 recall results the same; 41-case 39/41 and 8-case 8/8, counted from that output;
+  98.40 s warm and 258.93 s cold, so the times prove nothing. `latest_run_metrics.json` stays at 95.74.
+  The eval cannot reach the backup: the primary answers every case.
+- The backup as the router, `router_compare.py`'s 13 cases (the owner's run, live): `OUT_OF_SCOPE` for
+  27-31 and 62, `CONVERSATIONAL` for 63, `IN_SCOPE` for 42, 46, 58, 59, 60 and 93. Each label matches the
+  router rules and the dataset's expected answer, by reading. The other 28 router cases were not run on it.
+- `router_compare.py` now measures `config.fast_llm.runnable`: with the wrapper, a Gemini error there would
+  show the backup's label under Gemini's name (code review; the owner approved the change).
+
+*Not measured:* the backup's price (no record prices either model), and how often OpenRouter's outages
+are errors rather than hangs.
 
 ### Arize Phoenix over LangSmith
 
@@ -613,7 +665,7 @@ and declined.
 **Why the minimal swap is not enough.** Established while checking the fast-path
 table for that edit: **the vector index is the only path this text takes to a
 reader.** `extract_problem_block` never serves this file — its regex at
-`config.py:172-174` is `^\s*(?:#|//|\*)` and every heading in the file is
+`config.py:188-190` is `^\s*(?:#|//|\*)` and every heading in the file is
 pandoc-escaped as `\#`, giving **0 matches** when run against it. No fast-path
 key concerns tracing either. So a reader gets a *retrieved chunk*, not the
 section.
@@ -626,7 +678,7 @@ either.** The note is the only place that reasoning can reach a reader through
 this system.
 
 **The honest limit.** The bullets help only if they land in the same retrieved
-chunk as the fence. `config.py:107` sets the parent chunk size to 1000 and the
+chunk as the fence. `config.py:123` sets the parent chunk size to 1000 and the
 section runs to roughly 1,600 characters, so they probably do not. Recorded
 rather than resolved.
 
@@ -903,7 +955,7 @@ so four of the six looked like marker-only differences.
 **Two latent defects were closed in the same commit, neither reachable today.**
 The action column could name a file and no repair when a difference was
 whitespace `_body` strips; a `whitespace` flag now covers that. And a live block
-with an empty body — which `config.py:193-195` can emit for a header with
+with an empty body — which `config.py:209-211` can emit for a header with
 nothing under it — has the same empty body as any one-line short answer, so the
 two collided and the short answer was reported as a header difference; the body
 test now requires a non-empty body or a problem heading. `data/` holds 118
@@ -1281,7 +1333,7 @@ answers.
 
 **Left alone, on purpose:**
 - The on-disk collection `semantic_cache_v2`. It shares `persist_directory`
-  with the main index (`config.py:88`), so deleting files there can destroy the
+  with the main index (`config.py:104`), so deleting files there can destroy the
   index. Nothing opens it now. To drop it later, call `delete_collection()`
   on a `Chroma` opened on that collection name, once, as the deleted
   `clear_cache.py` did; never delete files. Whether `backend/chroma_db` on the
@@ -1571,7 +1623,7 @@ and not locked. On GitHub, run `40894313618` on `p2-ci`: frontend 37 s,
 `TRANSCRIPT_REFINE_ENABLED` and `WEATHER_TOOL_ENABLED`, read by three functions at the end of
 `config.py`. With no variable set, every feature stays on.
 
-**Only `false` turns a feature off** (`config.py:209`). A `NAME=` line parses to an empty string
+**Only `false` turns a feature off** (`config.py:225`). A `NAME=` line parses to an empty string
 (`dotenv_values`, run), and `getenv`'s default does not apply to it, so the pattern at `config.py:48`
 turned to default-on would switch a feature off silently. The cost, accepted by the owner: `off`, `0`
 or a value holding literal quote marks, such as `"false"` typed in the Space settings, leaves a feature on and spending. A startup line prints the three states.

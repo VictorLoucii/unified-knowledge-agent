@@ -13,7 +13,7 @@ import asyncio
 import json
 import os
 
-from backend.core import config  # loads env, builds fast_llm (Flash Lite)
+from backend.core import config  # loads env, builds fast_llm (3.6 Flash, with a backup since G18)
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -39,7 +39,8 @@ def mk(model):
 
 
 MODELS = {
-    "google/gemini-3.5-flash-lite (config.fast_llm)": config.fast_llm,
+    # .runnable, not the wrapper: with the wrapper a Gemini error would show the backup's label here.
+    "google/gemini-3.6-flash (config.fast_llm.runnable)": config.fast_llm.runnable,
     "google/gemini-3.6-flash": mk("google/gemini-3.6-flash"),
     "google/gemini-2.5-flash": mk("google/gemini-2.5-flash"),
 }

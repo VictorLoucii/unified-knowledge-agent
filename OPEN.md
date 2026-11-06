@@ -210,7 +210,7 @@ weights already on disk. Treat that as a floor, not a forecast.
 Space pays it on every container start, in the background thread at `app.py:79`,
 so it never blocks the port bind. **It is not brief.** See item 4.
 
-**The likely cause, read:** `config.py:91` is
+**The likely cause, read:** `config.py:107` is
 `HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")` with **no device pinned**,
 so the library selects the device. The Mac has one to select and the container
 does not. *That the library picks the Mac GPU was general knowledge and
@@ -573,7 +573,7 @@ Read from source:
 
 | Path | Reads what | After a `data/` edit |
 |---|---|---|
-| `config.py:167-170` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
+| `config.py:183-186` `extract_problem_block` | Opens the `.md` files **from disk at request time** | **Never stale.** No ingestion involved. |
 | The vector index | Chroma and the docstore | Stale locally until a rebuild. **Fresh in the Space on every container start**, because since `003496a` there is no manifest and `ingest.py:33` returns an empty one. Observed twice on 2026-08-18 with identical chunk counts. |
 | `fast_path_routes.py` `FAST_PATH_INTERCEPTS` | **Hardcoded Python strings** | **Permanently stale.** Nothing updates it, ever. |
 
@@ -647,7 +647,7 @@ against something they never claimed to equal.
    live block, and exited 1 on that last entry alone.
 
    **Its verdict can become machine-dependent, and it is not today.**
-   `config.py:143` iterates `os.listdir` with no `sorted()` and `config.py:168`
+   `config.py:159` iterates `os.listdir` with no `sorted()` and `config.py:184`
    returns on the first file holding a matching header, so "the live block" for
    an id is whichever file the filesystem lists first. Measured 2026-08-22
    across the 26 files: 118 problem headers, 116 distinct ids, with `42` in two
@@ -755,8 +755,10 @@ defect. The comments in `docker-compose.yml` say so at the point of edit.
 The silent part is fixed. **Since `2c06890` (2026-08-22) the primary's fallback
 is on a different vendor** — `config.py:62` is `google/gemini-3.6-flash` behind
 `openai/gpt-5-mini` — which closes the "same model twice" exposure below.
-`fast_llm` and `expansion_llm` are still wrapped by nothing; that part is open.
-The model table below describes the pre-migration state.
+**Since 2026-11-06 (G18) `fast_llm` has a backup on another vendor and a 45 s time
+limit** (`DECISIONS.md`, "The scope router keeps failing open"). The router still
+fails open when both models fail. `expansion_llm` is still wrapped by nothing; that
+part is open. The model table below describes the pre-migration state.
 
 ### What happened
 
@@ -907,7 +909,7 @@ added.
   edit. Gated on finding a model. **Item 8 changes this calculation:** the
   question is no longer only which fallback to add, but which model the whole
   system should name at all.
-- **Give `fast_llm` a fallback.** Not previously considered. It never calls
+- **Give `fast_llm` a fallback. Done 2026-11-06 (G18).** Not previously considered. It never calls
   tools at any of its three sites, so the approval-panel constraint does not
   apply to it either — the same reasoning as `expansion_llm`.
 
@@ -1580,9 +1582,9 @@ The mechanism, in order, all `read` at `7a42773`:
 
 **Corrected 2026-08-22, after the commit that recorded it.** This item first
 said 867,756. That is the raw file slice from the header to EOF.
-`config.py:187` then calls `.strip()` (-1), `config.py:189-195` replaces the
+`config.py:203` then calls `.strip()` (-1), `config.py:205-211` replaces the
 27-character source header with the 16-character normalised one (-11), and
-`config.py:197` appends `\n\n<END OF PROBLEM>` (+18). What the user receives is
+`config.py:213` appends `\n\n<END OF PROBLEM>` (+18). What the user receives is
 **867,746**, measured three ways — `extract_problem_block("42")`,
 `route_query(...)["fast_path_response"]`, and the advisor session's independent
 reimplementation, all agreeing. **The subject line of commit `119e256` still
@@ -1799,7 +1801,7 @@ cap at `:485` and `MAX_CHAR_LIMIT` at `:540`, and it sums blocks across every fi
 **Measured 2026-11-02 by plain file reads with the regexes at `search.py:113` and `:198`, no model
 call:** 158 ids, 26 over 8000 characters, 13 of those word-like: `yarn` 874,632, `This` 409,294, `in`
 362,365. Numbered ids reach 34,914 (Problem 78). Problem 42 is 3,344 here, against 867,755 by the
-regex at `config.py:174` (item 12), so item 12's figure does not carry over to this route.
+regex at `config.py:190` (item 12), so item 12's figure does not carry over to this route.
 
 **The fast path switch widens it.** Today a table hit shields eval case 49 ("...'Ghost' Streaming State
 problem in Phase 4..."), whose text gives the id `in`. Off, that question may send about 362,365
@@ -1842,6 +1844,6 @@ text. It looks independent of the switch. Not run on `main`.
 
 **Measured:** importing it with the test harness's fakes raises `ImportError: cannot import name
 'get_data_file_path' from 'backend.core.config'`. `eval_corpus_growth.py:18` imports that name and `:25` calls it;
-`config.py:122` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
+`config.py:138` defines only `get_data_file_paths`, which returns a list, so renaming the import alone would not fix `:25`.
 `README.md:53` and `:114` still advertise the script. **Not checked:** when the name went, and what else in the script has
 aged. Not fixed: `backend/evals` was out of scope for that task.

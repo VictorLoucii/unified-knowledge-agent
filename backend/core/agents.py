@@ -68,13 +68,13 @@ async def route_input_node(state: State) -> str | Send:
         if "CONVERSATIONAL" in response_text:
             return "conversational_node"
     except Exception as e:
-        # Do not swallow this. fast_llm has no fallback — config.py:80 wraps
-        # only primary_llm — so a rate limit or timeout lands here, and the
-        # fall-through below skips the OUT_OF_SCOPE and CONVERSATIONAL branches
-        # above. The refusal that DECISIONS.md records under "OUT_OF_SCOPE takes
-        # precedence in the router prompt" therefore stops firing for as long as
-        # the model is unavailable, and before this log said so, nothing in the
-        # container log recorded that it had happened.
+        # Do not swallow this. fast_llm falls back to fast_llm_backup (config.py,
+        # G18), so this arm runs only when both models fail. A failure the backup
+        # covers prints nothing and is not counted. Here the fall-through below
+        # skips the OUT_OF_SCOPE and CONVERSATIONAL branches above. The refusal
+        # that DECISIONS.md records under "OUT_OF_SCOPE takes precedence in the
+        # router prompt" therefore stops firing for this query, and before this
+        # log said so, nothing in the container log recorded that it happened.
         #
         # Failing open is the pre-existing behaviour and is deliberately left
         # unchanged here; only the silence is fixed. See OPEN.md item 7.

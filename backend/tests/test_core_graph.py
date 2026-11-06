@@ -5,6 +5,8 @@ import asyncio
 import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from langchain_core.runnables import RunnableWithFallbacks
+
 from backend.core import agents, semantic_router
 from backend.core import config as backend_config
 from conftest import (
@@ -12,12 +14,18 @@ from conftest import (
     FALLBACK_TEXT,
     QUESTION,
     RETRIEVED_TEXT,
+    FailingModel,
     ScriptedModel,
+    StrictFakeMessagesListChatModel,
     checkpoint_messages,
     rag_script,
     run_chat,
     streamed_text,
 )
+
+# Read at import, before the core fixture replaces config.fast_llm with a fake.
+REAL_FAST_LLM = backend_config.fast_llm
+OUT_OF_SCOPE_QUERY = "How do I deploy a pod to Kubernetes?"
 
 GREETING_REPLY = "Hello. Ask me about the knowledge base."
 # No "problem X" in the key, so the regex fallback in fast_path_node cannot supply the id.
@@ -129,6 +137,49 @@ def test_out_of_scope_message_routes_once(core, route_calls):
 
     assert route_calls == [query]
     assert streamed_text(chunks) == FALLBACK_TEXT
+
+
+# ------------------------------------------------------------------
+# G18: fast_llm's backup
+# ------------------------------------------------------------------
+def router_with(primary, backup):
+    """The real fast_llm wrapper from config.py, with its two models replaced."""
+    return REAL_FAST_LLM.model_copy(update={"runnable": primary, "fallbacks": [backup]})
+
+
+def test_fast_llm_has_a_backup_on_another_model_that_does_not_stream():
+    assert isinstance(REAL_FAST_LLM, RunnableWithFallbacks)
+    primary, (backup,) = REAL_FAST_LLM.runnable, REAL_FAST_LLM.fallbacks
+    assert primary.model_name == "google/gemini-3.6-flash"
+    assert backup.model_name == "openai/gpt-5-mini"
+    # A model streams under astream_events unless streaming=False is set explicitly.
+    for model in (primary, backup):
+        assert model.streaming is False and "streaming" in model.model_fields_set
+        assert model.request_timeout == 45
+    assert backup is not backend_config.fallback_llm and backup is not backend_config.primary_llm
+
+
+def test_router_uses_the_backup_when_fast_llm_fails(core, monkeypatch):
+    """Steps: route (RAG), scope router (primary fails, backup says OUT_OF_SCOPE), fallback, stream. Nothing counted."""
+    backup = StrictFakeMessagesListChatModel(responses=[AIMessage(content="OUT_OF_SCOPE")])
+    monkeypatch.setattr(agents, "fast_llm", router_with(FailingModel(), backup))
+    core.set_qa(ScriptedModel())
+
+    chunks = run_chat(core.graph, OUT_OF_SCOPE_QUERY)
+
+    assert streamed_text(chunks) == FALLBACK_TEXT
+    assert backup.calls == 1 and core.qa.calls == []
+
+
+@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Scope router failed; defaulting to retrieval_node."], request_skips=1)
+def test_router_fails_open_and_counts_when_both_models_fail(core, monkeypatch):
+    """Steps: scope router (both fail), retrieval_node, answer, stream. The out-of-scope query is answered, as before G18."""
+    monkeypatch.setattr(agents, "fast_llm", router_with(FailingModel(), FailingModel()))
+    core.set_qa(rag_script(OUT_OF_SCOPE_QUERY, ANSWER))
+
+    chunks = run_chat(core.graph, OUT_OF_SCOPE_QUERY)
+
+    assert streamed_text(chunks) == ANSWER
 
 
 @pytest.mark.switch_states("fast_path_on", "no_variable")

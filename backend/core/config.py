@@ -74,11 +74,27 @@ fast_llm = ChatOpenAI(
     openai_api_base="https://openrouter.ai/api/v1",
     temperature=0,
     streaming=False,
-    max_retries=2,
+    max_retries=2, request_timeout=45,  # G18: without a timeout a hung call never raises, so it would never reach the backup
 )
 
 llm = primary_llm.with_fallbacks([fallback_llm])
 print(f"🤖 Loading LLM model: {llm.model_name}")
+
+# G18: fast_llm's backup, on another vendor, so a Gemini outage does not stop the scope router.
+# The string repeats primary_llm's default (config.py:51); a model migration changes both.
+# streaming=False is required: a streaming backup would put the router's label into the
+# visitor's stream (chat.py forwards every model stream event) and send conversational text twice.
+fast_llm_backup = ChatOpenAI(
+    model="openai/gpt-5-mini",
+    openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+    openai_api_base="https://openrouter.ai/api/v1",
+    temperature=0,
+    streaming=False,
+    request_timeout=45,
+    max_retries=2,
+    reasoning_effort="low",
+)
+fast_llm = fast_llm.with_fallbacks([fast_llm_backup])
 
 # ==========================================
 # 2. VECTOR DB INITIALIZATION

@@ -3,8 +3,8 @@
 Run from the repo root:
     uv run python -m backend.evals.check_fast_path
 Imports backend.core.config so the environment is loaded the way the app loads
-it. That import is not free — config.py:15-117 runs load_dotenv, registers
-Phoenix tracing, builds three ChatOpenAI clients and loads the all-MiniLM-L6-v2
+it. That import is not free — config.py:15-133 runs load_dotenv, registers
+Phoenix tracing, builds four ChatOpenAI clients and loads the all-MiniLM-L6-v2
 embedding model — but no model call is made. This script only reads files.
 
 Why the drift matters. semantic_router.py:12-20 serves the stored string when a
@@ -79,7 +79,7 @@ def classify(stored: str, live: str | None) -> tuple[str, str]:
         return "NO_LIVE_BLOCK", "data/: no '# Problem <id>' header exists"
     if stored == live:
         return "IDENTICAL", "nothing"
-    # `_body(live)` guards a vacuous equality. config.py:193-195 emits a bare
+    # `_body(live)` guards a vacuous equality. config.py:209-211 emits a bare
     # header for a block with no newline, whose body is "" — and every one-line
     # short answer also has a body of "". Without the guard those two collide
     # here and a short answer is reported as a header difference. No such block

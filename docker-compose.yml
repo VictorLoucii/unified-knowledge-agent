@@ -40,7 +40,7 @@ services:
     # (.dockerignore keeps backend/chroma_db and backend/docstore in the build
     # context on purpose). The two mounts removed here named ./chroma_db and
     # ./docstore, which do not exist, and mapped them to /app/chroma_db, which
-    # nothing reads — config.py:86 puts the real paths under /app/backend.
+    # nothing reads — config.py:102 puts the real paths under /app/backend.
     # depends_on:
     #   postgres:
     #     condition: service_healthy

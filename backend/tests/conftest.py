@@ -100,7 +100,7 @@ def _recording_print(*args, **kwargs):
 builtins.print = _recording_print
 
 # ------------------------------------------------------------------
-# 3. Import-time fakes for config.py (config.py:15, :24-45, :91-101)
+# 3. Import-time fakes for config.py (config.py:15, :24-45, :107-117)
 # ------------------------------------------------------------------
 DOTENV_CALLS: list = []
 
