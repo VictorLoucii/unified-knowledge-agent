@@ -27,6 +27,8 @@ from conftest import (
     run_chat,
     streamed_text,
 )
+from test_core_chat import FAKE_ROUTER_KEY, assert_key_masked_whole
+from test_core_routes import BROWSER_ID, routes  # noqa: F401 (routes is a fixture)
 
 # Measured on main at 6e5c4b8, before any switch code. A new value here means the eval
 # cache goes cold: the tool list and the prompt text are both part of the cache key.
@@ -347,3 +349,94 @@ def test_no_variable_weather_question_pauses_and_approval_answers(core, monkeypa
     assert len(weather_requests) == 3
     tool_message = checkpoint_messages(core.graph)[2]
     assert tool_message.type == "tool" and tool_message.content.startswith("Location: New Delhi")
+
+
+# ------------------------------------------------------------------
+# A rejected approval (REVAMP M5, OPEN.md item 16)
+# ------------------------------------------------------------------
+def reject(app_module, thread_id="thread-1"):
+    async def call():
+        request = app_module.ActionRequest(thread_id=thread_id, approve=False)
+        return await app_module.chat_approve(request, object(), BROWSER_ID)
+
+    return asyncio.run(call())
+
+
+def checkpoint_id(graph, thread_id="thread-1"):
+    state = asyncio.run(graph.aget_state({"configurable": {"thread_id": thread_id}}))
+    return state.config.get("configurable", {}).get("checkpoint_id")
+
+
+def pause_on_weather(core, *later_turns):
+    core.set_qa(ScriptedModel(weather_call_turn(), *later_turns))
+    run_chat(core.graph, WEATHER_QUESTION)
+    assert paused(core.graph) == ("sensitive_tools",)
+
+
+@pinned
+def test_reject_answers_the_paused_call_and_ends_the_pause(core, routes, weather_requests):
+    core.set_fast_replies("IN_SCOPE")
+    pause_on_weather(core)
+
+    assert reject(routes) == {"status": "action_cancelled"}
+
+    stored = checkpoint_messages(core.graph)
+    assert [m.type for m in stored] == ["human", "ai", "tool"]
+    assert stored[2].tool_call_id == "call_w" and stored[2].content == routes.DECLINED_TOOL_RESULT
+    assert paused(core.graph) == ()
+    assert weather_requests == []
+
+
+@pinned
+def test_new_message_after_a_reject_sends_the_call_with_its_result_and_is_answered(core, routes, weather_requests):
+    """OPEN.md item 16: before M5 this list was system, human, ai(tool call), human, and the main model refused it."""
+    core.set_fast_replies("IN_SCOPE", "IN_SCOPE")
+    pause_on_weather(core, answer_turn(ANSWER))
+    reject(routes)
+
+    chunks = run_chat(core.graph, QUESTION)
+
+    assert streamed_text(chunks) == ANSWER
+    sent = core.qa.calls[-1]
+    assert [m.type for m in sent] == ["system", "human", "ai", "tool", "human"]
+    assert sent[3].tool_call_id == sent[2].tool_calls[0]["id"]
+    assert weather_requests == []
+
+
+@pinned
+def test_reject_with_nothing_paused_writes_nothing(core, routes):
+    core.set_fast_replies("IN_SCOPE")
+    core.set_qa(rag_script(QUESTION, ANSWER))
+    run_chat(core.graph, QUESTION)
+    before = checkpoint_id(core.graph)
+
+    assert reject(routes) == {"status": "action_cancelled"}
+    assert reject(routes, "thread-never-used") == {"status": "action_cancelled"}
+
+    assert checkpoint_id(core.graph) == before
+    assert checkpoint_messages(core.graph, "thread-never-used") == []
+
+
+@pinned
+@pytest.mark.expected_skips(lines=["🚨 Reject error: fake checkpoint outage"], failed_requests=1)
+def test_reject_that_cannot_write_returns_503_and_counts(core, routes, monkeypatch, weather_requests):
+    core.set_fast_replies("IN_SCOPE")
+    pause_on_weather(core)
+
+    async def broken_write(*args, **kwargs):
+        raise RuntimeError("fake checkpoint outage")
+
+    monkeypatch.setattr(core.graph, "aupdate_state", broken_write)
+    response = reject(routes)
+
+    assert response.status_code == 503
+    assert paused(core.graph) == ("sensitive_tools",)
+
+
+@pinned
+def test_secret_across_the_edge_of_a_resumed_answer_is_masked(core, weather_requests):
+    """REVAMP M10, on the approve path: resume_graph_stream masks with its own StreamMasker."""
+    core.set_fast_replies("IN_SCOPE")
+    pause_on_weather(core, answer_turn("word " * 30 + FAKE_ROUTER_KEY + " " + "word " * 30))
+
+    assert_key_masked_whole(streamed_text(resume(core.graph)))

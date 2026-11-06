@@ -302,6 +302,28 @@ class ActionRequest(BaseModel):
     approve: bool  # True to proceed, False to cancel
 
 
+# The tool result a cancel stores, so the next message sends the model a call with its result (M5).
+DECLINED_TOOL_RESULT = "The user declined this tool call, so it did not run."
+
+
+async def decline_pending_tool_calls(thread_id: str) -> None:
+    """Answers each paused tool call with DECLINED_TOOL_RESULT, and ends the pause.
+
+    Written as qa_node: the last message is then a tool result with no call after it,
+    so the graph has nothing left to run, and a later approve finds nothing to resume.
+    A thread with no pause is left as it is.
+    """
+    from langchain_core.messages import ToolMessage
+
+    config = {"configurable": {"thread_id": thread_id}}
+    state = await graph.aget_state(config)
+    if not (state.next and "sensitive_tools" in state.next):
+        return
+    pending = getattr(state.values["messages"][-1], "tool_calls", None) or []
+    declined = [ToolMessage(content=DECLINED_TOOL_RESULT, tool_call_id=call["id"], name=call["name"]) for call in pending]
+    await graph.aupdate_state(config, {"messages": declined}, as_node="qa_node")
+
+
 @app.post("/chat_approve")
 async def chat_approve(request: ActionRequest, http_request: Request, x_browser_id: str | None = Header(default=None)):
     """Endpoint for the frontend to approve or reject a pending tool call."""
@@ -317,7 +339,7 @@ async def chat_approve(request: ActionRequest, http_request: Request, x_browser_
         return JSONResponse(status_code=503, content={"error": "Internal error"})
 
     if request.approve:
-        # Only approval resumes the graph; cancelling spends no credit and is not counted.
+        # Only approval resumes the graph; cancelling spends no credit and is not rate limited.
         if limited := check_rate_limit(http_request):
             return limited
         async def timed_resume_generator():
@@ -335,6 +357,13 @@ async def chat_approve(request: ActionRequest, http_request: Request, x_browser_
             media_type="text/event-stream"
         )
     else:
+        try:
+            await decline_pending_tool_calls(request.thread_id)
+        except Exception as e:
+            # The frontend shows "Action cancelled" whatever this returns; the count is the owner's signal.
+            print(f"🚨 Reject error: {e}")
+            count_skip("failed_requests")
+            return JSONResponse(status_code=503, content={"error": "Internal error"})
         return {"status": "action_cancelled"}
 
 

@@ -7,6 +7,8 @@ registry, route, retrieval, answer, mask and cap, stream, checkpoint.
 import pytest
 from langchain_core.messages import ToolMessage
 
+from backend.core.guardrails import StreamMasker
+
 from conftest import (
     ANSWER,
     DONE,
@@ -74,7 +76,7 @@ def test_rag_turn_runs_the_whole_core_path(core):
 
 
 def test_query_expansion_text_stays_out_of_the_stream(core):
-    """Steps: stream (the Expansion_LLM filter at chat.py:192)."""
+    """Steps: stream (the Expansion_LLM filter at chat.py:194)."""
     core.set_qa(rag_script(QUESTION, ANSWER))
 
     chunks = run_chat(core.graph, QUESTION)
@@ -84,7 +86,7 @@ def test_query_expansion_text_stays_out_of_the_stream(core):
 
 
 def test_secret_in_the_last_120_characters_is_masked(core):
-    """Steps: mask. The whole answer fits in the final buffer flush (chat.py:249-266)."""
+    """Steps: mask. The whole answer fits in the final buffer flush (chat.py:246-263)."""
     answer = f"Key {FAKE_ROUTER_KEY} and env {STUB_OPENROUTER_KEY} end."
     core.set_qa(rag_script(QUESTION, answer))
 
@@ -96,12 +98,6 @@ def test_secret_in_the_last_120_characters_is_masked(core):
     assert "[REDACTED SECRET]" in text
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Known bug: chat.py masks each streamed buffer slice on its own, "
-    "so a key that ends before the last 120 characters is sent in fragments. "
-    "Remove this mark when masking runs on the whole response.",
-)
 def test_secret_early_in_a_long_answer_is_masked(core):
     """Steps: mask, across the 120-character buffer edge."""
     answer = FAKE_ROUTER_KEY + " " + "word " * 60
@@ -112,8 +108,74 @@ def test_secret_early_in_a_long_answer_is_masked(core):
     assert FAKE_ROUTER_KEY not in text
 
 
+def assert_key_masked_whole(text):
+    """No part of the fake key's body reached the browser, and the redaction did."""
+    body = FAKE_ROUTER_KEY[len("sk-or-v1-"):]
+    assert not any(body[i:i + 8] in text for i in range(len(body) - 7)), "part of the key was sent"
+    assert "[REDACTED OPENROUTER KEY]" in text
+
+
+def test_secret_in_the_middle_of_a_streamed_answer_is_masked_whole(core):
+    """Steps: mask. The words after the key move the cut through it, a few characters per chunk."""
+    answer = "word " * 30 + FAKE_ROUTER_KEY + " " + "word " * 30
+    core.set_qa(rag_script(QUESTION, answer))
+
+    assert_key_masked_whole(streamed_text(run_chat(core.graph, QUESTION)))
+
+
+def test_secret_across_a_chunk_edge_of_a_whole_reply_is_masked(core):
+    """Steps: scope router (CONVERSATIONAL), conversational_node, mask, stream.
+
+    A conversational reply goes out in 120-character chunks (chat.py's on_chain_end branch,
+    which fast_path_node and fallback share). The key starts at 100, so it crosses the first edge.
+    """
+    reply = "x" * 100 + " " + FAKE_ROUTER_KEY + " end."
+    core.set_fast_replies("CONVERSATIONAL", reply)
+    core.set_qa(ScriptedModel())
+
+    assert_key_masked_whole(streamed_text(run_chat(core.graph, "hello there")))
+
+
+# ------------------------------------------------------------------
+# StreamMasker (guardrails.py), fed by hand
+# ------------------------------------------------------------------
+def test_masker_moves_the_cut_back_to_the_start_of_a_key_that_crosses_it():
+    masker = StreamMasker(120)
+    # Key at 100-157, after a space: the patterns need a word boundary before "sk-".
+    # The second feed makes the cut 138, inside the key.
+    sent = [masker.feed("a" * 99 + " " + FAKE_ROUTER_KEY[:20]), masker.feed(FAKE_ROUTER_KEY[20:] + " " + "b" * 100)]
+
+    assert sent == ["", "a" * 99 + " "]
+    assert_key_masked_whole("".join(sent) + masker.flush())
+
+
+def test_masker_keeps_a_url_without_a_password_and_masks_one_with_it():
+    """The URL is in data/Agentic_AI_Engineer.md; the later ":" and "@" once made it mask the text between."""
+    ordinary = 'Set "postgresql://localhost/postgres" as the default.\n\n**Then:** decorate it with @tool so it runs. ' * 3
+    with_creds = "Use postgresql://fakeuser:fakepass123@db.example:5432/app here."  # FAKE credentials
+    creds_masked = "Use postgresql://user:[REDACTED_PASSWORD]@db.example:5432/app here."
+
+    for text, expected in ((ordinary, ordinary), (with_creds, creds_masked)):
+        masker = StreamMasker(120)
+        sent = "".join(masker.feed(text[i:i + 5]) for i in range(0, len(text), 5)) + masker.flush()
+        assert sent == expected
+
+
+def test_masker_holds_back_a_secret_env_value_longer_than_its_window(monkeypatch):
+    fake_url = "postgresql://fakeuser@fakehost/" + "fakedb" * 50  # FAKE: 331 characters, no password
+    monkeypatch.setenv("DATABASE_URL", fake_url)
+    masker = StreamMasker(120)
+    text = "c" * 200 + fake_url + " " + "d" * 200
+
+    sent = "".join(masker.feed(text[i:i + 10]) for i in range(0, len(text), 10)) + masker.flush()
+
+    assert masker.hold == len(fake_url)
+    assert "fakedb" not in sent and "[REDACTED SECRET]" in sent
+    assert sent == "c" * 200 + "[REDACTED SECRET]" + " " + "d" * 200
+
+
 def test_long_answer_is_cut_at_the_length_cap(core):
-    """Steps: cap. max_allowed is max(2000, tool output + 1500) (chat.py:178, :224)."""
+    """Steps: cap. max_allowed is max(2000, tool output + 1500) (chat.py:180, :221)."""
     long_answer = "word " * 600
     core.set_qa(rag_script(QUESTION, long_answer))
 
@@ -160,7 +222,7 @@ def test_second_turn_sees_the_first_turn(core):
 
 
 def test_out_of_scope_query_streams_the_fallback_text(core):
-    """Steps: route (scope router says OUT_OF_SCOPE), stream (on_chain_end branch, chat.py:227)."""
+    """Steps: route (scope router says OUT_OF_SCOPE), stream (on_chain_end branch, chat.py:224)."""
     core.set_fast_replies("OUT_OF_SCOPE")
     core.set_qa(ScriptedModel())
 

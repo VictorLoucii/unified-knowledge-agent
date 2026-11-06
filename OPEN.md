@@ -807,7 +807,7 @@ this item said three, having grepped only `backend/core/` and missed the one in
 | Site | Behaviour on failure |
 |---|---|
 | `agents.py:57` scope router | Falls through to `retrieval_node`. **See below.** |
-| `agents.py:176` conversational | No local handler. Propagates to `chat.py:283-285`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
+| `agents.py:176` conversational | No local handler. Propagates to `chat.py:280-282`, which sends the `on_error` event to the browser (before `ad7b286`, `{'error': ...}`). Hard failure, but visible. |
 | `app.py:281` `/refine_transcript` | `app.py:286-289` logs and returns the raw transcript unchanged. Graceful. |
 
 **Line numbers drift.** `agents.py:147` was `:126` before commit `a8c9af9`
@@ -1167,10 +1167,10 @@ three spend routes check the rate limit.
 | `POST /chat_stream` | :225 | **yes** | Runs the full graph. **Guarded — see below.** Rate-limited 2026-10-29. |
 | `POST /refine_transcript` | :267 | **yes** | `fast_llm.ainvoke` at :281. **Length cap only**, `app.py:265`, 8,000 characters. No guardrail, no cache. Rate-limited 2026-10-29. |
 | `GET /` | :293 | no | Serves `static/index.html` if present. |
-| `POST /chat_approve` | :305 | **yes** | Resumes an interrupted graph run for a `thread_id` the calling browser owns; any other gets 404 (`98dae35`). Rate-limited 2026-10-29 (approve only). |
-| `GET /history` | :344 | no | Lists the calling browser's thread ids and titles (`X-Browser-Id`), with `limit`/`offset`; no header gets an empty list. Scoped 2026-10-27 (`98dae35`). |
-| `GET /history/{thread_id}` | :361 | no | Full messages of a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
-| `DELETE /history/{thread_id}` | :398 | no | Deletes a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
+| `POST /chat_approve` | :327 | **yes** | Resumes an interrupted graph run for a `thread_id` the calling browser owns; any other gets 404 (`98dae35`). Rate-limited 2026-10-29 (approve only). |
+| `GET /history` | :373 | no | Lists the calling browser's thread ids and titles (`X-Browser-Id`), with `limit`/`offset`; no header gets an empty list. Scoped 2026-10-27 (`98dae35`). |
+| `GET /history/{thread_id}` | :390 | no | Full messages of a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
+| `DELETE /history/{thread_id}` | :427 | no | Deletes a thread the calling browser owns; any other thread gets 404. Scoped 2026-10-27 (`98dae35`). |
 
 **Until G14 (`98dae35`, 2026-10-27), the three `/history` routes chained, and that
 was the data exposure.** `/history` at :331 handed out the thread ids, so nothing
@@ -1190,7 +1190,7 @@ three: `/chat_stream`, `/refine_transcript` and `/chat_approve`.**
 **Read.** `/chat_stream` is genuinely defended, but none of the defence lives in
 `app.py` — it is all in `chat.py`, which only `/chat_stream` routes through.
 
-- `chat.py:107` calls `check_input_guardrail`. `guardrails.py:13` refuses any
+- `chat.py:108` calls `check_input_guardrail`. `guardrails.py:13` refuses any
   message over 1,000 characters, and `guardrails.py:20-25` blocks jailbreak and
   key-extraction phrases.
 - The semantic cache step that ran after the guardrail and the thread save was
@@ -1425,7 +1425,7 @@ applies.
 `MemorySaver` — which is what `eval.py:39` does. No server, no database, no HTTP.
 
 - An unknown `thread_id` raises `langgraph.errors.EmptyInputError: Received no
-  input for __start__` and produces zero events. `chat.py:399-409` catches it and
+  input for __start__` and produces zero events. `chat.py:392-402` catches it and
   yielded `{"error": ...}` then `[DONE]` (since `ad7b286`, the `on_error` event
   then `[DONE]`), so the stream terminates cleanly.
 - A thread with `state.next == ()` raises nothing and yields two events,
@@ -1625,7 +1625,7 @@ is why they read alike; the mechanisms are opposite and the fixes are separate.
 reproduce, so the fix is untested against what caused it.**
 
 An earlier local session saw `/history` hang after roughly 15 minutes idle, then
-return the empty error list (`app.py:355-358`), with
+return the empty error list (`app.py:384-387`), with
 `discarding closed connection ... [BAD]` in the backend log. *Stated* — taken
 from the task brief; the original log was not re-read.
 
@@ -1765,8 +1765,34 @@ uses a new thread per case (`eval.py:45-46`). Read, not run: a weather follow-up
 it needs a change in the eval too. P2 item 12 removes the Problem-N part, not the table
 rows.
 
-## 16. A new message after a cancelled weather call is rejected by the main model (2026-11-02, found on item 15)
+## 16. A new message after a cancelled weather call is rejected by the main model (2026-11-02, found on item 15) — FIXED IN PART 2026-11-06
 
+**What M5 closed (task `p2-router-reject-masking`, REVAMP M5):** a cancel now answers each paused tool call
+with a stored tool result, "The user declined this tool call, so it did not run.", and ends the pause
+(`decline_pending_tool_calls` in `app.py`, called from the reject branch of `/chat_approve`). It writes as
+`qa_node`, so the graph has nothing left to run: written as `sensitive_tools`, `qa_node` stayed pending, and a
+later approve would have called the model (offline probe, 2026-11-06). The next message then sends system,
+human, ai(tool call), tool, human. A failed write returns 503 and counts under `failed_requests`; the frontend
+shows "Action cancelled" whatever it gets. No frontend change. Tests: four in `test_core_switches.py`.
+
+**What a visitor saw before it, measured 2026-11-06 on `db0cbd9`** (throwaway Postgres on 5434, the real
+frontend through Claude in Chrome, the checkpoint read by the owner): a weather question, a cancel, and then a
+reranker question got a full answer, in 44.08 s, with no error line in the log. `response_metadata["model_name"]`
+read `openai/gpt-5-mini` on the weather call and `google/gemini-3.6-flash` on both later AI messages. So the
+main model refused the list and the fallback answered, unseen, as in item 15. That the refusal was the 400 below
+is inferred. The unanswered call stays stored, so every later question in that thread goes to the fallback.
+
+**What M5 did not close.** Each of these keeps an AI tool call with no result, and its next message sends the
+same refused list:
+- a thread cancelled before the fix;
+- a pause the visitor leaves: the frontend sets the waiting flag only from the stream (`useChatStream.ts:139`),
+  so after a reload the input unlocks on a paused thread;
+- a thread paused before the weather switch went off, then left.
+Closing them needs `drop_unmatched_tool_messages` to answer an unanswered call at send time. Today
+`test_only_the_unmatched_tool_message_is_dropped` pins that it leaves such a call as it is, so that test would
+change. Out of scope for M5.
+
+**The record as found, 2026-11-02:**
 **Not fixed. Out of scope for item 15, which is the reverse fault.** A weather call stops at
 `interrupt_before` and stores an AI tool call with no result. Cancel writes nothing to the
 thread (`app.py:337-338`), and the frontend then asks "What would you like to do instead?"
@@ -1788,8 +1814,8 @@ went off keeps the shape, and a new message on it sends the same list in both st
 ## 17. A fast-path marker can shorten the next answer's length limit (2026-11-02, found on item 15)
 
 **Not fixed. Read from source, not run. Older than item 15's fix, which does not change it.**
-The marker stays stored, so `chat.py:172` reads it as the last tool output. A follow-up that
-answers with no tool call then has a limit of 2000 characters (`chat.py:178`), even after a long
+The marker stays stored, so `chat.py:173` reads it as the last tool output. A follow-up that
+answers with no tool call then has a limit of 2000 characters (`chat.py:180`), even after a long
 RAG answer earlier in the thread. A longer answer gets the truncation warning.
 
 ## 18. `search.py` takes any word after "problem" as an id, and that route has no length cap (2026-11-02, found on P2 item 8)
@@ -1820,7 +1846,7 @@ way. **The switch changes one thing:** with weather on, a weather call stops at 
 Off, `agents.py:189` sends it to `safe_tools`, which returns an error message to the model. One fake
 test and no real-model sample cover an invented call. The error text names the valid tools and the off
 prompt line says there is no such tool, so a repeat looks unlikely (inferred). A `recursion_limit` in the
-configs at `chat.py:167` and `:290` looks small, but it changes behaviour on the core path.
+configs at `chat.py:168` and `:287` looks small, but it changes behaviour on the core path.
 
 ## 20. With the fast path off, a Problem-N question can skip retrieval, and a conversational reply can be empty (2026-11-02, found on P2 item 8)
 

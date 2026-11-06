@@ -5,6 +5,7 @@ import openai
 from langchain_core.messages import HumanMessage, ToolMessage
 
 from backend.core.guardrails import (
+    StreamMasker,
     check_input_guardrail,
     mask_sensitive_data,
     get_content_length,
@@ -173,8 +174,9 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
 
         generated_chars_count = 0
         full_response = ""
-        stream_buffer = ""
         BUFFER_WINDOW = 120
+        # Holds back at least BUFFER_WINDOW characters, more for a longer secret (M10).
+        masker = StreamMasker(BUFFER_WINDOW)
         max_allowed = max(2000, last_tool_output_length + 1500)
 
         async for event in graph.astream_events(inputs, config, version="v2"):
@@ -194,14 +196,9 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
 
                 chunk = event["data"].get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    content = chunk.content
-                    stream_buffer += content
+                    safe_output = masker.feed(chunk.content)
 
-                    if len(stream_buffer) > BUFFER_WINDOW:
-                        to_output = stream_buffer[:-BUFFER_WINDOW]
-                        stream_buffer = stream_buffer[-BUFFER_WINDOW:]
-
-                        safe_output = mask_sensitive_data(to_output)
+                    if safe_output:
                         generated_chars_count += len(safe_output)
 
                         if generated_chars_count > max_allowed:
@@ -229,11 +226,11 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                 if isinstance(output_data, dict) and "messages" in output_data:
                     for msg in output_data["messages"]:
                         if msg.__class__.__name__ == "AIMessage" and msg.content:
-                            content = msg.content
+                            # The whole text is masked before it is cut, so no key crosses a chunk edge (M10).
+                            content = mask_sensitive_data(msg.content)
                             chunk_size = 120
                             for i in range(0, len(content), chunk_size):
-                                chunk = content[i:i+chunk_size]
-                                safe_output = mask_sensitive_data(chunk)
+                                safe_output = content[i:i+chunk_size]
                                 stream_event = {
                                     "event": "on_chat_model_stream",
                                     "name": "fast_path_node",
@@ -242,12 +239,12 @@ async def generate_chat_responses(user_message: str, thread_id: str, graph, asyn
                                 }
                                 yield f"data: {json.dumps(stream_event)}\n\n"
                                 await asyncio.sleep(0.01)
-                            full_response += mask_sensitive_data(content)
+                            full_response += content
 
 
         # Flush remaining buffer
-        if stream_buffer:
-            safe_output = mask_sensitive_data(stream_buffer)
+        safe_output = masker.flush()
+        if safe_output:
             generated_chars_count += len(safe_output)
 
             flush_event = {
@@ -295,8 +292,9 @@ async def resume_graph_stream(thread_id: str, graph):
         last_tool_output_length = get_last_tool_output_length(state)
         generated_chars_count = 0
         full_response = ""
-        stream_buffer = ""
         BUFFER_WINDOW = 120
+        # Holds back at least BUFFER_WINDOW characters, more for a longer secret (M10).
+        masker = StreamMasker(BUFFER_WINDOW)
         max_allowed = max(2000, last_tool_output_length + 1500)
 
         # Passing 'None' tells LangGraph to pick up exactly where it left off
@@ -314,14 +312,9 @@ async def resume_graph_stream(thread_id: str, graph):
                     continue
                 chunk = event["data"].get("chunk")
                 if chunk and hasattr(chunk, "content") and chunk.content:
-                    content = chunk.content
-                    stream_buffer += content
+                    safe_output = masker.feed(chunk.content)
 
-                    if len(stream_buffer) > BUFFER_WINDOW:
-                        to_output = stream_buffer[:-BUFFER_WINDOW]
-                        stream_buffer = stream_buffer[-BUFFER_WINDOW:]
-
-                        safe_output = mask_sensitive_data(to_output)
+                    if safe_output:
                         generated_chars_count += len(safe_output)
 
                         if generated_chars_count > max_allowed:
@@ -348,11 +341,11 @@ async def resume_graph_stream(thread_id: str, graph):
                 if isinstance(output_data, dict) and "messages" in output_data:
                     for msg in output_data["messages"]:
                         if msg.__class__.__name__ == "AIMessage" and msg.content:
-                            content = msg.content
+                            # The whole text is masked before it is cut, so no key crosses a chunk edge (M10).
+                            content = mask_sensitive_data(msg.content)
                             chunk_size = 120
                             for i in range(0, len(content), chunk_size):
-                                chunk = content[i:i+chunk_size]
-                                safe_output = mask_sensitive_data(chunk)
+                                safe_output = content[i:i+chunk_size]
                                 stream_event = {
                                     "event": "on_chat_model_stream",
                                     "name": "fast_path_node",
@@ -361,12 +354,12 @@ async def resume_graph_stream(thread_id: str, graph):
                                 }
                                 yield f"data: {json.dumps(stream_event)}\n\n"
                                 await asyncio.sleep(0.01)
-                            full_response += mask_sensitive_data(content)
+                            full_response += content
 
 
         # Flush remaining buffer
-        if stream_buffer:
-            safe_output = mask_sensitive_data(stream_buffer)
+        safe_output = masker.flush()
+        if safe_output:
             generated_chars_count += len(safe_output)
 
             flush_event = {

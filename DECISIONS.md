@@ -388,7 +388,7 @@ now." The banner shows a failed variant.
 runs after the ownership check and before the chat pre-steps. No pre-step can
 therefore answer during loading. It also adds no latency line, and it
 stays outside `backend/core/**`, which `.claude/rules/evals.md` scopes. The cost
-is a second copy of the guardrail refusal's event shape (`chat.py:109-115`).
+is a second copy of the guardrail refusal's event shape (`chat.py:110-116`).
 
 **No eval run, and why.** `eval.py:26-48` compiles its own graph and calls
 `graph.ainvoke`. It never calls `/chat_stream`, `generate_chat_responses` or
@@ -428,7 +428,7 @@ whatever the documentation says, so moving the frontend to 8000 would have
 recreated the split rather than closed it.
 
 The code already agreed with the note in five places — `Dockerfile:30` and
-`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:420`, and the three
+`:33`, `README.md:7`'s `app_port: 7860`, `backend/app.py:449`, and the three
 call sites above. **8000 appears in no Python or TypeScript source file
 anywhere in the repository**; grepped repo-wide, the only source hits are
 `search.py:485` and `:487`, which truncate a text block at 8000 *characters*.
@@ -722,6 +722,55 @@ two numbers measure different strings and are not meant to agree — the message
 cap measures what is sent, the transcript cap measures what is dictated before
 editing. The full evidence, both stop paths and where 8,000 comes from, is in
 [OPEN.md](OPEN.md) item 9 under "Why 8,000 and not 1,000".
+
+### Masking holds back a whole secret; a whole reply is masked before it is cut
+
+**Chosen (2026-11-06, task `p2-router-reject-masking`, REVAMP M10, by the owner at gate 1):** the model
+stream in both `generate_chat_responses` and `resume_graph_stream` (`chat.py`) sends text through
+`StreamMasker` (`guardrails.py`). It holds back at least 120 characters, as before, and never fewer than the
+longest secret it can match: 89 for an `sk-or-v1-` key, 67 for an `sk-` key, or the longest secret env value.
+It masks the whole buffer, and when a match crosses the cut, it moves the cut back to the match's start. So a
+matchable secret that starts in the sent part is whole when it is masked. The whole-reply branch
+(`fast_path_node`, `conversational_node`, `fallback`) masks the whole text first and then cuts it into
+120-character chunks. `mask_sensitive_data` keeps its lines; its three patterns and its env-name list are now
+module constants below it, which the masker reads too.
+
+**Why:** the old code masked each slice on its own (`stream_buffer[:-120]`, and each 120-character chunk). A key
+across a slice edge reached the browser in parts. Measured 2026-10-29 for the stream (the strict xfail), and
+on 2026-11-06 for the chunks with fake keys: a key across a 120-character chunk edge leaked.
+
+**What a visitor sees change:** nothing, for an ordinary answer. The stream still holds 120 characters
+back and sends them at the end. A longer secret env value holds back more, and a key near the cut is held
+until it is whole. The length cap counts the same sent text, so it is unchanged.
+
+**Rejected:**
+- *Mask the whole streamed answer before sending any of it.* The visitor would see nothing until the model
+  finished. It is kept for the whole-reply branch, where the text is already whole.
+- *`sk-proj-` keys.* No pattern matches them, and widening a pattern is a coverage change, not the slice
+  edge (`REVAMP.md`, P1 deferred item (e)). An `sk-proj-` key set as `OPENAI_API_KEY` is masked by value.
+
+**The database pattern was bounded in the same change (the owner's decision after the code review).** The
+old `postgresql://[^:]+:([^@]+)@` crosses spaces and lines. Masked whole, it replaced ordinary text from
+`postgresql://localhost/postgres` (in `data/Agentic_AI_Engineer.md`) to the next `:` and `@`, such as
+`@tool`, with `[REDACTED_PASSWORD]`; the old 120-character slices had capped that. Now it is
+`postgresql://[^:@\s/]+:[^@\s]+@`: no whitespace or `/` in the user, no whitespace in the password. A
+`user:password@host` URL is still masked (fake values, tested).
+
+**Not covered, stated so no reader takes this for more:**
+- A password with whitespace no longer matches `DB_PASSWORD_PATTERN`. A password with no whitespace and longer
+  than the hold can still cross the cut before its `@` arrives. A `DATABASE_URL` value that is set is masked
+  whole by value.
+- A key no pattern matches at all is sent as before: `sk-proj-`, an `sk-` key over 64 characters, and a key
+  glued to a word, because the patterns need a word boundary before `sk-` (found writing the move-back test).
+- `resume_graph_stream`'s whole-reply branch cannot run: a resume starts at `sensitive_tools` and goes to
+  `qa_node` (inferred from the edges in `agents.py`). It gets the same change and has no test. Dead code is
+  mentioned, not removed.
+
+**Measured 2026-11-06:** the strict xfail mark is gone, and `test_secret_early_in_a_long_answer_is_masked`
+passes in all five switch states. Added: a key in the middle of a streamed answer (five states); a key across a
+chunk edge of a conversational reply (five states); a key across the edge of a resumed answer; the masker's
+move-back; an env value longer than the window; a URL with no password kept, one with a password masked.
+6 of 6 named mutations caught.
 
 ---
 
@@ -1225,7 +1274,7 @@ below.
 ### The chat pre-steps are one list; the thread save is one step that fails closed
 
 **Chosen (2026-10-29, P2 item 4, REVAMP section 12 point 3):**
-`generate_chat_responses` runs `PRE_STEPS` (`chat.py:139`) in order, then the
+`generate_chat_responses` runs `PRE_STEPS` (`chat.py:140`) in order, then the
 graph path. The steps are the input guardrail and the thread save. Until
 2026-10-30 the semantic cache and triage followed the save (see "The semantic
 cache is removed, not fixed" and "Triage is removed; the router is the one
@@ -1238,7 +1287,7 @@ returns, so a step that fails has sent nothing.
 **Two failure policies, not one.** An optional step keeps its own `try` and its
 exact warning text, and passes on when it fails. Triage and the cache were the
 optional steps; both were removed 2026-10-30, so the list holds none today. The guardrail and the thread save are core: they have no `try`, and the
-runner ends the turn with `_error_events` (`chat.py:86`), the same events and
+runner ends the turn with `_error_events` (`chat.py:87`), the same events and
 logs the graph path's `except` sends. A save that passed on would leave no
 `thread_metadata` row, so the next checkpoint write fails its foreign key, and
 with `durability="async"` (see "The thread registry is core") a model call can
@@ -1371,7 +1420,7 @@ the test, by name.
 **Chosen (2026-10-30, by the owner; decision 5, M6; P2 item 6, REVAMP section
 12 "How a removal is done"):** the triage pre-step is deleted: `_triage_step`,
 its prompt and its `PRE_STEPS` entry. `PRE_STEPS` is now the guardrail and the
-thread save (`chat.py:139`). The scope router in the graph (`agents.py:57-64`)
+thread save (`chat.py:140`). The scope router in the graph (`agents.py:57-64`)
 stays and is now the only model that classifies scope.
 
 **Why:**
@@ -1558,12 +1607,12 @@ differently. A run with `PYTHONHASHSEED` fixed would test it. That run was not m
 
 **Rejected:**
 - *Stop storing the marker.* Recall would need a new channel in `eval.py`, stored threads stay
-  broken, and `chat.py:178` changes.
+  broken, and `chat.py:180` changes.
 - *Store a matching tool call.* Stored threads stay broken, and every follow-up shows the model a
   fake search with an empty result.
 - *Match only the literal `bypass_tool_call_id`.* It cannot drop a real result by accident, but
   it leaves any other unmatched tool message to the 400. The general rule keeps real results, and
-  two tests guard that (`test_core_chat.py:65-66`, `test_only_the_unmatched_tool_message_is_dropped`).
+  two tests guard that (`test_core_chat.py:67-68`, `test_only_the_unmatched_tool_message_is_dropped`).
 
 ## CI
 
@@ -1732,7 +1781,7 @@ file and a target, with its reason, and one nothing needs fails the test. A test
 against `workflow.nodes` at the five compile sites, because a stale name at `app.py:74` fails only at startup.
 
 **Uncovered, so no reader takes these tests as proof of more:**
-- Names that go quiet rather than fail: `chat.py:227`, `:239`, `:270`, `:346`, `:358`, `:389`. `chat.py`'s `Expansion_LLM`
+- Names that go quiet rather than fail: `chat.py:224`, `:236`, `:267`, `:339`, `:351`, `:382`. `chat.py`'s `Expansion_LLM`
   filter likewise.
 - Router RULE 2, and the prompt's "weather or technical query" wording.
 - The frontend: approval panel, microphone, footer display. What the mic does on a 404 from `/refine_transcript` was not run.
@@ -1767,11 +1816,12 @@ so a rise has a line in the log to explain it.
 `"skips": {"request_skips": n, "startup_faults": n, "failed_requests": n, "seconds_since_start": n}`. If the count code
 fails, the key is absent and the other fields still answer.
 
-**The sort, 31 `count_skip` calls (`skip_counter.py`):**
+**The sort, 31 `count_skip` calls (`skip_counter.py`); 32 since 2026-11-06, when a failed reject was added to `failed_requests`:**
 - *`request_skips`, 14:* the request is answered with less. The scope router, query expansion, three search interceptors,
   `extract_problem_block`, three title sites, refine, and the index, stats and weather tools.
 - *`startup_faults`, 10:* Phoenix, the data folder (two), ingestion (six), table setup.
-- *`failed_requests`, 7:* the caller got an error. A failed turn or resume, an ownership check, and the history and delete routes.
+- *`failed_requests`, 7, now 8:* the caller got an error. A failed turn or resume, an ownership check, and the history and delete routes.
+  Since 2026-11-06 also a reject whose write failed: the route returns 503, but the frontend shows "Action cancelled" whatever it gets (`useChatStream.ts:257-275`), so the count is the owner's only sign.
   The plan's word was "failed turn"; the history and delete routes are not turns, and nothing else shows their failures.
   A credit-limit refusal counts here, because the caller gets the paused line and no answer. So a spent key reads like a wave of failures.
 

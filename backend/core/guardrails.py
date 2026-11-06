@@ -86,17 +86,78 @@ def mask_sensitive_data(text: str) -> str:
         return text
     
     # Mask environment variable values dynamically
-    sensitive_keys = ["OPENROUTER_API_KEY", "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY", "OPENAI_API_KEY", "WAQI_API_KEY"]
+    sensitive_keys = SENSITIVE_ENV_NAMES
     for key in sensitive_keys:
         val = os.getenv(key)
         if val and len(val) > 4 and val in text:
             text = text.replace(val, "[REDACTED SECRET]")
-            
+
     # Mask typical OpenRouter / OpenAI API keys (sk-or-v1-...) with flexible length
-    text = re.sub(r"\bsk-or-v1-[a-zA-Z0-9]{40,80}\b", "[REDACTED OPENROUTER KEY]", text)
+    text = OPENROUTER_KEY_PATTERN.sub("[REDACTED OPENROUTER KEY]", text)
     # Mask other typical API keys with flexible length
-    text = re.sub(r"\bsk-[a-zA-Z0-9]{32,64}\b", "[REDACTED API KEY]", text)
+    text = API_KEY_PATTERN.sub("[REDACTED API KEY]", text)
     # Mask DB password patterns in connection strings
-    text = re.sub(r"postgresql://[^:]+:([^@]+)@", "postgresql://user:[REDACTED_PASSWORD]@", text)
-    
+    text = DB_PASSWORD_PATTERN.sub("postgresql://user:[REDACTED_PASSWORD]@", text)
+
     return text
+
+
+# Defined below mask_sensitive_data so its lines keep the numbers that records cite.
+SENSITIVE_ENV_NAMES = ("OPENROUTER_API_KEY", "DATABASE_URL", "PGPASSWORD", "LANGCHAIN_API_KEY", "OPENAI_API_KEY", "WAQI_API_KEY")
+OPENROUTER_KEY_PATTERN = re.compile(r"\bsk-or-v1-[a-zA-Z0-9]{40,80}\b")
+API_KEY_PATTERN = re.compile(r"\bsk-[a-zA-Z0-9]{32,64}\b")
+# No whitespace and no "/" in the user, no whitespace in the password: unbounded, it masked ordinary text
+# from "postgresql://localhost/postgres" to the next ":" and "@" (code review, 2026-11-06).
+DB_PASSWORD_PATTERN = re.compile(r"postgresql://[^:@\s/]+:[^@\s]+@")
+# The longest text the two key patterns can match: "sk-or-v1-" plus 80, and "sk-" plus 64.
+LONGEST_KEY_MATCH = max(len("sk-or-v1-") + 80, len("sk-") + 64)
+
+
+class StreamMasker:
+    """Masks a streamed answer whose secrets may cross a chunk edge (REVAMP M10).
+
+    feed() returns the text that is safe to send now; flush() returns the rest at the end.
+    It holds back at least `hold` characters, and never fewer than the longest secret it
+    can match: a key pattern's longest match, or the longest secret env value. So any
+    secret that starts in the sent part is whole in the buffer when it is masked. If a
+    match crosses the cut, the cut moves back to the match's start.
+
+    Not covered: DB_PASSWORD_PATTERN has no length limit, so a password longer than the
+    hold can still cross the cut before its "@" arrives. A key no pattern matches at all,
+    such as an sk-proj- key, is sent as it is, as before.
+    """
+
+    def __init__(self, hold: int = 120):
+        env_values = [os.getenv(name) or "" for name in SENSITIVE_ENV_NAMES]
+        self.hold = max(hold, LONGEST_KEY_MATCH, *(len(value) for value in env_values))
+        self.pending = ""
+
+    def _secret_spans(self, text: str):
+        for name in SENSITIVE_ENV_NAMES:
+            value = os.getenv(name)
+            if value and len(value) > 4:
+                start = text.find(value)
+                while start != -1:
+                    yield start, start + len(value)
+                    start = text.find(value, start + 1)
+        for pattern in (OPENROUTER_KEY_PATTERN, API_KEY_PATTERN, DB_PASSWORD_PATTERN):
+            for match in pattern.finditer(text):
+                yield match.start(), match.end()
+
+    def feed(self, text: str) -> str:
+        self.pending += text
+        cut = len(self.pending) - self.hold
+        if cut <= 0:
+            return ""
+        moved = True
+        while moved:
+            moved = False
+            for start, end in self._secret_spans(self.pending):
+                if start < cut < end:
+                    cut, moved = start, True
+        sent, self.pending = self.pending[:cut], self.pending[cut:]
+        return mask_sensitive_data(sent)
+
+    def flush(self) -> str:
+        rest, self.pending = self.pending, ""
+        return mask_sensitive_data(rest)
