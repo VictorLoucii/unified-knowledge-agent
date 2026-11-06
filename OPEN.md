@@ -1911,3 +1911,16 @@ Problem-N removal deleted from every case, so a fixed import would still find no
   matches approve, and the other call is not run either way.
 
 **Not checked:** whether the main model ever calls the weather tool together with another tool.
+
+## 23. An agent error in the eval is reported as a search miss (2026-11-06, found on P2 item 12)
+
+**Not fixed. Read from source, not run.** When `graph.ainvoke` raises, `eval.py:64-65` returns
+the text `Error invoking agent: ...` with no retrieved sections. For a case with `target_sections`,
+`is_section_hit` is then False, and `eval.py:153-154` records `SEARCH MISS: Target document not
+retrieved.` without calling the judge. The error text never reaches the report, and the run prints
+the hint at `eval.py:247` to tune ChromaDB, not to check the provider. An OpenRouter outage on a
+labelled case therefore reads as a retrieval regression.
+
+**Older than the Problem-N removal.** The old rule (a `target_problem_id` with no id in the marker)
+hid the error the same way; the removal carried it over to section recall. Found by `/code-review
+high` on that change. **Not checked:** how often a run has hit it; no recorded run shows it.
