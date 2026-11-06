@@ -18,7 +18,7 @@ uv run python -m backend.evals.eval --concurrency 1
 
 - **Never set `MODEL_NAME`.** Three places read it: `config.py:51` (agent,
   default `openai/gpt-5-mini`), `search.py:17` (query expansion,
-  `google/gemini-3.5-flash-lite`) and `eval.py:84` (judge,
+  `google/gemini-3.5-flash-lite`) and `eval.py:74` (judge,
   `deepseek/deepseek-chat`). Setting it also swaps the judge, which invalidates
   every cached judgment and makes the run far more expensive. A model migration
   changes the default strings in source (`OPEN.md` item 8).
@@ -28,7 +28,7 @@ uv run python -m backend.evals.eval --concurrency 1
   Apple-GPU backend.
 - **Every run overwrites `backend/evals/latest_run_metrics.json`**, a partial
   `--indices` run too. Back it up before a partial run; restore it after.
-- `--indices` is 1-based (`eval.py:141`). `eval.py:147` sizes the totals from the
+- `--indices` is 1-based (`eval.py:131`). `eval.py:137` sizes the totals from the
   sliced dataset.
 - The run needs `.env`, which the sandbox blocks. The owner starts it.
 
@@ -39,8 +39,8 @@ uv run python -m backend.evals.eval --concurrency 1
    `HEAD`. On a regression, find the cause, fix or revert, and re-run. Read the
    pass threshold from `eval.py`; never restate it.
 3. **Be surgical with the system prompt.** The directives in
-   `backend/core/agents.py` for problem extraction, rigid formatting and the
-   zero-knowledge guardrail are load-bearing.
+   `backend/core/agents.py`, the zero-knowledge guardrail among them, are
+   load-bearing.
 4. **Change the test when the behaviour should change.** Update the expected
    output in `backend/evals/qa_dataset.json`; do not bend the prompt to an
    outdated test. Update `check_fast_path.py` in the same change when a change
@@ -57,8 +57,8 @@ uv run python -m backend.evals.eval --concurrency 1
 The fast-path table (`backend/core/fast_path_routes.py`, 53 entries) answers 53
 of the 94 cases with no retriever or model call. `semantic_router.py` matches a
 key as a substring of the query; `agents.py:fast_path_node` returns the stored
-answer and a synthetic `ToolMessage` with the problem id, which `eval.py`
-scrapes for Recall@k.
+answer and a synthetic `ToolMessage` whose artifact copies the entry's
+`target_sections`, which `eval.py` reads for section recall.
 
 **When you change retrieval, report the 41-case and 8-case figures beside the
 headline.** Run only the exercised cases:
@@ -74,12 +74,12 @@ dataset changes.
 
 ## Runtime proves nothing
 
-- `eval.py:36` caches every model call in `.langchain.db` (gitignored, ~100 MB).
-  A warm run still makes some model calls. The old recall marker lists its
-  problem ids in a Python set's order, which changes from run to run. So a
-  retrieval case whose marker holds two or more ids misses the cache
-  (`DECISIONS.md`, "Recall counts sections, not problem numbers"; measured
-  2026-11-06). Any prompt, retrieval or model-string edit
+- `eval.py:35` caches every model call in `.langchain.db` (gitignored, ~100 MB).
+  A warm run still makes some model calls. Until the Problem-N removal the old
+  recall marker listed its problem ids in a Python set's order, so a retrieval
+  case whose marker held two or more ids missed the cache (`DECISIONS.md`,
+  "Recall counts sections, not problem numbers"; measured 2026-11-06). Any
+  prompt, retrieval or model-string edit
   turns hits into misses. Do not read a slow run as a regression or a fast one
   as a pass.
 - The cache is never invalidated: lookups key on the exact prompt text, and

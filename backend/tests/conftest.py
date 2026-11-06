@@ -480,7 +480,6 @@ def core(monkeypatch, switch_state):
     monkeypatch.setattr(search, "expansion_llm", expansion_llm)
     monkeypatch.setattr(search, "retriever", retriever)
     monkeypatch.setattr(search, "get_reranker", lambda: reranker)
-    monkeypatch.setattr(search, "get_data_file_paths", lambda: [])
 
     ns = SimpleNamespace(
         state=state,

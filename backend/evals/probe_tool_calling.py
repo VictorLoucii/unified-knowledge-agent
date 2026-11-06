@@ -1,8 +1,8 @@
 """Tool-calling probe for OPEN.md item 8.
 
 Mirrors the real call path: ChatOpenAI with the config.py:50-57 settings,
-the real five tools bound with bind_tools, the qa_node system prompt from
-agents.py:168-177, streaming on. Records every streamed chunk in order and
+the real tools bound with bind_tools (three since 2026-11-06), the qa_node system prompt from
+agents.py:163-172, streaming on. Records every streamed chunk in order and
 flags any text content that arrives BEFORE the first tool-call chunk, which
 is what breaks the frontend approval panel (DECISIONS.md:20-23).
 

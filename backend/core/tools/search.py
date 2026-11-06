@@ -2,7 +2,7 @@ import os
 import re
 from langchain_core.tools import tool
 from langchain_openai import ChatOpenAI
-from backend.core.config import retriever, get_data_file_paths
+from backend.core.config import retriever
 from backend.core.skip_counter import count_skip
 _reranker = None
 
@@ -40,13 +40,6 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
     they wrote it. Do NOT shorten it into keywords and do NOT rephrase it. The
     tool performs its own keyword expansion on what you send, so a fragment
     gives it less to work with, not more.
-    This applies to every query, including a specific Problem ID (e.g.
-    'Problem 26') and ordinal positions like 'the first problem' or 'the last
-    problem' — those exact phrases must survive into the query you pass.
-
-    CRITICAL FORMATTING: When the tool returns a specific problem block, 
-    you must output the text EXACTLY as is, character-for-character, without summarizing. 
-    (EXCEPTION: If answering a meta-query about your capabilities per Directive 11, you MUST prepend your conversational explanation FIRST, before the exact text).
     """
     # Guardrail: Truncate and strip query to prevent massive injections.
     # 1000 matches the cap check_input_guardrail applies at guardrails.py:13.
@@ -60,26 +53,21 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
 
     print(f"\n📥 [TOOL CALL] search_knowledge_base triggered with query: '{query}'")
 
-    direct_match = re.search(r"(?i)\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", query)
-    if direct_match:
-        # Skip expansion entirely — go straight to raw extraction
+    try:
+        prompt_content = (
+            f"Generate 3 diverse, highly specific keyword search queries (1-5 words each) to find the answer to this exact query: '{query}'.\n"
+            "RULE 1: Use synonyms, specific technical terms, and alternative phrasing.\n"
+            "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query.\n"
+            "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
+        )
+        response = await expansion_llm.ainvoke(prompt_content)
+        search_variants = response.content.split("\n")
+    except Exception as e:
+        print(f"🚨 [ERROR] expansion_llm.invoke failed: {e}")
+        count_skip("request_skips")
+        import traceback
+        traceback.print_exc()
         search_variants = []
-    else:
-        try:
-            prompt_content = (
-                f"Generate 3 diverse, highly specific keyword search queries (1-5 words each) to find the answer to this exact query: '{query}'.\n"
-                "RULE 1: Use synonyms, specific technical terms, and alternative phrasing.\n"
-                "RULE 2: DO NOT invent or add problem numbers. ONLY include a problem number if the user explicitly typed one in their query.\n"
-                "Respond with ONLY the raw queries, one per line. No numbers, no bullets."
-            )
-            response = await expansion_llm.ainvoke(prompt_content)
-            search_variants = response.content.split("\n")
-        except Exception as e:
-            print(f"🚨 [ERROR] expansion_llm.invoke failed: {e}")
-            count_skip("request_skips")
-            import traceback
-            traceback.print_exc()
-            search_variants = []
 
     all_queries = [
         q.strip().lstrip("0123456789.- ") for q in search_variants if q.strip()
@@ -94,149 +82,11 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
         all_queries.append("Scenario A: Adding New Files Place your new .md or .docx files in the data directory and Restart the backend server")
         print("🎯 [DEBUG] Injected exact semantic query for multiple files ingestion guide fix.")
 
-    all_queries = [
-        (
-            re.sub(r"(?i).*\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+).*", r"# \1 \2", q)
-            if re.search(r"(?i)\b(problem|question)s?\b\s*(?::\s*|\s+)[A-Za-z0-9_]+", q)
-            else q
-        )
-        for q in all_queries
-    ]
-
     all_queries = list(set(all_queries))
     print(f"🤖 [DEBUG] Queries actually being searched: {all_queries}")
 
-    direct_problem_blocks = []
-    target_problems = set()
-
-    for q in all_queries:
-        match = re.search(r"(?i)\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", q)
-        if match:
-            prefix = match.group(1).lower()
-            target_problems.add(f"{prefix}_{match.group(2)}")
-
     # ==========================================
-    # 1. ORDINAL INTERCEPTOR (First / Last)
-    # ==========================================
-    query_lower = query.lower()
-    needs_first = any(x in query_lower for x in ["first problem", "oldest problem"])
-    needs_last = any(x in query_lower for x in ["last problem", "latest problem"])
-
-    if needs_first or needs_last:
-        try:
-            data_files = get_data_file_paths()
-            all_ids = []
-            
-            for data_file in data_files:
-                if os.path.exists(data_file):
-                    with open(data_file, "r", encoding="utf-8") as f:
-                        temp_text = f.read()
-
-                    file_ids = []
-                    for m in re.findall(r"(?im)^[^a-zA-Z]*\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", temp_text):
-                        if m[1].isdigit():
-                            file_ids.append(int(m[1]))
-                    all_ids.extend(file_ids)
-
-            if all_ids:
-                if needs_first:
-                    min_id = str(min(all_ids))
-                    target_problems.add(f"problem_{min_id}")
-                    print(
-                        f"🎯 [DEBUG] Ordinal 'First' detected. Lowest ID is {min_id}"
-                    )
-                if needs_last:
-                    max_id = str(max(all_ids))
-                    target_problems.add(f"problem_{max_id}")
-                    print(
-                        f"🎯 [DEBUG] Ordinal 'Last' detected. Highest ID is {max_id}"
-                    )
-        except Exception as e:
-            print(f"⚠️ [WARNING] Ordinal interceptor failed: {e}")
-            count_skip("request_skips")
-
-    # ==========================================
-    # 1.5. CAPABILITIES INTERCEPTOR
-    # ==========================================
-    if any(phrase in query_lower for phrase in [
-        "what kind of internship logs",
-        "capabilities",
-        "i'm sorry, but that information is not available"
-    ]):
-        target_problems.add("problem_1")
-        print("🎯 [DEBUG] Capabilities/Fallback query detected. Intercepting with Target 1.")
-
-    # ==========================================
-    # 1.6. SPECIFIC FUNCTION INTERCEPTOR
-    # ==========================================
-    if "count_items" in query_lower:
-        target_problems.add("problem_3")
-        print("🎯 [DEBUG] Specific function 'count_items' query detected. Intercepting with Target 3.")
-    
-    if "duplicate key" in query_lower:
-        target_problems.add("problem_33")
-        print("🎯 [DEBUG] Specific function 'duplicate key' query detected. Intercepting with Target 33.")
-
-    if "invalid_grant" in query_lower or "refresherror" in query_lower:
-        target_problems.add("problem_JOB_HUNT")
-        print("🎯 [DEBUG] Specific function 'invalid_grant' query detected. Intercepting with Target JOB_HUNT.")
-
-    # ==========================================
-    # 2. RAW EXTRACTION EXECUTION
-    # ==========================================
-    if target_problems:
-        print(f"🚀 [DEBUG] Engaging Raw Interceptor for IDs: {target_problems}")
-        try:
-            data_files = get_data_file_paths()
-            for data_file in data_files:
-                if os.path.exists(data_file):
-                    with open(data_file, "r", encoding="utf-8") as f:
-                        full_file_text = f.read()
-
-                    all_header_matches = list(
-                        re.finditer(
-                            r"(?im)^[^a-zA-Z]*\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", full_file_text
-                        )
-                    )
-
-                    for i, match in enumerate(all_header_matches):
-                        prefix = match.group(1).lower()
-                        prob_num = match.group(2)
-                        key = f"{prefix}_{prob_num}"
-                        
-                        if key in target_problems:
-                            start_idx = match.start()
-                            end_idx = (
-                                all_header_matches[i + 1].start()
-                                if i + 1 < len(all_header_matches)
-                                else len(full_file_text)
-                            )
-                            block = full_file_text[start_idx:end_idx].strip()
-
-                            direct_problem_blocks.append(f"{block}\n")
-        except Exception as e:
-            print(f"🚨 [ERROR] Raw Interceptor execution failed: {e}")
-            count_skip("request_skips")
-
-    # ==========================================
-    # 3. SHORT-CIRCUIT THE VECTOR SEARCH
-    # ==========================================
-    if direct_problem_blocks:
-        final_output = "\n\n".join(direct_problem_blocks)
-        print(
-            f"✅ [DEBUG] Short-circuiting vector search. Fed {len(direct_problem_blocks)} raw blocks."
-        )
-
-        # [PHASE 7.0 FIX]: Inject metadata even during an early return!
-        retrieved_ids_str = ",".join([p.split('_')[-1] for p in target_problems])
-        final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
-
-        # The artifact is for eval.py's section recall; the model reads only final_output.
-        # These raw blocks are file slices, not retrieved chunks, so no section counts.
-        return final_output, {"retrieved_sections": []}
-
-    # ==========================================
-    # 4. RESUME STANDARD VECTOR SEARCH
+    # VECTOR SEARCH
     # ==========================================
     all_docs = []
 
@@ -421,88 +271,6 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
         preview = doc.page_content[:100].replace("\n", " ")
         print(f"  {i+1}. Rerank Score: {score} | Preview: {preview}...")
 
-    # [PHASE 6.8 FIX ONLY ESCALATE PROBLEMS FOUND IN THE TOP 3 DOCS
-    discovered_problems = set()
-    for doc in unique_docs:
-        headers_text = " ".join(
-            [str(val) for k, val in doc.metadata.items() if "Header" in k]
-        )
-
-        # 🚀 THE FIX: Prevent Extractor Trap by checking metadata headers
-        # If the chunk comes from a Workflow or General section, do NOT scrape it for bug IDs.
-        source_file = str(doc.metadata.get("source", doc.metadata.get("source_file", ""))).lower()
-        if any(
-            keyword in headers_text.lower()
-            for keyword in ["workflow", "rule", "general", "role"]
-        ) or any(
-            f in source_file for f in ["agentic_ai_engineer.md", "multi-file-sprint-plans.md", "multi-file-support-walkthrough.md", "readme.md"]
-        ):
-            print(
-                f"🔧 [__DEV__] Skipping auto-escalation for general document: {headers_text[:50]}..."
-            )
-            continue
-
-        header_matches = re.finditer(r"(?i)\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", headers_text)
-        content_matches = re.finditer(r"(?im)^[^a-zA-Z]*\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", doc.page_content)
-        
-        from itertools import chain
-        for m in chain(header_matches, content_matches):
-            prefix = m.group(1).lower()
-            discovered_problems.add(f"{prefix}_{m.group(2)}")
-
-    escalated_text = ""
-    if discovered_problems:
-        print(
-            f"🔍 [DEBUG] Top Docs contained Problems {discovered_problems}. Auto-Escalating..."
-        )
-        try:
-            data_files = get_data_file_paths()
-            escalated_blocks = []
-            
-            for data_file in data_files:
-                if os.path.exists(data_file):
-                    with open(data_file, "r", encoding="utf-8") as f:
-                        full_file_text = f.read()
-
-                    matches = list(
-                        re.finditer(
-                            r"(?im)^[^a-zA-Z]*\b(problem|question)s?\b\s*(?::\s*|\s+)([A-Za-z0-9_]+)", full_file_text
-                        )
-                    )
-
-                    for i, match in enumerate(matches):
-                        prefix = match.group(1).lower()
-                        prob_num = match.group(2)
-                        key = f"{prefix}_{prob_num}"
-                        
-                        if key in discovered_problems and prefix in ("problem", "question"):
-                            start_idx = match.start()
-                            end_idx = (
-                                matches[i + 1].start()
-                                if i + 1 < len(matches)
-                                else len(full_file_text)
-                            )
-                            block = full_file_text[start_idx:end_idx].strip()
-
-                            if len(block) > 8000:
-                                block = (
-                                    block[:8000] + "\n\n...[BLOCK TRUNCATED FOR LENGTH]..."
-                                )
-
-                            display_prefix = "QUESTION" if prefix == "question" else "PROBLEM"
-                            escalated_blocks.append(
-                                f"=== AUTO-ESCALATED CONTEXT: {display_prefix} {prob_num} ===\n"
-                                f"(AGENT INSTRUCTION: CONDITIONAL EXTRACTION - If the user explicitly requested this exact bug ID, or a highly specific technical error, you MUST synthesize the entire text below this line including code and paths. "
-                                f"Act as a Librarian (listing ONLY IDs) if the query is vague/ambiguous and matches 2 or more completely unrelated problems (e.g., 'file upload bug' matching 3 different IDs). You are STRICTLY FORBIDDEN from summarizing code blocks—output them exactly.)\n\n"
-                                f"{block}\n==============================================\n"
-                            )
-
-            if escalated_blocks:
-                escalated_text = "\n\n".join(escalated_blocks)
-        except Exception as e:
-            print(f"⚠️ [WARNING] Auto-Escalation failed: {e}")
-            count_skip("request_skips")
-
     def format_doc_for_llm(doc):
         headers = []
         if "Header 1" in doc.metadata:
@@ -527,24 +295,14 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
     doc_blocks = [format_doc_for_llm(doc) for doc in unique_docs]
     formatted_context = "\n\n---\n\n".join(doc_blocks)
 
-    # FIX: Prioritize Top Vector Matches (General Knowledge) BEFORE bulky Escalated Problems
-    if escalated_text:
-        final_output = (
-            "=== TOP VECTOR MATCHES (GENERAL KNOWLEDGE / WORKFLOW RULES) ===\n\n"
-            + formatted_context
-            + "\n\n"
-            + escalated_text
-        )
-    else:
-        final_output = formatted_context
+    final_output = formatted_context
 
     MAX_CHAR_LIMIT = 30000
 
     # Section recall (eval.py): the reranked chunks whose block starts before the cut
     # below. A block that starts just before the cut counts even if only its first
-    # characters survive it (DECISIONS.md). Escalated blocks
-    # are file slices chosen by problem id, so they do not count (DECISIONS.md).
-    block_start = final_output.index(formatted_context)
+    # characters survive it (DECISIONS.md).
+    block_start = 0
     retrieved_sections = []
     for doc, block in zip(unique_docs, doc_blocks):
         section = {
@@ -560,12 +318,5 @@ async def search_knowledge_base(query: str) -> tuple[str, dict]:
             final_output[:MAX_CHAR_LIMIT]
             + "\n\n...[TOTAL CONTENT TRUNCATED DUE TO SIZE]..."
         )
-
-    # [RECALL@K METADATA INJECTION]
-    # Inject retrieved IDs as an invisible comment for the evaluation parser.
-    # The LLM ignores this, ensuring UI/Persona backward compatibility.
-    if discovered_problems:
-        retrieved_ids_str = ",".join([p.split('_')[-1] for p in discovered_problems])
-        final_output += f"\n\n<!-- RETRIEVED_PROBLEM_IDS: [{retrieved_ids_str}] -->"
 
     return final_output, {"retrieved_sections": retrieved_sections}

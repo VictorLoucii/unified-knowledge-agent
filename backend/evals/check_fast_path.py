@@ -7,16 +7,18 @@ it. That import is not free — config.py:15-133 runs load_dotenv, registers
 Phoenix tracing, builds four ChatOpenAI clients and loads the all-MiniLM-L6-v2
 embedding model — but no model call is made. This script only reads files.
 
-Why the drift matters. semantic_router.py:12-21 serves the stored string when a
-table key is a substring of the query, and it runs first. semantic_router.py:24-35
-serves extract_problem_block() live when no key matched but the query names a
-problem. So one problem can reach a user by two paths, and every difference this
-script prints is a difference between what those two paths return.
+Why the drift matters. semantic_router.py serves the stored string when a table
+key is a substring of the query. For 20 entries that string is a copy of a problem
+block in data/, and nothing else re-reads data/ for it, so a fix made in data/
+never reaches those answers. Every difference this script prints is a difference
+between a stored copy and the block in data/ today.
 
-target_id carries two meanings and only one of them is a copy claim. When it is
-truthy, agents.py:104-113 synthesises the ToolMessage that eval.py:56-64 scrapes
-and eval.py:165-169 scores for Recall@k, so target_id is a recall label first.
-For 20 entries the stored output is also a copy of that problem's block. For 5 it
+The Problem-N lookup that once served the live block is gone (DECISIONS.md,
+"The Problem-N feature is removed"). extract_problem_block below is its extractor,
+moved here unchanged so the verdicts keep their meaning; the app no longer calls it.
+
+target_id is now only this script's selector; recall reads target_sections. For 20
+entries the stored output is a copy of that problem's block. For 5 it
 is a short answer *about* the problem and was never a copy, and the 26th
 ("JOB_HUNT") has no live block, so nothing establishes it either way. NOT_A_COPY
 names that second population; it is not a lenient verdict on the first.
@@ -30,9 +32,50 @@ import re
 import sys
 
 from backend.core.fast_path_routes import FAST_PATH_INTERCEPTS
-from backend.core.config import extract_problem_block
+from backend.core.config import get_data_file_paths
+from backend.core.skip_counter import count_skip
 
 END_MARKER = "<END OF PROBLEM>"
+
+
+def extract_problem_block(problem_id: str) -> str | None:
+    """Extracts a problem block from the bugs markdown file directly."""
+    try:
+        data_files = get_data_file_paths()
+        for data_file in data_files:
+            with open(data_file, "r", encoding="utf-8") as f:
+                full_file_text = f.read()
+
+            all_header_matches = list(
+                re.finditer(
+                    r"(?im)^\s*(?:#|//|\*)\s*problem\s*:?\s*([A-Za-z0-9_]+)", full_file_text
+                )
+            )
+
+            for i, match in enumerate(all_header_matches):
+                prob_num = match.group(1)
+                if prob_num == problem_id:
+                    start_idx = match.start()
+                    end_idx = (
+                        all_header_matches[i + 1].start()
+                        if i + 1 < len(all_header_matches)
+                        else len(full_file_text)
+                    )
+                    block = full_file_text[start_idx:end_idx].strip()
+
+                    # Normalize header to '**# Problem X**'
+                    if not block.startswith(f"**# Problem {problem_id}**"):
+                        first_line_end = block.find("\n")
+                        if first_line_end != -1:
+                            block = f"**# Problem {problem_id}**" + block[first_line_end:]
+                        else:
+                            block = f"**# Problem {problem_id}**"
+
+                    return f"{block}\n\n<END OF PROBLEM>"
+    except Exception as e:
+        print(f"🚨 [ERROR] extract_problem_block failed: {e}")
+        count_skip("request_skips")
+    return None
 
 # Tolerant of the mangled headers the table already stores — '**# Problem 1**4',
 # '****# Problem 4**0**', '# Problem 9'. A test that demanded the exact
@@ -79,7 +122,7 @@ def classify(stored: str, live: str | None) -> tuple[str, str]:
         return "NO_LIVE_BLOCK", "data/: no '# Problem <id>' header exists"
     if stored == live:
         return "IDENTICAL", "nothing"
-    # `_body(live)` guards a vacuous equality. config.py:209-211 emits a bare
+    # `_body(live)` guards a vacuous equality. Lines 70-72 above emit a bare
     # header for a block with no newline, whose body is "" — and every one-line
     # short answer also has a body of "". Without the guard those two collide
     # here and a short answer is reported as a header difference. No such block
@@ -95,7 +138,7 @@ def classify(stored: str, live: str | None) -> tuple[str, str]:
             parts.append("marker")
         # The branch is only reached when stored != live, so a difference that is
         # neither the first line nor the marker is whitespace `_body` stripped at
-        # :72. Without this fallback the action reads "fast_path_routes.py: " and
+        # :116. Without this fallback the action reads "fast_path_routes.py: " and
         # names a file without naming a repair.
         if not parts:
             parts.append("whitespace")

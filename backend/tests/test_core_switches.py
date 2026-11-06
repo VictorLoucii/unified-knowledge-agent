@@ -32,12 +32,14 @@ from test_core_routes import BROWSER_ID, routes  # noqa: F401 (routes is a fixtu
 
 # Measured on main at 6e5c4b8, before any switch code. A new value here means the eval
 # cache goes cold: the tool list and the prompt text are both part of the cache key.
-TOOL_LIST_SHA256 = "50068bedc3765b49546a0b9172af8d4e6874e6025100d81deb8d377dedd806b2"
+# TOOL_LIST_SHA256 changed on purpose with the Problem-N removal (two tools and the search
+# tool's description went; DECISIONS.md, "The Problem-N feature is removed").
+TOOL_LIST_SHA256 = "c9ce79e39c27e3c17710ba042e5d7066fd636d9fa6f73d0307ca0efc811f8c96"
 ANSWER_PROMPT_SHA256 = "f96532cd7bf20cbab574743980e6e701652fdf1746d24a7db8507db9b5ca3d31"
 ROUTER_PROMPT_SHA256 = "d7c3b299093e0ae57f0f7b9a79f25f6b25fc156240ffa6235a41f726bd5562c1"
 CONVERSATIONAL_PROMPT_SHA256 = "a55e482850da908a6b3f910b76e6ff8d67d7af3c262166b08454f064a85b9c36"
 
-ALL_TOOLS = ["get_system_time", "get_internship_stats", "get_problem_index", "search_knowledge_base", "get_weather_and_aqi"]
+ALL_TOOLS = ["get_system_time", "search_knowledge_base", "get_weather_and_aqi"]
 WEATHER_QUESTION = "What is the weather in New Delhi?"
 PLANTED_KEY = "planted fast path question"
 PLANTED_ANSWER = "The planted stored answer."
@@ -223,23 +225,6 @@ def test_fast_path_off_sends_a_table_question_down_the_normal_route(core, monkey
     assert len(core.qa.calls) == 2
     assert [m.type for m in checkpoint_messages(core.graph)] == ["human", "ai", "tool", "ai"]
     assert RETRIEVED_TEXT in checkpoint_messages(core.graph)[2].content
-
-
-@pinned
-def test_fast_path_off_sends_a_problem_id_question_down_the_normal_route(core, monkeypatch):
-    def block_lookup_must_not_run(problem_id):
-        raise AssertionError("the Problem-N block lookup ran with the fast path off")
-
-    monkeypatch.setenv("FAST_PATH_ENABLED", "false")
-    monkeypatch.setattr(config, "extract_problem_block", block_lookup_must_not_run)
-    core.set_fast_replies("IN_SCOPE")
-    core.set_qa(rag_script(QUESTION, ANSWER))
-
-    chunks = run_chat(core.graph, "Tell me about Problem 7")
-
-    assert streamed_text(chunks) == ANSWER
-    assert len(core.qa.calls) == 2
-    assert core.fast_llm.calls == 1
 
 
 # ------------------------------------------------------------------

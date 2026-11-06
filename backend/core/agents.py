@@ -6,9 +6,8 @@ from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode, tools_condition
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.types import Send
-import re
 
-from backend.core.config import llm, fast_llm, parse_problem_id, extract_problem_block, weather_tool_enabled
+from backend.core.config import llm, fast_llm, weather_tool_enabled
 from backend.core.tools import tools
 from backend.core.semantic_router import route_query
 from backend.core.skip_counter import count_skip
@@ -24,6 +23,11 @@ llm_without_weather = llm.bind_tools(safe_tools)
 WEATHER_TOOL_LINE = "You also have access to the `get_weather_and_aqi` tool which you should use to answer weather and air quality questions.\n"
 WEATHER_OFF_LINE = "You have no tool for live weather or air quality. If asked, say that this data is not available and do not state a figure.\n"
 
+# fast_path_node's tool message, written for an entry with target_sections. Short and not
+# empty, like the marker it replaces: get_last_tool_output_length (guardrails.py) reads it,
+# so chat.py's output cap is as before for those entries (OPEN.md item 17, still open).
+FAST_PATH_TOOL_TEXT = "Stored answer from the fast-path table."
+
 class State(TypedDict):
     messages: Annotated[list[BaseMessage], add_messages]
     route_category: str
@@ -36,9 +40,9 @@ async def route_input_node(state: State) -> str | Send:
 
     user_msg = state["messages"][-1].content
 
-    # Deterministic lookups run BEFORE the classifier. FAST_PATH_INTERCEPTS and the
-    # Problem N extractor are exact matches, so a model call must not be able to
-    # overrule them. When the classifier ran first it could return CONVERSATIONAL and
+    # The deterministic lookup runs BEFORE the classifier. FAST_PATH_INTERCEPTS is
+    # an exact match, so a model call must not be able to overrule it.
+    # When the classifier ran first it could return CONVERSATIONAL and
     # exit before route_query was ever reached, discarding the stored answer.
     # Skipping the classifier for these queries also removes one model call per hit.
     route_result = await route_query(user_msg)
@@ -50,7 +54,6 @@ async def route_input_node(state: State) -> str | Send:
         return Send("fast_path_node", {
             "messages": state["messages"][-1:],
             "fast_path_response": route_result["fast_path_response"],
-            "fast_path_target_id": route_result.get("fast_path_target_id", ""),
             "fast_path_target_sections": route_result.get("fast_path_target_sections", []),
         })
 
@@ -89,26 +92,18 @@ async def route_input_node(state: State) -> str | Send:
     return "retrieval_node"
 
 async def fast_path_node(state: State):
-    user_msg = state["messages"][-1].content if state["messages"] else ""
-    
     final_output = state["fast_path_response"]
-    target_id = state.get("fast_path_target_id", "")
-    
-    # Fallback just in case
-    if not target_id:
-        match = re.search(r"(?i)\bproblem\s*:?\s*([A-Za-z0-9_]+)\b", user_msg)
-        if match:
-            target_id = match.group(1)
-            
+    target_sections = state.get("fast_path_target_sections") or []
+
     msgs = []
-    if target_id:
+    if target_sections:
         tool_msg = ToolMessage(
-            content=f"<!-- RETRIEVED_PROBLEM_IDS: [{target_id}] -->",
+            content=FAST_PATH_TOOL_TEXT,
             name="search_knowledge_base",
             tool_call_id="bypass_tool_call_id",
             # eval.py's section recall. A copy of the table's label, so a table hit is a
             # recall hit by construction (DECISIONS.md). No model ever reads it.
-            artifact={"retrieved_sections": state.get("fast_path_target_sections") or []},
+            artifact={"retrieved_sections": target_sections},
         )
         msgs.append(tool_msg)
         

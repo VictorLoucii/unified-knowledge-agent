@@ -12,7 +12,7 @@ pinned: true
 
 **The Mission:** To transform a growing directory of 20+ multi-disciplinary knowledge bases (including technical internship logs, Python guidelines, Agentic AI concepts, and more) into a deterministic, production-grade Agentic Intelligence layer. This system moves beyond "vibe-based" RAG by implementing strict logic guardrails, Human-in-the-loop (HITL) safety, and automated evaluation pipelines.
 
-**Current Status:** Evaluated — 100% Search Recall@k (34/34) and 95.7% AI Logic Score (90/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; measured on its own, that pipeline scores 8/8 on recall and 38/41 on AI Logic. The recall regression introduced by the 2026-08-17 index rebuild was fixed on 2026-08-20 — see [OPEN.md](OPEN.md) item 1.
+**Current Status:** Evaluated — 100% section recall (34/34) and 96.8% AI Logic Score (91/94) on a 94-case golden dataset. Of those, 53 cases are served by a deterministic fast-path lookup and 41 exercise the full RAG pipeline; measured on its own, that pipeline scores 8/8 on section recall and 39/41 on AI Logic. The recall regression introduced by the 2026-08-17 index rebuild was fixed on 2026-08-20 — see [OPEN.md](OPEN.md) item 1.
 
 ---
 
@@ -56,8 +56,6 @@ This system is built for deterministic reliability, performance optimization, an
 ### 3. Unified LLM Architecture & Cost Control
 * **Model split by job (since 2026-08-22):** `openai/gpt-5-mini` at low reasoning effort drives the agent; `google/gemini-3.6-flash` is the cross-vendor fallback and the scope router; `google/gemini-3.5-flash-lite` does query expansion only. GPT-5 Mini was chosen for strict tool-calling hygiene (no pre-execution text leakage that breaks the HITL UI), measured by a streaming probe, and for cost. See [DECISIONS.md](DECISIONS.md), "GPT-5 Mini drives, Gemini 3.6 Flash routes and falls back, Flash Lite only expands".
 * **Scope Router:** The graph's entry router classifies each query that misses the fast-path table on a non-streaming setup of Gemini 3.6 Flash and sends out-of-scope queries straight to a fixed reply, skipping retrieval and the agent. It must not run on Flash Lite, which marks plain Python questions out of scope (measured, six eval cases).
-* **Zero-Token Programmatic Bypass:** Intercepts direct log-retrieval queries (e.g., "Problem 12") at the API and Graph levels, fetching raw logs directly from the source files and bypassing LLM inference entirely.
-* **Direct Query Bypass for Search Expansion:** Intercepts searches referencing specific problem IDs to bypass the query expansion LLM entirely, conserving OpenRouter API credits.
 * **Prompt Compression:** Features a compressed system prompt (~50% smaller) and a tuned "Context Diet" limiting `parent_splitter` chunks to 1,000 characters to prevent input token leakage.
 * **Asynchronous & Lazy-Loaded Optimizations:** Executes search tool expansion tasks asynchronously (`ainvoke`) to avoid blocking the event loop, and lazy-loads the 80MB `CrossEncoder` model only when vector search is requested to improve application startup latency.
 * **Hyper-Local Weather & AQI Integration (HITL Protected):** Seamlessly answers dynamic environmental queries using Open-Meteo's APIs. Features a custom-built algorithm to calculate the **Indian National AQI (CPCB)** from raw pollutant data, entirely protected by LangGraph's Human-in-the-Loop pause/resume functionality to prevent unwarranted API requests.
@@ -81,7 +79,7 @@ This system is built for deterministic reliability, performance optimization, an
 | :--- | :--- | :--- |
 | **Orchestration** | **LangGraph** | Stateful state machine with HITL interrupts & persistence |
 | **Cloud State** | **Supabase (PostgreSQL)** | State survives container prunes; enables multi-device sync |
-| **Logic Layer** | **Python (FastAPI)** | Hardened "Raw Interceptors" & Regex Anchors |
+| **Logic Layer** | **Python (FastAPI)** | Fast-path table of stored answers, query expansion and reranked vector search |
 | **Observability** | **Arize Phoenix (local collector)** | Zero-cost, local real-time X-ray of trace observability (replaced LangChain/LangSmith) |
 | **Data Ingestion** | **ChromaDB** | Vector storage using `all-MiniLM-L6-v2` local embeddings |
 | **Frontend** | **Next.js 14 / Tailwind** | Markdown-rendered UI with HITL "Action Required" status |
@@ -105,9 +103,7 @@ This system is built for deterministic reliability, performance optimization, an
 │   │   ├── semantic_router.py # Semantic query classifier (Fast Path & Triage)
 │   │   └── tools/         # Modular Librarian Triage & Search sub-package
 │   │       ├── __init__.py
-│   │       ├── problem_index.py
 │   │       ├── search.py
-│   │       ├── stats.py
 │   │       └── system.py
 │   ├── evals/             
 │   │   ├── eval.py        # Automated LLM-as-a-Judge evaluation (with retry support)

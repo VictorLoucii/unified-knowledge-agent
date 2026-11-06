@@ -232,39 +232,21 @@ def test_probe(core, routes):
 '''
 
 
-PROBLEM_ID_PAYLOAD_TEST = '''def test_fast_path_payload_carries_only_the_last_message(monkeypatch):
-    monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)
-    query = "Tell me about Problem 7"
-    state = {"messages": [HumanMessage(content="first"), AIMessage(content="reply"), HumanMessage(content=query)]}
-
-    send = asyncio.run(agents.route_input_node(state))
-
-    assert [m.content for m in send.arg["messages"]] == [query]
-
-
-'''
-
-
 def remove_fast_path_table(root):
-    """The table only. The switch, route_query and fast_path_node stay, because Problem-N shares them until item 12.
+    """The table only. The switch, route_query and fast_path_node stay, unreachable without it.
 
-    The two Problem-N tests stay in the run, to prove that. They name the table fixture
-    only to keep the table out of their way, so they lose that one name here.
+    Since the Problem-N removal the table is the only way into fast_path_node, so its four
+    graph tests, the Send payload test among them, go with the table.
     """
     delete(root, "backend/core/fast_path_routes.py")
     delete(root, "backend/evals/check_fast_path.py")
     router = "backend/core/semantic_router.py"
     replace(root, router, "from backend.core.fast_path_routes import FAST_PATH_INTERCEPTS\n")
-    cut(root, router, "    # 1. Exact Match Intercepts", "    # Also handle problem ID fast path")
-    graph_tests = "backend/tests/test_core_graph.py"
-    replace(root, graph_tests, "def test_problem_id_hit_routes_once(core, route_calls, planted_table, monkeypatch):", "def test_problem_id_hit_routes_once(core, route_calls, monkeypatch):")
-    replace(root, graph_tests, "def test_rag_question_after_a_problem_id_hit_sends_a_valid_list(core, planted_table, monkeypatch):", "def test_rag_question_after_a_problem_id_hit_sends_a_valid_list(core, monkeypatch):")
-    # The Send payload stays too, so its test keeps running, through the route that stays.
-    cut(root, graph_tests, "def test_fast_path_payload_carries_only_the_last_message(planted_table):", "def test_rag_prompt_hint_text_stays_the_same(core):", PROBLEM_ID_PAYLOAD_TEST)
+    cut(root, router, "    # 1. Exact Match Intercepts", "    # 2. Default to RAG")
 
 
 FAST_PATH_TABLE_PROBE = '''
-# A real key of the table, with no problem id, so only the table can answer it.
+# A real key of the table.
 TABLE_KEY = "file upload bug"
 
 
@@ -304,7 +286,7 @@ def test_probe(core, routes):
 def remove_query_expansion(root):
     search = "backend/core/tools/search.py"
     cut(root, search, "expansion_llm = ChatOpenAI(", '@tool(response_format="content_and_artifact")\nasync def search_knowledge_base')
-    cut(root, search, "    direct_match = re.search(", "    all_queries = [", "    search_variants = []\n\n")
+    cut(root, search, "    try:\n        prompt_content = (", "    all_queries = [", "    search_variants = []\n\n")
     replace(root, "backend/tests/conftest.py", '    monkeypatch.setattr(search, "expansion_llm", expansion_llm)\n')
 
 
@@ -414,7 +396,8 @@ RECIPES = (
     )),
     Recipe("system_time", remove_system_time, SYSTEM_TIME_PROBE),
     Recipe("fast_path_table", remove_fast_path_table, FAST_PATH_TABLE_PROBE, (
-        ("test_core_graph", "test_fast_path_hit_keeps_the_target_id_marker"),
+        ("test_core_graph", "test_fast_path_hit_stores_a_tool_message_with_text"),
+        ("test_core_graph", "test_fast_path_payload_carries_only_the_last_message"),
         ("test_core_graph", "test_fast_path_table_hit_routes_once"),
         ("test_core_graph", "test_rag_question_after_a_table_hit_sends_a_valid_list"),
     )),

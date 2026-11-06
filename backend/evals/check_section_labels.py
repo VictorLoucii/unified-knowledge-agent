@@ -7,9 +7,10 @@ can never be a hit, so the section recall would fall with no change in retrieval
 data/ and this check shows which labels to rebuild. DECISIONS.md, "Recall counts sections,
 not problem numbers", says how the labels were built.
 
-It also checks that every case with a target_problem_id, and every table entry with a
-target_id, carries a label, and it names each label path that occurs more than once in its
-file: a chunk from the other place would count as a hit too.
+It also checks that every table entry with a target_id (check_fast_path.py's selector)
+carries a label, that the selection finds both cases and entries, and it names each label
+path that occurs more than once in its file: a chunk from the other place would count as a
+hit too.
 
 Needs data/ with its Git LFS content; it needs no .env and makes no network call.
 Exit 0: every label resolves. Exit 1: a label is missing or names no section.
@@ -56,13 +57,18 @@ def section_keys(name: str, text: str) -> list:
 
 
 def labelled_rows() -> list:
-    """(row name, old id, label or None) for every row that carries an old id."""
+    """(row name, target_id or None, label or None) for every labelled case and table entry.
+
+    A case is selected by its label, since target_problem_id is gone. A table entry is
+    selected by its label or its target_id, so an entry with an id and no label fails.
+    """
     with open(REPO / "backend/evals/qa_dataset.json", encoding="utf-8") as f:
         dataset = json.load(f)
-    rows = [(f"case {n}", c["target_problem_id"], c.get("target_sections"))
-            for n, c in enumerate(dataset, 1) if c.get("target_problem_id") is not None]
-    rows += [(f"entry {key[:50]!r}", e["target_id"], e.get("target_sections"))
-             for key, e in FAST_PATH_INTERCEPTS.items() if e.get("target_id") is not None]
+    rows = [(f"case {n}", None, c["target_sections"])
+            for n, c in enumerate(dataset, 1) if "target_sections" in c]
+    rows += [(f"entry {key[:50]!r}", e.get("target_id"), e.get("target_sections"))
+             for key, e in FAST_PATH_INTERCEPTS.items()
+             if e.get("target_id") is not None or "target_sections" in e]
     return rows
 
 
@@ -78,9 +84,13 @@ def main() -> int:
 
     rows = labelled_rows()
     failing, repeated, checked = [], set(), 0
+    # A selection of zero would check nothing and still print PASS.
+    for kind in ("case", "entry"):
+        if not any(row.startswith(kind + " ") for row, _, _ in rows):
+            failing.append(f"no labelled {kind} rows selected")
     for row, old_id, label in rows:
         if not label:
-            failing.append(f"{row} (old id {old_id!r}): no target_sections")
+            failing.append(f"{row} (target_id {old_id!r}): no target_sections")
             continue
         for section in label:
             checked += 1

@@ -133,8 +133,6 @@ retriever = ParentDocumentRetriever(
 print(f"✅ Connected to local ChromaDB & DocStore at: {BASE_DIR}")
 
 
-import re
-
 def get_data_file_paths() -> list[str]:
     """Resolves and returns the paths to all active data sources."""
     base_dir = os.path.abspath(os.path.dirname(__file__))
@@ -165,56 +163,6 @@ def get_data_file_paths() -> list[str]:
         count_skip("startup_faults")
         
     return data_paths
-
-
-def parse_problem_id(message: str) -> str | None:
-    """Parses problem ID from user query if they are requesting a log passthrough."""
-    if not message:
-        return None
-    match = re.search(r"(?i)\bproblem\s*:?\s*([A-Za-z0-9_]+)\b", message)
-    if match:
-        return match.group(1)
-    return None
-
-
-def extract_problem_block(problem_id: str) -> str | None:
-    """Extracts a problem block from the bugs markdown file directly."""
-    try:
-        data_files = get_data_file_paths()
-        for data_file in data_files:
-            with open(data_file, "r", encoding="utf-8") as f:
-                full_file_text = f.read()
-
-            all_header_matches = list(
-                re.finditer(
-                    r"(?im)^\s*(?:#|//|\*)\s*problem\s*:?\s*([A-Za-z0-9_]+)", full_file_text
-                )
-            )
-
-            for i, match in enumerate(all_header_matches):
-                prob_num = match.group(1)
-                if prob_num == problem_id:
-                    start_idx = match.start()
-                    end_idx = (
-                        all_header_matches[i + 1].start()
-                        if i + 1 < len(all_header_matches)
-                        else len(full_file_text)
-                    )
-                    block = full_file_text[start_idx:end_idx].strip()
-                    
-                    # Normalize header to '**# Problem X**'
-                    if not block.startswith(f"**# Problem {problem_id}**"):
-                        first_line_end = block.find("\n")
-                        if first_line_end != -1:
-                            block = f"**# Problem {problem_id}**" + block[first_line_end:]
-                        else:
-                            block = f"**# Problem {problem_id}**"
-                    
-                    return f"{block}\n\n<END OF PROBLEM>"
-    except Exception as e:
-        print(f"🚨 [ERROR] extract_problem_block failed: {e}")
-        count_skip("request_skips")
-    return None
 
 
 # ==========================================

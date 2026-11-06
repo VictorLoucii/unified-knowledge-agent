@@ -30,7 +30,7 @@ from langchain_core.documents import Document
 from backend import memory
 from backend.core import agents, chat, config, ingest, skip_counter
 from backend.core.skip_counter import KINDS, count_skip, skip_report
-from backend.core.tools import problem_index, search, stats, weather_aqi
+from backend.core.tools import search, weather_aqi
 from conftest import (
     ANSWER,
     COUNTS_AFTER_IMPORT,
@@ -286,34 +286,6 @@ def test_query_expansion_failure_counts(core, monkeypatch):
 
 
 @one_state
-@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Ordinal interceptor failed: fake fault"], request_skips=1)
-def test_ordinal_interceptor_failure_counts(core, monkeypatch):
-    monkeypatch.setattr(search, "get_data_file_paths", raises)
-    assert "Rerankers score" in run_search("what is the first problem")
-
-
-@one_state
-@pytest.mark.expected_skips(lines=["🚨 [ERROR] Raw Interceptor execution failed: fake fault"], request_skips=1)
-def test_raw_interceptor_failure_counts(core, monkeypatch):
-    monkeypatch.setattr(search, "get_data_file_paths", raises)
-    assert "Rerankers score" in run_search("problem 5")
-
-
-@one_state
-@pytest.mark.expected_skips(lines=["⚠️ [WARNING] Auto-Escalation failed: fake fault"], request_skips=1)
-def test_auto_escalation_failure_counts(core, monkeypatch):
-    core.retriever.docs = [Document(page_content="Problem 7\nRerankers score it.", metadata={"source": "data/notes.md"})]
-    monkeypatch.setattr(search, "get_data_file_paths", raises)
-    assert "Rerankers score" in run_search(QUESTION)
-
-
-@pytest.mark.expected_skips(lines=["🚨 [ERROR] extract_problem_block failed: fake fault"], request_skips=1)
-def test_problem_block_failure_counts(monkeypatch):
-    monkeypatch.setattr(config, "get_data_file_paths", raises)
-    assert config.extract_problem_block("1") is None
-
-
-@one_state
 @pytest.mark.expected_skips(lines=["🚨 Error refining transcript: fake provider outage"], request_skips=1)
 def test_refine_failure_counts(core, routes, monkeypatch):  # noqa: F811
     monkeypatch.setattr(config, "fast_llm", FailingModel())
@@ -321,28 +293,10 @@ def test_refine_failure_counts(core, routes, monkeypatch):  # noqa: F811
     assert response == {"refined_transcript": "raw words"}
 
 
-@pytest.mark.expected_skips(lines=["⚠️ [WARNING] get_problem_index found no data file."], request_skips=1)
-def test_problem_index_missing_file_counts(monkeypatch):
-    monkeypatch.setattr(problem_index.os.path, "exists", lambda path: False)
-    assert problem_index.get_problem_index.invoke({"start": 1, "end": 2}) == "Error: Internship database file not found."
-
-
-@pytest.mark.expected_skips(lines=["🚨 [ERROR] get_problem_index crashed: fake fault"], request_skips=1)
-def test_problem_index_crash_counts(monkeypatch):
-    monkeypatch.setattr(problem_index.os.path, "exists", raises)
-    assert problem_index.get_problem_index.invoke({"start": 1, "end": 2}) == "Error extracting titles: fake fault"
-
-
 @pytest.mark.expected_skips(lines=["⚠️ [WARNING] get_weather_and_aqi failed: fake fault"], request_skips=1)
 def test_weather_failure_counts(monkeypatch):
     monkeypatch.setattr(weather_aqi.requests, "get", raises)
     assert "An error occurred" in weather_aqi.get_weather_and_aqi.invoke({"location": "Delhi"})
-
-
-@pytest.mark.expected_skips(lines=["⚠️ [WARNING] get_internship_stats failed: fake fault"], request_skips=1)
-def test_stats_failure_counts(monkeypatch):
-    monkeypatch.setattr(stats, "get_data_file_paths", raises)
-    assert "Could not determine stats" in stats.get_internship_stats.invoke({})
 
 
 # ------------------------------------------------------------------
@@ -511,9 +465,7 @@ SCANNED = (
     "backend/core/ingest.py",
     "backend/core/rate_limit.py",
     "backend/core/semantic_router.py",
-    "backend/core/tools/problem_index.py",
     "backend/core/tools/search.py",
-    "backend/core/tools/stats.py",
     "backend/core/tools/system.py",
     "backend/core/tools/weather_aqi.py",
 )

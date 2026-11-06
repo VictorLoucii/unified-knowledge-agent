@@ -2,7 +2,6 @@
 import json
 import os
 import sys
-import re
 from pathlib import Path
 import time
 import uuid
@@ -39,11 +38,11 @@ set_llm_cache(SQLiteCache(database_path=os.path.join(project_root, ".langchain.d
 memory = MemorySaver()
 graph = workflow.compile(checkpointer=memory)
 
-async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str], list[dict], bool]:
-    """Returns the agent's textual response alongside mathematically extracted Problem IDs.
+async def get_agent_response_and_metadata(query: str) -> tuple[str, list[dict], bool]:
+    """Returns the agent's textual response and the retrieved sections.
 
-    Also returns the retrieved sections from the tool messages' artifacts, for the section
-    recall (backend/evals/recall.py), and whether a fast-path table hit wrote them.
+    The sections come from the tool messages' artifacts, for the section recall
+    (backend/evals/recall.py). The bool says whether a fast-path table hit wrote them.
     """
     try:
         inputs = {"messages": [HumanMessage(content=query)]}
@@ -53,15 +52,6 @@ async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str], l
         output_state = await graph.ainvoke(inputs, config=config)
         final_message = output_state["messages"][-1].content
         
-        # Intercept and extract the hidden metadata directly from the Tool calls
-        retrieved_ids = []
-        for msg in output_state["messages"]:
-            if hasattr(msg, 'type') and msg.type == 'tool' and isinstance(msg.content, str):
-                matches = re.findall(r"<!-- RETRIEVED_PROBLEM_IDS: \[(.*?)\] -->", msg.content)
-                for match in matches:
-                    if match.strip():
-                        retrieved_ids.extend([x.strip() for x in match.split(",")])
-                        
         retrieved_sections = []
         from_fast_path = False
         for msg in output_state["messages"]:
@@ -70,9 +60,9 @@ async def get_agent_response_and_metadata(query: str) -> tuple[str, list[str], l
                 # fast_path_node's synthetic message (agents.py); its sections copy the table's label
                 from_fast_path = from_fast_path or msg.tool_call_id == "bypass_tool_call_id"
 
-        return final_message, list(set(retrieved_ids)), retrieved_sections, from_fast_path
+        return final_message, retrieved_sections, from_fast_path
     except Exception as e:
-        return f"Error invoking agent: {str(e)}", [], [], False
+        return f"Error invoking agent: {str(e)}", [], False
 
 # --- 1. Define the Structured Output for the Judge ---
 class EvalResult(BaseModel):
@@ -146,32 +136,21 @@ def run_evals():
     passed_llm_count = 0
     total_llm = len(dataset)
     
-    recall_hits = 0
-    total_recall_targets = 0
-    
     async def evaluate_single_test(test, actual_test_idx, semaphore):
         async with semaphore:
             print(f"🔄 Running Test {actual_test_idx}...")
             
             # 1. Get Agent Output & Metadata
-            agent_output, retrieved_ids, retrieved_sections, from_fast_path = await get_agent_response_and_metadata(test["query"])
+            agent_output, retrieved_sections, from_fast_path = await get_agent_response_and_metadata(test["query"])
 
-            # Section recall: reported beside the old recall, and kept out of the pass rule
-            # and the judge skip below until the Problem-N removal (DECISIONS.md).
+            # 2. Section recall (Mathematical Check, bypassing LLM bias): it drives the pass
+            # rule and the judge skip (DECISIONS.md, "The Problem-N feature is removed").
             target_sections = test.get("target_sections")
             section_hit = is_section_hit(target_sections, retrieved_sections) if target_sections else None
             
-            # 2. Check Recall@k (Mathematical Check, bypassing LLM bias)
-            target_id = test.get("target_problem_id")
-            is_hit = False
-            
-            if target_id is not None:
-                if str(target_id) in retrieved_ids:
-                    is_hit = True
-            
             # 3. Grade with LLM Judge (with retries for transient JSON/validation errors)
             verdict = None
-            if target_id is not None and not is_hit:
+            if section_hit is False:
                 verdict = EvalResult(passed=False, reason="SEARCH MISS: Target document not retrieved.")
             else:
                 max_eval_retries = 5
@@ -202,9 +181,6 @@ def run_evals():
                 "actual_test_idx": actual_test_idx,
                 "passed": verdict.passed if verdict else False,
                 "reason": verdict.reason if verdict else "Failed",
-                "target_id": target_id,
-                "is_hit": is_hit,
-                "retrieved_ids": retrieved_ids,
                 "section_hit": section_hit,
                 "retrieved_sections": retrieved_sections,
                 "from_fast_path": from_fast_path,
@@ -229,13 +205,6 @@ def run_evals():
         else:
             print(f"❌ AI LOGIC FAIL (Test {result['actual_test_idx']})")
             
-        if result["target_id"] is not None:
-            total_recall_targets += 1
-            if result["is_hit"]:
-                print(f"✅ SEARCH HIT: Target [{result['target_id']}] found in Chroma DB Retrieval {result['retrieved_ids']}")
-                recall_hits += 1
-            else:
-                print(f"❌ SEARCH MISS: Target [{result['target_id']}] NOT found in Chroma DB Retrieval {result['retrieved_ids']}")
 
         if result["section_hit"] is not None:
             source = "fast-path copy" if result["from_fast_path"] else "retrieval"
@@ -255,29 +224,26 @@ def run_evals():
     print("📊 PHASE 7.0 EVALUATION REPORT MATRIX")
     print("===========================================")
     
-    if total_recall_targets > 0:
-        recall_score = (recall_hits / total_recall_targets) * 100
-        print(f"🔎 Final Search Recall@k: {recall_hits}/{total_recall_targets} ({recall_score:.1f}%)")
-    else:
-        recall_score = 100.0
-        print("🔎 Final Search Recall@k: N/A (No target IDs specified)")
-
     section_hits = sum(c[0] for c in section_counts.values())
     section_cases = sum(c[1] for c in section_counts.values())
     if section_cases:
+        section_recall_score = section_hits / section_cases * 100
         (r_hits, r_cases), (f_hits, f_cases) = section_counts["retrieval"], section_counts["fast-path copy"]
-        print(f"🔎 Section Recall@k (reported only, not in the pass rule): {section_hits}/{section_cases} "
-              f"({section_hits / section_cases * 100:.1f}%); retrieval {r_hits}/{r_cases}, "
+        print(f"🔎 Section Recall@k: {section_hits}/{section_cases} "
+              f"({section_recall_score:.1f}%); retrieval {r_hits}/{r_cases}, "
               f"fast-path copies {f_hits}/{f_cases} (true by construction)")
+    else:
+        section_recall_score = 100.0
+        print("🔎 Section Recall@k: N/A (No target sections specified)")
 
     print(f"🧠 Final Agent Logic Score: {passed_llm_count}/{total_llm} ({llm_score:.1f}%)")
     print("===========================================")
 
-    if llm_score >= 95.0 and recall_score == 100.0:
+    if llm_score >= 95.0 and section_recall_score == 100.0:
         print("🏆 STATUS: PRODUCTION READY. (Safe to Deploy)")
     else:
         print("❌ STATUS: PIPELINE FAILED.")
-        if recall_score < 100.0:
+        if section_recall_score < 100.0:
             print("⚠️ ACTIONABLE INSIGHT: Tweak ChromaDB search weights in tools.py. The Database is failing to find the right files.")
         if llm_score < 95.0:
             print("⚠️ ACTIONABLE INSIGHT: Tweak System Prompt. The Database is finding the files, but the AI is failing to synthesize them correctly.")
@@ -285,11 +251,11 @@ def run_evals():
     # Save the latest run metrics
     metrics_path = os.path.join(os.path.dirname(__file__), "latest_run_metrics.json")
     with open(metrics_path, "w") as f:
-        json.dump({"llm_score": llm_score, "recall_score": recall_score}, f, indent=4)
+        json.dump({"llm_score": llm_score, "section_recall_score": section_recall_score}, f, indent=4)
         
     end_time = time.time()
     print(f"⏱️ Total Evaluation Time: {end_time - start_time:.2f} seconds")
-    if llm_score < 95.0 or recall_score < 100.0:
+    if llm_score < 95.0 or section_recall_score < 100.0:
         sys.exit(1)
 
     end_time = time.time()

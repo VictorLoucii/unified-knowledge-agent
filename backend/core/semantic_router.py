@@ -1,9 +1,8 @@
 from backend.core.config import fast_llm, fast_path_enabled
 from backend.core.fast_path_routes import FAST_PATH_INTERCEPTS
-import re
 
 async def route_query(user_query: str) -> dict:
-    # Off covers both lookups below, the table and the Problem-N block.
+    # Off covers the table lookup below.
     if not fast_path_enabled():
         print("🔀 [ROUTER] Fast path is off (Delegating to ChromaDB)")
         return {"route_category": "RAG"}
@@ -16,26 +15,9 @@ async def route_query(user_query: str) -> dict:
             return {
                 "route_category": "FAST_PATH",
                 "fast_path_response": fast_data["output"],
-                "fast_path_target_id": fast_data.get("target_id", ""),
                 "fast_path_target_sections": fast_data.get("target_sections", []),
             }
             
-    # Also handle problem ID fast path
-    problem_match = re.search(r"(?i)\bproblem\s*:?\s*([A-Za-z0-9_]+)\b", user_query)
-    if problem_match:
-        from backend.core.config import extract_problem_block
-        problem_id = problem_match.group(1)
-        block = extract_problem_block(problem_id)
-        if block:
-            print(f"⚡ [ROUTER] Dynamic Fast-Path triggered for Problem ID: {problem_id}")
-            return {
-                "route_category": "FAST_PATH",
-                "fast_path_response": block,
-                "fast_path_target_id": problem_id
-            }
-        else:
-            return {"route_category": "RAG"}
-
     # 2. Default to RAG for Vector Database Retrieval
     print("🔀 [ROUTER] Classified as RAG (Delegating to ChromaDB)")
     return {"route_category": "RAG"}

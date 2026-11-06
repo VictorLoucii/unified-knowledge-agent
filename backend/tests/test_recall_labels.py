@@ -85,7 +85,7 @@ def test_a_section_that_starts_past_the_size_cut_does_not_count(core):
 @pytest.mark.switch_states("no_variable")
 def test_a_table_hit_carries_the_entry_sections(core, monkeypatch):
     monkeypatch.setattr(semantic_router, "FAST_PATH_INTERCEPTS", {
-        PLANTED_KEY: {"output": "Stored.", "target_id": "planted_id", "target_sections": PLANTED_SECTIONS},
+        PLANTED_KEY: {"output": "Stored.", "target_sections": PLANTED_SECTIONS},
     })
     core.set_fast_replies()
     core.set_qa(ScriptedModel())
@@ -97,7 +97,8 @@ def test_a_table_hit_carries_the_entry_sections(core, monkeypatch):
 
 
 @pytest.mark.switch_states("no_variable")
-def test_a_table_entry_without_sections_carries_an_empty_list(core, monkeypatch):
+def test_a_table_entry_without_sections_writes_no_tool_message(core, monkeypatch):
+    """A target_id alone no longer writes one: it is check_fast_path.py's selector, not a recall label."""
     monkeypatch.setattr(semantic_router, "FAST_PATH_INTERCEPTS", {
         PLANTED_KEY: {"output": "Stored.", "target_id": "planted_id"},
     })
@@ -106,8 +107,7 @@ def test_a_table_entry_without_sections_carries_an_empty_list(core, monkeypatch)
 
     run_chat(core.graph, PLANTED_KEY)
 
-    tool_messages = [m for m in checkpoint_messages(core.graph) if isinstance(m, ToolMessage)]
-    assert [m.artifact for m in tool_messages] == [{"retrieved_sections": []}]
+    assert [m for m in checkpoint_messages(core.graph) if isinstance(m, ToolMessage)] == []
 
 
 # ------------------------------------------------------------------
@@ -157,12 +157,10 @@ def test_a_hit_is_the_same_file_and_the_same_headers_at_the_same_levels():
 # The labels
 # ------------------------------------------------------------------
 
-def test_every_row_with_an_old_id_carries_sections_and_no_other_row_does():
+def test_labels_sit_on_34_cases_and_on_exactly_the_26_entries_with_a_target_id():
     dataset = load_dataset()
-    rows = [(f"case {n}", c.get("target_problem_id"), c.get("target_sections")) for n, c in enumerate(dataset, 1)]
-    rows += [(f"entry {k!r}", e.get("target_id"), e.get("target_sections")) for k, e in FAST_PATH_INTERCEPTS.items()]
-
-    wrong = [name for name, old_id, sections in rows if (old_id is not None) != bool(sections)]
+    assert not [n for n, c in enumerate(dataset, 1) if "target_problem_id" in c]
+    wrong = [k for k, e in FAST_PATH_INTERCEPTS.items() if (e.get("target_id") is not None) != bool(e.get("target_sections"))]
     assert not wrong, wrong
     assert sum(1 for c in dataset if c.get("target_sections")) == 34
     assert sum(1 for e in FAST_PATH_INTERCEPTS.values() if e.get("target_sections")) == 26
@@ -172,7 +170,7 @@ def test_every_row_with_an_old_id_carries_sections_and_no_other_row_does():
 def test_a_labelled_case_the_fast_path_answers_carries_the_label_it_copies(switch_state):
     """A fast-path hit copies the label the router returns, so a case with another label would always miss.
 
-    Calls the router itself, so a change to its lookup is seen here, the Problem-N branch too.
+    Calls the router itself, so a change to its lookup is seen here.
     """
     mismatched = []
     for n, case in enumerate(load_dataset(), 1):

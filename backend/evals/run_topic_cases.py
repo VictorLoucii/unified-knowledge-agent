@@ -23,7 +23,7 @@ project_root = str(Path(__file__).parent.parent.parent.resolve())
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-# The same environment as eval.py:15-19.
+# The same environment as eval.py:14-18.
 os.environ["EVAL_MODE"] = "true"
 for _switch in ("FAST_PATH_ENABLED", "TRANSCRIPT_REFINE_ENABLED", "WEATHER_TOOL_ENABLED"):
     os.environ.setdefault(_switch, "true")

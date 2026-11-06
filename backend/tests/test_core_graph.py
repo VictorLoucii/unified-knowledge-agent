@@ -28,11 +28,9 @@ REAL_FAST_LLM = backend_config.fast_llm
 OUT_OF_SCOPE_QUERY = "How do I deploy a pod to Kubernetes?"
 
 GREETING_REPLY = "Hello. Ask me about the knowledge base."
-# No "problem X" in the key, so the regex fallback in fast_path_node cannot supply the id.
 PLANTED_KEY = "planted fast path question"
 PLANTED_ANSWER = "The planted stored answer."
-PLANTED_TARGET_ID = "planted_id"
-PROBLEM_BLOCK = "**# Problem 7**\nThe stored block."
+PLANTED_SECTIONS = [{"source_file": "planted.md", "headers": {"Header 1": "Planted"}}]
 
 
 @pytest.fixture
@@ -55,7 +53,7 @@ def planted_table(monkeypatch):
     monkeypatch.setattr(
         semantic_router,
         "FAST_PATH_INTERCEPTS",
-        {PLANTED_KEY: {"output": PLANTED_ANSWER, "target_id": PLANTED_TARGET_ID}},
+        {PLANTED_KEY: {"output": PLANTED_ANSWER, "target_sections": PLANTED_SECTIONS}},
     )
 
 
@@ -89,21 +87,6 @@ def test_fast_path_table_hit_routes_once(core, route_calls, planted_table):
     assert core.fast_llm.calls == 0 and core.qa.calls == []
 
 
-@pytest.mark.switch_states("fast_path_on", "no_variable")
-def test_problem_id_hit_routes_once(core, route_calls, planted_table, monkeypatch):
-    """Steps: route (Problem-N block found), fast_path_node, stream; no model call."""
-    monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)
-    core.set_fast_replies()
-    core.set_qa(ScriptedModel())
-    query = "Tell me about Problem 7"
-
-    chunks = run_chat(core.graph, query)
-
-    assert route_calls == [query]
-    assert streamed_text(chunks) == PROBLEM_BLOCK
-    assert core.fast_llm.calls == 0 and core.qa.calls == []
-
-
 def test_rag_question_routes_once(core, route_calls):
     """Steps: route (RAG), scope router, retrieval_node, answer, stream."""
     core.set_fast_replies("IN_SCOPE")
@@ -113,6 +96,20 @@ def test_rag_question_routes_once(core, route_calls):
 
     assert route_calls == [QUESTION]
     assert streamed_text(chunks) == ANSWER
+
+
+@pytest.mark.switch_states("fast_path_on", "no_variable")
+def test_a_problem_number_question_goes_down_the_normal_route(core, route_calls):
+    """The Problem-N lookup is gone: no table key matches, so the question is retrieved like any other."""
+    query = "Tell me about Problem 7"
+    core.set_fast_replies("IN_SCOPE")
+    core.set_qa(rag_script(query, ANSWER))
+
+    chunks = run_chat(core.graph, query)
+
+    assert route_calls == [query]
+    assert streamed_text(chunks) == ANSWER
+    assert core.fast_llm.calls == 1 and len(core.qa.calls) == 2
 
 
 def test_conversational_message_routes_once(core, route_calls):
@@ -183,19 +180,20 @@ def test_router_fails_open_and_counts_when_both_models_fail(core, monkeypatch):
 
 
 @pytest.mark.switch_states("fast_path_on", "no_variable")
-def test_fast_path_hit_keeps_the_target_id_marker(core, planted_table):
-    """eval.py reads recall from this marker. The key has no "problem X" text, so the id comes from the router."""
+def test_fast_path_hit_stores_a_tool_message_with_text(core, planted_table):
+    """eval.py reads the sections from its artifact; the text keeps chat.py's output cap as it was (OPEN.md item 17)."""
     core.set_fast_replies()
     core.set_qa(ScriptedModel())
 
     run_chat(core.graph, PLANTED_KEY)
 
     tool_messages = [m for m in checkpoint_messages(core.graph) if isinstance(m, ToolMessage)]
-    assert [m.content for m in tool_messages] == [f"<!-- RETRIEVED_PROBLEM_IDS: [{PLANTED_TARGET_ID}] -->"]
+    assert [m.content for m in tool_messages] == [agents.FAST_PATH_TOOL_TEXT]
+    assert agents.FAST_PATH_TOOL_TEXT
 
 
-def assert_follow_up_sent_a_valid_list(core, marker_id):
-    """Every model call of the follow-up has no unmatched tool message, and the marker stays stored."""
+def assert_follow_up_sent_a_valid_list(core):
+    """Every model call of the follow-up has no unmatched tool message, and the table's tool message stays stored."""
     assert len(core.qa.calls) == 2
     for call in core.qa.calls:
         called_ids = set()
@@ -206,7 +204,7 @@ def assert_follow_up_sent_a_valid_list(core, marker_id):
     assert [m.type for m in core.qa.calls[0]] == ["system", "human", "ai", "human"]
     assert RETRIEVED_TEXT in core.qa.calls[1][-1].content
     stored = [m.content for m in checkpoint_messages(core.graph) if isinstance(m, ToolMessage)]
-    assert f"<!-- RETRIEVED_PROBLEM_IDS: [{marker_id}] -->" in stored
+    assert agents.FAST_PATH_TOOL_TEXT in stored
 
 
 @pytest.mark.switch_states("fast_path_on", "no_variable")
@@ -219,21 +217,7 @@ def test_rag_question_after_a_table_hit_sends_a_valid_list(core, planted_table):
     chunks = run_chat(core.graph, QUESTION)
 
     assert streamed_text(chunks) == ANSWER
-    assert_follow_up_sent_a_valid_list(core, PLANTED_TARGET_ID)
-
-
-@pytest.mark.switch_states("fast_path_on", "no_variable")
-def test_rag_question_after_a_problem_id_hit_sends_a_valid_list(core, planted_table, monkeypatch):
-    """OPEN.md item 15, the same fault through the Problem-N route."""
-    monkeypatch.setattr(backend_config, "extract_problem_block", lambda problem_id: PROBLEM_BLOCK)
-    core.set_fast_replies("IN_SCOPE")
-    core.set_qa(rag_script(QUESTION, ANSWER))
-
-    run_chat(core.graph, "Tell me about Problem 7")
-    chunks = run_chat(core.graph, QUESTION)
-
-    assert streamed_text(chunks) == ANSWER
-    assert_follow_up_sent_a_valid_list(core, "7")
+    assert_follow_up_sent_a_valid_list(core)
 
 
 def test_only_the_unmatched_tool_message_is_dropped():

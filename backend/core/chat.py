@@ -142,8 +142,8 @@ PRE_STEPS = (_guardrail_step, _save_thread_step)
 
 async def generate_chat_responses(user_message: str, thread_id: str, graph, async_pool, owner_id: str):
     """
-    Handles input validation, LLM bypass check for direct problem queries,
-    and streams responses from the LangGraph workflow.
+    Handles input validation and streams responses from the LangGraph
+    workflow.
     """
     start_time = time.time()
     turn = ChatTurn(user_message, thread_id, graph, async_pool, owner_id)
